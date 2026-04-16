@@ -1,0 +1,9 @@
+[project]
+name = "gradient-alignment"
+version = "0.1.0"
+description = "Studying gradient alignment in deep learning."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "torchvision",
+]
