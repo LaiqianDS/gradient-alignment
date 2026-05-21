@@ -83,3 +83,26 @@ Esta extracción se realiza tras `optimizer.step()` y se loggea por capa junto a
 ## Notes
 - Usable para comentar contexto de métodos adaptativos que usan la varianza del gradiente.
 - Adam combina momentum (primer momento) con estimación del segundo momento no centrado (varianza no centrada) del gradiente para escalar el learning rate por parámetro.
+
+### Uso en el TFG
+
+- **Rol: optimizador del sweep, NO métrica.** Adam no aporta ninguna métrica al `METRIC_REGISTRY` cerrado. Es uno de los dos regímenes optimizadores del barrido (SGD vs Adam); las 10 métricas se computan bajo **ambos** para contrastar la robustez de las correlaciones métrica↔eficiencia. Hiperparámetros estándar: $\text{lr} = 10^{-3}$, $\beta_1 = 0.9$, $\beta_2 = 0.999$, $\varepsilon = 10^{-8}$.
+- **Razón $\hat{m}_t / \sqrt{\hat{v}_t}$ como SNR que motiva el eje varianza.** El paso de Adam es $\Delta\theta_t = -\alpha\,\hat{m}_t / (\sqrt{\hat{v}_t} + \varepsilon)$, donde la razón $\hat{m}_t / \sqrt{\hat{v}_t}$ (primer momento sobre raíz del segundo momento no centrado) se interpreta como un *signal-to-noise ratio* por parámetro (sección 2.1). Esta lectura es la motivación conceptual de las métricas de varianza del registro: `gsnr` ($r(\theta_j) = \tilde{g}(\theta_j)^2 / \rho^2(\theta_j)$, Liu et al. 2020) y `normalized_variance` ($\mathbb{V}[g]/\mathbb{E}[g]^2$, inverso de un SNR, Faghri et al. 2020).
+- **Raw-grad rationale (justificación en methods).** Todas las métricas se calculan sobre el gradiente bruto $\nabla L(w)$ y **nunca** sobre la actualización preacondicionada $\hat{m}_t / \sqrt{\hat{v}_t}$. Sin esto, las métricas medidas bajo Adam no serían comparables con las de SGD y se rompería el análisis cross-optimizador: el preacondicionador define al optimizador, no es parte de la señal medida.
+- **Snapshot/restore de $m_t, v_t$ en la medición (crítico).** El estado interno de Adam (`exp_avg` = $m_t$, `exp_avg_sq` = $v_t$) acumula entre pasos. Durante la medición fuera del bucle de entrenamiento hay que hacer snapshot de `optimizer.state_dict()` y restaurarlo al terminar; sin restore, el barrido de gradientes contaminaría el estado y el run divergiría tras cada ventana de medida. En SGD puro (sin estado) este cuidado no aplica, pero el pipeline lo trata de forma uniforme.
+- **Variables de control cross-optimizador** (no son métricas del registro): lr efectivo bias-corrected $\alpha\sqrt{1-\beta_2^t}/(1-\beta_1^t)$, normas por capa de $m_t$ y $v_t$, y la norma del update $\|\Delta\theta_t\|$, útiles para diagnosticar saturación o explosión del preacondicionador.
+
+## Papers relacionados
+
+- [[RMSProp - Divide the gradient by a running average of its recent magnitude]] — antecedente directo: Adam hereda de RMSProp la media móvil exponencial de $g_t^2$ (segundo momento no centrado) que escala el paso por parámetro.
+- [[An overview of gradient descent optimization algorithms]] — review que sitúa Adam en la taxonomía de optimizadores adaptativos; respaldo de la elección del sweep SGD + Adam.
+- [[Understanding Why Neural Networks Generalize Well Through GSNR of Parameters]] — formaliza el GSNR $\tilde{g}^2/\rho^2$ por parámetro; convierte en métrica explícita el SNR $\hat{m}_t/\sqrt{\hat{v}_t}$ que Adam usa implícitamente.
+- [[A Study of Gradient Variance in Deep Learning]] — define `normalized_variance` $\mathbb{V}[g]/\mathbb{E}[g]^2$ como inverso de un SNR; misma intuición señal/ruido que el preacondicionador de Adam.
+- [[Accelerating Stochastic Gradient Descent using Predictive Variance Reduction]] — SVRG; varianza del estimador del gradiente como objeto a controlar, complementario al SNR por parámetro de Adam.
+
+## Otros papers interesantes a revisar
+
+- **Decoupled Weight Decay Regularization (AdamW)** (Loshchilov & Hutter, 2019) — desacopla weight decay del paso adaptativo; variante de Adam dominante en la práctica y candidata natural si el sweep se ampliara. arXiv:1711.05101.
+- **On the Convergence of Adam and Beyond (AMSGrad)** (Reddi, Kale & Kumar, 2018) — exhibe un fallo de convergencia de Adam por el segundo momento no monótono y propone AMSGrad; relevante para matizar la cota de regret del paper original. ICLR 2018, arXiv:1904.09237.
+- **Adaptive Methods Generalize Worse Than SGD (The Marginal Value of Adaptive Gradient Methods in Machine Learning)** (Wilson et al., 2017) — evidencia empírica de peor generalización de métodos adaptativos frente a SGD; sustenta el contraste cross-optimizador del TFG. arXiv:1705.08292.
+- **On the Variance of the Adaptive Learning Rate and Beyond (RAdam)** (Liu et al., 2020) — atribuye la inestabilidad temprana de Adam a la alta varianza del learning rate adaptativo en los primeros pasos; conecta directamente con la ventana de entrenamiento temprano del TFG. arXiv:1908.03265.

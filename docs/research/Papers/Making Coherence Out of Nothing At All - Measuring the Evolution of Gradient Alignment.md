@@ -67,4 +67,29 @@ Si se registra *on-the-fly* durante el entrenamiento, pueden reutilizarse los gr
 
 ## Notes
 
+### Uso en el TFG
+
+- **Métrica que origina:** `m_coherence` (familia alineación), núcleo conceptual de toda la familia junto con la *Coherent Gradients Hypothesis*. Es la formalización escala-invariante y $O(m)$ de la coherencia per-sample.
+- **Fórmula clave:** $\alpha_m = \dfrac{\|\sum_i g_i\|^2}{\sum_i \|g_i\|^2} = m\cdot\dfrac{\mathbb{E}_{z,z'}[g_z\cdot g_{z'}]}{\mathbb{E}_z[g_z\cdot g_z]} \in [1, m]$ ($1$ = gradientes ortogonales, $m$ = idénticos), sobre el gradiente bruto $\nabla L$.
+- **Cómo se usa:** se mide $\alpha_m$ sobre un probe fijo $m \in [512, 2048]$ en las ventanas tempranas (5/10/25/50% de épocas) y se correlaciona (Spearman/Pearson) con eficiencia (épocas-a-umbral, AUC de test loss) y generalización. NO se optimiza. Comparte el barrido per-sample $\nabla L$ con `stiffness` y `gsnr`.
+- **Señal:** ↑ mejor — alta coherencia temprana → convergencia rápida + mejor generalización. (Matiz del paper: con etiquetas aleatorias la coherencia *crece* a mitad de entrenamiento; en el TFG sin label noise se espera la trayectoria de etiquetas reales.)
+- **Cómputo $O(m)$ streaming:** acumuladores $S=\sum_i g_i$ (vector $P$) y $Q=\sum_i\|g_i\|^2$ (escalar); $\alpha_m = \|S\|^2/Q$. No materializar la matriz $(m,P)$ (≈47 GB para $m{=}1024$, ResNet-18 fp32).
+- **Pitfalls/decisiones:** SOLO per-sample — los mini-batches inflan la coherencia (Cor 3.1 del paper), nunca medir per-batch; forzar **fp32** ($Q$ hace underflow en fp16); la diagonal $z=z'$ se mantiene en la definición; `model.eval()` y misma muestra fija en todas las épocas. El recíproco $1/\alpha$ es la *gradient diversity* de las cotas de mini-batch SGD (Yin et al. 2018), útil para conectar con el eje teórico.
+
+## Papers relacionados
+
+- [[Coherent Gradients An Approach to Understanding Generalization in Gradient Descent-based Optimization]] — paper predecesor del mismo autor (Chatterjee 2019); `m_coherence` operacionaliza su *Coherent Gradients Hypothesis* sobre el término cruzado $\sum_{e\neq e'}\langle g_{te}, g_{te'}\rangle$.
+- [[Stiffness - A New Perspective on Generalization in Neural Networks]] — misma familia (alineación per-sample); el paper compara explícitamente $\alpha_m$ frente a sign/cosine stiffness (no-linealidades que dificultan ligar la métrica al cambio real en la loss). Comparte el barrido per-sample $\nabla L$.
+- [[The Impact of Neural Network Overparameterization on Gradient Confusion and Stochastic Gradient Descent]] — misma familia; el paper contrasta $\alpha_m$ con la *gradient confusion* de Sankararaman (estimador de extremo $z\neq z'$ vs. media incluyendo diagonal).
+- [[Understanding Why Neural Networks Generalize Well Through GSNR of Parameters]] — eje alineación/varianza per-sample sobre $\nabla L$; comparte el mismo barrido per-sample y mide coherencia/SNR del gradiente como proxy de generalización.
+- [[Gradient-Weight Alignment as a Train-Time Proxy for Generalization in Classification Tasks]] — mismo problema (proxy de alineación en tiempo de entrenamiento para generalización); comparable directo del delta del TFG.
+- [[Disparity Between Batches as a Signal for Early Stopping]] — mismo problema (señal barata de gradientes para predecir generalización/early stopping), familia alineación.
+
+## Otros papers interesantes a revisar
+
+- **Gradient Diversity: a Key Ingredient for Scalable Distributed Learning** (Yin, Pananjady, Lam, Papailiopoulos, Ramchandran, Bartlett, 2018) — define la *gradient diversity*, exactamente el recíproco $1/\alpha$; conecta `m_coherence` con cotas de convergencia de mini-batch SGD y batch size. arXiv:1706.05699.
+- **What Can Linearized Neural Networks Actually Say About Generalization?** (Ortiz-Jiménez, Moosavi-Dezfooli, Frossard, 2021) — relaciona alineación de gradientes/kernel con generalización en regímenes no-lazy; complementa la separación optimización/generalización que plantea el paper. arXiv:2106.06770.
+- **Gradient Descent Quantizes ReLU Network Features** (Maennel, Bousquet, Gelly, 2018) — explica cómo SGD *crea* estructura/alineación común (eco del hallazgo de coherencia creciente con etiquetas aleatorias). arXiv:1803.08367.
+- **An Investigation into Neural Net Optimization via Hessian Eigenvalue Density** (Ghorbani, Krishnan, Xiao, 2019) — curvatura de segundo orden que el paper señala como pieza ausente para explicar la *emergencia* de coherencia. arXiv:1901.10159.
+
 ## Cited By

@@ -66,4 +66,25 @@ La versión vectorizada sustituye el bucle por `torch.func.vmap(grad(loss_fn))` 
 - A diferencia de Faghri (centrado en velocidad de convergencia), GSNR ata varianza ↔ generalización con marco teórico explícito.
 - Encaje en TFG: candidata fuerte como métrica temprana, fundamenta teóricamente por qué baja varianza relativa predice mejor rendimiento final.
 
+### Uso en el TFG
+- **Métrica que origina:** `gsnr` (familia varianza). SNR por parámetro $r(\theta_j) = \tilde g(\theta_j)^2 / \rho^2(\theta_j)$, con $\tilde g(\theta_j) = \mathbb{E}_i[g_{i,j}]$ y $\rho^2(\theta_j) = \operatorname{Var}_i[g_{i,j}]$ sobre el gradiente bruto $\nabla L$.
+- **Cómo se usa:** estimación per-sample sobre `probe_set` fijo ($M = 512$) con acumuladores streaming $S_j = \sum_i g_{i,j}$, $Q_j = \sum_i g_{i,j}^2$; agregación por **mean** sobre parámetros ($\text{GSNR}_{\text{global}} = \operatorname{mean}_j r_j$), medida en las ventanas tempranas (5/10/25/50% de épocas) y correlacionada con generalización/eficiencia. Comparte el **per-sample ∇L sweep** con `m_coherence` y `stiffness`.
+- **Señal:** ↑ mejor (GSNR alto $\Rightarrow$ *gap* de generalización pequeño; la curva ascendente temprana sobre datos reales es justo el régimen que el TFG explota).
+- **Pitfalls/decisiones:** agregar con **mean, nunca sum** (la suma es incomparable entre arquitecturas de distinto $P$); $\rho_j^2$ **unbiased** ($\div\, M-1$); `eps` por parámetro para $\rho_j^2 \to 0$ (dead ReLU, capas congeladas); cola pesada de $r_j$ $\Rightarrow$ loguear también **median** y **p95**, no solo la media.
+- **Qué NO se implementa:** **OSGR** ($R(\mathcal{Z},n) = 1 - \tfrac{1}{n}\sum_j W_j/(r_j + 1/n)$) requiere $M$ runs de entrenamiento independientes, incompatible con un run por composición; GSNR es el único candidato del registro derivado de este paper.
+
+## Papers relacionados
+- [[A Study of Gradient Variance in Deep Learning]] — misma familia varianza; normalized variance $\mathbb{V}[g]/\mathbb{E}[g]^2$ es el inverso del SNR que mide GSNR.
+- [[An Empirical Model of Large-Batch Training]] — familia varianza; gradient noise scale $\operatorname{tr}(\Sigma)/\|G\|^2$ es otra ratio señal/ruido del gradiente.
+- [[Making Coherence Out of Nothing At All - Measuring the Evolution of Gradient Alignment]] — comparte el per-sample ∇L sweep y el mismo problema (consistencia de gradientes ↔ generalización), conectado vía $p_{\text{same\_sign}}$.
+- [[Stiffness - A New Perspective on Generalization in Neural Networks]] — comparte el per-sample ∇L sweep; alineación per-sample como proxy de generalización con la misma intuición de gradientes coherentes.
+- [[The Impact of Neural Network Overparameterization on Gradient Confusion and Stochastic Gradient Descent]] — mismo problema: el acuerdo entre gradientes per-sample en régimen sobreparametrizado controla SGD y generalización.
+- [[Adam - A Method for Stochastic Optimization]] — la ratio $\hat m_t/\sqrt{\hat v_t}$ de Adam es el antecedente conceptual del SNR por parámetro que formaliza GSNR.
+
+## Otros papers interesantes a revisar
+- **Fantastic Generalization Measures and Where to Find Them** (Jiang et al., 2020) — estudio empírico a gran escala de >40 medidas de generalización (varias basadas en gradiente y varianza) con análisis causal; marco de referencia para situar GSNR frente a otras métricas. arXiv:1912.02178
+- **Stochastic Gradient Descent as Approximate Bayesian Inference** (Mandt et al., 2017) — modela el ruido de SGD como proceso de Ornstein-Uhlenbeck; fundamenta la lectura de $\rho^2(\theta_j)$ como varianza del estimador estocástico. arXiv:1704.04289
+- **On Large-Batch Training for Deep Learning: Generalization Gap and Sharp Minima** (Keskar et al., 2017) — vincula tamaño de batch y *gap* de generalización vía nitidez del mínimo; complementa la explicación de GSNR del mismo *gap*. arXiv:1609.04836
+- **The Break-Even Point on Optimization Trajectories of Deep Neural Networks** (Jastrzębski et al., 2020) — analiza el espectro de la covarianza del gradiente en la fase temprana del entrenamiento; directamente relevante para medir varianza de gradiente en ventanas tempranas. arXiv:2002.09572
+
 ## Cited By

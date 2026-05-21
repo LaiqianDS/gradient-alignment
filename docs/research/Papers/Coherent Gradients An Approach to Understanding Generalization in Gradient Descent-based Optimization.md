@@ -42,7 +42,7 @@ y un overfit ajustado definido como $\text{ta} - [\varepsilon \cdot (1/10) + (1 
 
 $$\text{coherencia} \approx \frac{\|\sum_i g_i\|^2}{N \cdot \sum_i \|g_i\|^2},$$
 
-valor acotado en $[1/N,\, 1]$ que tiende a $1$ bajo alineamiento perfecto y a $1/N$ bajo ortogonalidad. Este paper aporta el marco conceptual (background del TFG); el estimador escalable y formalmente justificado a loggear es la **m-coherence** propuesta en [[Making Coherence Out of Nothing At All]] (Chatterjee & Zielinski, 2022), que admite cómputo en streaming sin materializar la matriz de Gram.
+valor acotado en $[1/N,\, 1]$ que tiende a $1$ bajo alineamiento perfecto y a $1/N$ bajo ortogonalidad. Este paper aporta el marco conceptual (background del TFG); el estimador escalable y formalmente justificado a loggear es la **m-coherence** propuesta en [[Making Coherence Out of Nothing At All - Measuring the Evolution of Gradient Alignment]] (Chatterjee & Zielinski, 2020), que admite cómputo en streaming sin materializar la matriz de Gram.
 
 **Entradas.** Per-example gradients $g_i \in \mathbb{R}^P$ sobre $N$ ejemplos del training set, computados con la pérdida no agregada.
 
@@ -67,6 +67,32 @@ logger.log_scalar("coherence/global", coherence, step=epoch)
 **Consideraciones.** El paper aporta el marco conceptual (background del TFG: explica *por qué* el alineamiento de gradientes debería predecir generalización vía estabilidad algorítmica), pero no propone un estimador escalable; la métrica concreta que se loggeará es la implementación m-coherence de Chatterjee & Zielinski. Este desdoblamiento es útil para la narrativa de la tesis (background conceptual → método operacional). Conviene también separar el cálculo de evaluación del paso de entrenamiento para evitar contaminar la dinámica de SGD.
 
 **Logging.** Escalar global `coherence/global` y por capa `coherence/layer_k` (descomposición por bloque de parámetros), una entrada por época. Sirve como baseline conceptual frente al cual comparar variantes (m-coherence escalable, stiffness, gradient confusion, GSNR) en los experimentos de correlación con eficiencia de entrenamiento.
+
+## Notes
+
+### Uso en el TFG
+
+- **Rol: motivación / marco conceptual, no métrica del registry.** Chatterjee (2019) es la cita central de la *intro* y el *related work* de toda la familia de alineación del TFG. Articula la **Coherent Gradients Hypothesis (CGH)** —ejemplos similares producen gradientes per-sample similares, y como el gradiente global es su suma, las direcciones reforzadas por muchos ejemplos son las que dominan la actualización y, vía estabilidad algorítmica, las que generalizan. Responde al *por qué* medimos alineación, no aporta un estimador concreto al `METRIC_REGISTRY`.
+- **Fórmula clave (descomposición que motiva el TFG).** $\|g_t\|^2 = \sum_e \|g_t^e\|^2 + \sum_{e \neq e'} \langle g_t^e, g_t^{e'} \rangle$. El primer término es siempre positivo; el **segundo término** (suma de productos internos per-sample) es exactamente la alineación que el TFG cuantifica. La intuición cuadrática del paper —gradientes ortogonales dan $\|g_t\|^2 \approx m\|g^\circ\|^2$ frente a $\approx m^2\|g^\circ\|^2$ bajo alineación perfecta— es la base conceptual de que más coherencia temprana debería predecir convergencia más rápida.
+- **Qué NO se implementa: $f_t^p$ y $f_t^c$.** Las métricas de fracción de reducción de pérdida atribuible a pristine/corrupt, $f_t^p = \langle g_t, g_t^p\rangle/\langle g_t, g_t\rangle$ y $f_t^c = \langle g_t, g_t^c\rangle/\langle g_t, g_t\rangle$ (con $f_t^p + f_t^c = 1$), y sus integrales $i_t^p, i_t^c$, **quedan fuera del registry**: exigen *label noise* (partición pristine/corrupt del minibatch) que se descarta en la v1 del TFG. Tampoco se reproduce *winsorized SGD*: el TFG es correlacional sobre $\nabla L$ bruto, no interviene la dinámica de optimización.
+- **Qué SÍ hereda el TFG.** El estimador escalable y formalmente justificado que sí se loggea es **m-coherence** (ver [[Making Coherence Out of Nothing At All - Measuring the Evolution of Gradient Alignment]]), continuación directa de este paper con cómputo $O(m)$ en streaming. El desdoblamiento background conceptual (Chatterjee 2019) → método operacional (m-coherence) es útil para la narrativa de la tesis.
+- **Conexión con el registry.** El segundo término de la descomposición es la magnitud común a tres métricas de alineación: `m_coherence` lo normaliza por $\sum_e\|g_t^e\|^2$; `stiffness` ([[Stiffness - A New Perspective on Generalization in Neural Networks]]) mide el mismo producto interno per-sample como coseno/signo, con desagregación intra/entre clase; `gradient_confusion` ([[The Impact of Neural Network Overparameterization on Gradient Confusion and Stochastic Gradient Descent]]) captura el caso adverso ($\langle g_i, g_j\rangle$ muy negativo). La CGH es el paraguas teórico que justifica por qué estos tres proxies deberían correlacionar con generalización y eficiencia.
+
+## Papers relacionados
+
+- [[Making Coherence Out of Nothing At All - Measuring the Evolution of Gradient Alignment]] — continuación directa (Chatterjee & Zielinski); convierte la coherencia cualitativa de la CGH en m-coherence, el estimador escalable que sí entra al registry.
+- [[Stiffness - A New Perspective on Generalization in Neural Networks]] — citado por el paper; operacionaliza el mismo producto interno per-sample (coseno/signo) que el 2º término de la descomposición, con desagregación intra/entre clase.
+- [[The Impact of Neural Network Overparameterization on Gradient Confusion and Stochastic Gradient Descent]] — citado por el paper; gradient confusion es el caso adverso de la alineación (gradientes anti-correlacionados) y conecta coherencia con sobreparametrización y velocidad de SGD.
+- [[Understanding Why Neural Networks Generalize Well Through GSNR of Parameters]] — mismo problema (generalización vía estadística de gradientes per-sample); su argumento de same-sign gradients es el análogo por-parámetro de la coherencia por-dirección.
+- [[Gradient-Weight Alignment as a Train-Time Proxy for Generalization in Classification Tasks]] — misma familia (proxy de alineación train-time para predecir generalización); hereda la motivación de la CGH para un score per-sample barato.
+- [[A Theory of Neural Tangent Kernel Alignment and Its Influence on Training]] — noción de alineación afín (kernel-target alignment del NTK); enlaza coherencia de gradientes con la teoría de núcleos tangentes.
+
+## Otros papers interesantes a revisar
+
+- **Understanding deep learning requires rethinking generalization** (Zhang, Bengio, Hardt, Recht, Vinyals, 2017) — la paradoja de generalización (ajustar etiquetas aleatorias con la misma red) que motiva todo el paper y el TFG. arXiv:1611.03530.
+- **Stability and Generalization** (Bousquet & Elisseeff, 2002) — base de estabilidad algorítmica que Chatterjee usa para ligar coherencia con generalización (direcciones fuertes = estables ante remoción de un ejemplo). JMLR 2:499–526.
+- **The Lottery Ticket Hypothesis: Finding Sparse, Trainable Neural Networks** (Frankle & Carbin, 2019) — conexión que el propio paper señala: las direcciones coherentes/fuertes se relacionan con subredes entrenables. arXiv:1803.03635.
+- **Gradient Descent Quantizes ReLU Network Features / SGD on Neural Networks Learns Functions of Increasing Complexity** (Nakkiran et al., 2019) — evidencia complementaria de que SGD aprende primero patrones simples comunes a muchos ejemplos, en línea con la CGH. arXiv:1905.11604.
 
 ## Cited By
 

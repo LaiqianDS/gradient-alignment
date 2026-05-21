@@ -87,9 +87,37 @@ Sobre $C$ se calcula adicionalmente la *class stiffness matrix* agregando por pa
 
 ## Notes
 
+### Uso en el TFG
+
+- **Métrica que origina.** Es el origen de `stiffness` (familia alineación). Sobre gradientes per-sample del gradiente bruto $g_i = \nabla_W \ell(f_W(x_i), y_i)$ se computan cos-stiffness $S_{\cos}(i,j) = \cos(g_i, g_j) = \tfrac{g_i \cdot g_j}{\|g_i\|\,\|g_j\|}$ y sign-stiffness $S_{\text{sign}}(i,j) = \text{sign}(g_i \cdot g_j)$.
+- **Cómo se usa.** Se agrega sobre un probe estratificado $M = 256$ distinguiendo pares within-class (mismo label) y between-class (distinto label): $\bar S_{\cos}^{\text{within}} = \mathbb{E}_{i\neq j,\, y_i=y_j}[S_{\cos}(i,j)]$ y $\bar S_{\cos}^{\text{between}} = \mathbb{E}_{i\neq j,\, y_i\neq y_j}[S_{\cos}(i,j)]$. La señal predictiva vive en la ventana temprana (5/10/25/50% de épocas): la stiffness decae hacia 0 al iniciarse el overfitting.
+- **Señal.** $\bar S_{\cos}^{\text{within}}$ ↑ mejor (clases con features compartidos → SGD que transfiere mejoras intra-clase); $\bar S_{\cos}^{\text{between}} \approx 0$ esperable. Se reportan también `cos`, `sign` globales.
+- **Pitfall de memoria.** El cuello es la gram $G G^\top$ con coste de memoria $M \cdot P$ floats = **12GB para $M = 256$ en ResNet-18 fp32**, bloqueante sin mitigación. Solución: chunk en $M$ acumulando filas, o reducir $P$.
+- **Decisión de scope.** **Default last-layer-only** en ResNet-18 ($P_{\text{eff}} \approx 5k$ en lugar de 11.7M), consistente con `gwa`; Fort reporta stiffness por bloques, así que sigue siendo teóricamente significativo. En FC/MLP y CNN-small: full-parameter (P pequeño).
+- **Sweep compartido y descarte.** Comparte el barrido per-sample $\nabla L$ con `m_coherence` ($M=1024$) y `gsnr` ($M=512$). NO se implementa el análisis "stiffness vs distancia en el input" ni la dynamic critical length $\xi$: añaden una dimensión continua (distancia 2D) fuera del scope puramente correlacional del TFG.
+
 ## Cited By
 [[The Impact of Neural Network Overparameterization on Gradient Confusion and Stochastic Gradient Descent]]
 [[Speedy Performance Estimation for Neural Architecture Search]]
 [[Coherent Gradients An Approach to Understanding Generalization in Gradient Descent-based Optimization]]
 [[Gradient-Weight Alignment as a Train-Time Proxy for Generalization in Classification Tasks]]
 [[Disparity Between Batches as a Signal for Early Stopping]]
+
+## Papers relacionados
+
+- [[Making Coherence Out of Nothing At All - Measuring the Evolution of Gradient Alignment]] — Misma familia alineación; m-coherence $\alpha_m$ es el agregado escalar del mismo producto $g_z\cdot g_{z'}$ entre per-sample grads y comparte el sweep $\nabla L$ con stiffness.
+- [[Coherent Gradients An Approach to Understanding Generalization in Gradient Descent-based Optimization]] — Cita a stiffness; la CGH formaliza el mismo principio (la generalización viene del alineamiento entre gradientes per-sample) que aquí se mide vía within/between-class.
+- [[The Impact of Neural Network Overparameterization on Gradient Confusion and Stochastic Gradient Descent]] — Cita a stiffness; gradient confusion es el peor caso (mín. coseno) del mismo objeto coseno entre gradientes per-sample/per-batch.
+- [[Gradient-Weight Alignment as a Train-Time Proxy for Generalization in Classification Tasks]] — Cita a stiffness; proxy train-time de generalización con la misma decisión de last-layer-only para acotar memoria.
+- [[Disparity Between Batches as a Signal for Early Stopping]] — Cita a stiffness; usa alineamiento (distancia L2) entre gradientes como señal de early stopping, mismo régimen de ventana temprana.
+- [[Speedy Performance Estimation for Neural Architecture Search]] — Cita a stiffness y comparte la motivación NAS/meta-learning que los autores conjeturan como uso futuro de la métrica.
+- [[A Theory of Neural Tangent Kernel Alignment and Its Influence on Training]] — La equivalencia stiffness $\leftrightarrow g_i\cdot g_j$ es exactamente el NTK empírico; este paper formaliza el kernel alignment al que stiffness apunta.
+- [[Understanding Why Neural Networks Generalize Well Through GSNR of Parameters]] — Familia alineación/varianza; comparte el sweep per-sample $\nabla L$ con stiffness y conecta alineamiento de gradientes con generalización.
+
+## Otros papers interesantes a revisar
+
+- **Neural Tangent Kernel: Convergence and Generalization in Neural Networks** (Jacot, Gabriel & Hongler, 2018) — Marco NTK que fundamenta la equivalencia stiffness = $g_i\cdot g_j$; cita central del paper. arXiv:1806.07572.
+- **Sensitivity and Generalization in Neural Networks: an Empirical Study** (Novak et al., 2018) — Línea directa de la que parte Fort (sensibilidad de salidas a entradas próximas); evidencia empírica de la conexión sensibilidad-generalización. arXiv:1802.08760.
+- **A Closer Look at Memorization in Deep Networks** (Arpit et al., 2017) — Caracteriza memorización vs aprendizaje de patrones; complementa la interpretación de stiffness baja como memorización local. arXiv:1706.05394.
+- **Gradient Descent Happens in a Tiny Subspace** (Gur-Ari, Roberts & Dyer, 2018) — El gradiente vive en un subespacio de baja dimensión dominado por el Hessiano; relevante para justificar last-layer-only y proyecciones al acotar $M\cdot P$. arXiv:1812.04754.
+- **What Can Linearized Neural Networks Actually Say About Generalization?** (Ortiz-Jiménez, Moosavi-Dezfooli & Frossard, 2021) — Examina cuándo el NTK empírico predice generalización; matiza el alcance de proxies basados en alineamiento de gradientes como stiffness. arXiv:2106.06770.

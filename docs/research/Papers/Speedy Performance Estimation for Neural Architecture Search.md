@@ -65,4 +65,29 @@ for t in range(1, T + 1):
 
 **Logging.** Registrar TSE y TSE-EMA acumulados por época como escalares; congelar y persistir su valor en los hitos del 5%, 10%, 25% y 50% del presupuesto para el sweep de correlaciones contra los proxies de eficiencia.
 
+## Notes
+
+### Uso en el TFG
+
+- **Rol — BASELINE PREDICTOR obligatorio, NO métrica del registry**: TSE-EMA es el origen del predictor `tse_ema` y se taggea `metric_kind="baseline"` en `metrics_at_window.parquet` para separarlo de las 10 métricas de gradiente del `METRIC_REGISTRY` (7 alineación + 3 varianza). No es una métrica de gradiente: es un predictor de eficiencia derivado únicamente de la train loss.
+- **Fórmula**: $\text{TSE-EMA} = \sum_{t=1}^{T} \gamma^{T-t}\,\bar\ell_t$, con $\bar\ell_t$ la train loss media de la época $t$ y $\gamma = 0.999$ (suma ponderada exponencialmente de train losses, da más peso a épocas tardías sin descartar las tempranas). Se registran también `tse` (suma simple) y `tse_e` (E=1) por completitud, pero `tse_ema` es el baseline principal.
+- **Coste CERO**: la train loss ya se computa en el forward de cada paso, así que TSE-EMA se obtiene como subproducto del bucle de optimización (acumulador EMA). Sin barrido extra, sin acceso a gradientes, sin val set.
+- **Señal**: $\downarrow$ mejor — menor TSE-EMA $\Rightarrow$ la configuración acumula menos pérdida bajo la curva de entrenamiento (converge antes) $\Rightarrow$ mejor eficiencia/generalización esperada.
+- **Por qué es CRÍTICO (el listón a batir)**: es el *sanity check* metodológico de la tesis. Cualquier métrica de gradiente propuesta debe **superar a TSE-EMA en correlación de Spearman** frente a los proxies de eficiencia (épocas-a-umbral, AUC de test loss, mejor test loss) sobre las **mismas ventanas** (5/10/25/50% de épocas); si no lo hace, el coste de instrumentar gradientes (barridos batch-grad, per-sample $\nabla L$, Jacobian NTK) **no se justifica**. Sin este baseline gratis la tesis no puede defender que la alineación/varianza de gradientes aporte valor sobre algo que ya se mide.
+- **NOTA — paper comparable (delta a argumentar)**: es **uno de los 3 papers más comparables** al TFG (junto a Hölzl 2025 y Forouzesh & Thiran 2021) por atacar el mismo problema —predicción temprana barata de rendimiento. Ru et al. muestran que TSE-EMA supera validation accuracy, learning-curve extrapolation (LcSVR) y zero-cost proxies (JacCov/SNIP/SynFlow) en Spearman $\rho$ bajo presupuestos $T \le 0.5\,T_{end}$. Diferencia de scope: ellos rankean **arquitecturas** en NAS y *optimizan* la búsqueda; el TFG es **correlacional**, no optimiza, y usa TSE-EMA como referencia gratis dentro de un sweep controlado (SGD/Adam × FC/CNN-small/ResNet-18 × MNIST/CIFAR-10/(ImageNet)).
+
+## Papers relacionados
+
+- [[Gradient-Weight Alignment as a Train-Time Proxy for Generalization in Classification Tasks]] — mismo problema (proxy train-time de generalización, barato); uno de los 3 comparables. GWA es métrica del registry y debe batir a este baseline.
+- [[Disparity Between Batches as a Signal for Early Stopping]] — mismo problema (señal temprana barata de generalización sin val set); uno de los 3 comparables. `gradient_disparity` es métrica del registry medida contra este baseline.
+- [[A Study of Gradient Variance in Deep Learning]] — la motivación teórica de TSE invoca cotas de generalización dependientes de la **varianza del gradiente**; conecta el baseline con la familia varianza (`normalized_variance`).
+- [[An Empirical Model of Large-Batch Training]] — comparte el marco "predecir eficiencia de entrenamiento a partir de estadísticos baratos"; el GNS predice batch size crítico, TSE-EMA predice ranking de eficiencia.
+
+## Otros papers interesantes a revisar
+
+- **NAS-Bench-201: Extending the Scope of Reproducible Neural Architecture Search** (Dong & Yang, 2020) — benchmark tabular (uno de los espacios donde Ru et al. evalúan TSE); referencia estándar para correlaciones ranking-vs-test en NAS. arXiv:2001.00326
+- **Zero-Cost Proxies for Lightweight NAS** (Abdelfattah et al., 2021) — proxies de coste cero (snip, grasp, synflow, etc.) que TSE-EMA supera en consistencia entre tareas; competidores directos del baseline. arXiv:2101.08134
+- **Neural Architecture Search without Training** (NASWOT, Mellor et al., 2021) — estima rendimiento al inicializar usando la correlación de los mapas lineales (regiones ReLU) entre datos, sin entrenar; otro proxy barato comparable que TSE supera bajo presupuestos mayores. arXiv:2006.04647
+- **Fantastic Generalization Measures and Where to Find Them** (Jiang et al., 2020) — estudio empírico a gran escala de medidas de generalización y su correlación con el gap real; marco metodológico para situar TSE-EMA y las métricas de gradiente como proxies competidores. arXiv:1912.02178
+
 ## Cited By

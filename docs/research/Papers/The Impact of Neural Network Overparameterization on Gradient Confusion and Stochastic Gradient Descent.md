@@ -102,3 +102,27 @@ def gradient_confusion(model, loss_fn, loader, M=100):
 **Logging.** Por checkpoint: el escalar $\zeta$ (mínimo) y, para señal más rica, un **histograma** de los $\binom{M}{2}$ cosenos pares (media, percentiles 1/5/50, fracción negativa). Esto permite correlacionar tanto el peor caso como la masa de la distribución con las métricas de eficiencia (epochs-to-threshold, AUC test loss, best test loss).
 
 ## Notes
+
+### Uso en el TFG
+
+- **Métrica que origina:** `gradient_confusion` (familia alineación), única métrica del `METRIC_REGISTRY` derivada de este paper. Es el origen formal de la noción de anti-correlación par a par entre gradientes.
+- **Fórmula clave y estimador.** Definición teórica: $\langle \nabla f_i(w), \nabla f_j(w)\rangle \ge -\eta$ para todo $i\neq j$. En el TFG se estima la versión coseno (normalizada e invariante a escala) sobre $M$ gradientes de batch independientes: $\hat\eta = -\min_{i\neq j} \frac{g_i \cdot g_j}{\|g_i\|\,\|g_j\|}$.
+- **Recorte de $M$.** El paper usa $M = 100$ pares al final de cada época; el TFG recorta a $M = 50$ por presupuesto de memoria ($M\cdot P$). Cadencia `epoch` dentro de la ventana temprana (5/10/25/50% de épocas).
+- **Señal (signo).** $\hat\eta$ mayor = peor (más confusión, SGD más lento). Como `min` es un estimador de extremo ruidoso, se reporta también `min_cos` (↑ mejor, preferida por consistencia con las demás métricas coseno), `median_cos`, `p05_cos` y `frac_neg` para capturar la masa de la distribución, no solo el peor caso.
+- **Decisiones de implementación.** Gradiente **bruto** $\nabla L$ (no la update preacondicionada de Adam), `model.eval()` durante la medición (congelar BN/Dropout), muestreo de batches **disjuntos** sin reemplazo. Comparte el **batch-grad sweep** con `cos_sim_batches`, `gradient_disparity` y `normalized_variance` (mismos $K$ batches; ampliar a $M=50$ es la métrica que más lo demanda junto a `normalized_variance`).
+- **Pitfall principal.** Memoria $M\cdot P$ es bloqueante en ResNet-18 ($\approx 2.3$ GB fp32 para $M=50$): chunkear el producto $G G^\top$ o pasar los gradientes a CPU. NO se implementan las cotas teóricas (Teoremas 3.1–6.1) ni el OSGR-style; solo el estimador empírico. Los **ablations de overparameterización** (anchura↓confusión, profundidad↑confusión, BN+skip↓confusión) son material de discusión teórica, no se reproducen como experimento propio.
+
+## Papers relacionados
+
+- [[Making Coherence Out of Nothing At All - Measuring the Evolution of Gradient Alignment]] — misma familia (alineación); m-coherence es el agregado complementario (media de pares) frente al peor-caso (mínimo) de gradient confusion.
+- [[Stiffness - A New Perspective on Generalization in Neural Networks]] — misma familia; cosine-stiffness es el mismo coseno entre gradientes pero per-sample y desglosado within/between clases, no el mínimo per-batch.
+- [[Disparity Between Batches as a Signal for Early Stopping]] — comparte el batch-grad sweep y el mismo objeto (discrepancia entre 2 batches); GD usa distancia $\ell_2$ sin normalizar donde aquí se usa el coseno.
+- [[A Study of Gradient Variance in Deep Learning]] — comparte el batch-grad sweep; `normalized_variance` es la cara de varianza estocástica del mismo barrido de gradientes de batch.
+- [[Coherent Gradients An Approach to Understanding Generalization in Gradient Descent-based Optimization]] — mismo problema (alineación de gradientes como motor de generalización); el paper cita la CGH como marco conceptual de fondo.
+- [[Gradient-Weight Alignment as a Train-Time Proxy for Generalization in Classification Tasks]] — mismo problema (proxy barato en train-time para predecir generalización); GWA usa coseno gradiente-peso en lugar de coseno entre gradientes.
+
+## Otros papers interesantes a revisar
+
+- **Gradient Diversity: a Key Ingredient for Scalable Distributed Learning** (Yin, Pananjady, Lam, Papailiopoulos, Ramchandran, Bartlett, 2018) — define *gradient diversity* $\Delta_S(w) = \frac{\sum_i \|\nabla f_i\|^2}{\|\sum_i \nabla f_i\|^2}$, magnitud emparentada con la confusión que regula el batch size admisible sin pérdida de velocidad; el propio Sankararaman la contrasta. arXiv:1706.05699.
+- **Stochastic Training is Not Necessary for Generalization** (Geiping, Goldstein et al., 2021) — del mismo grupo (Goldstein); estudia hasta qué punto el ruido de SGD (y por tanto la confusión/diversidad de gradientes) es necesario para generalizar, complementa la lectura sobre el rol del gradiente bruto. arXiv:2109.14119.
+- **Gradient Descent Happens in a Tiny Subspace** (Gur-Ari, Roberts, Dyer, 2018) — muestra que el gradiente vive en un subespacio de baja dimensión definido por los top eigenvectores de la Hessiana; relevante para entender por qué los cosenos entre gradientes de batch no son ruido puro. arXiv:1812.04754.

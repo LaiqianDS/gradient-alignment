@@ -67,4 +67,30 @@ def gradient_disparity(model, loss_fn, sampler, s=5):
 - **Logging**: un escalar `gradient_disparity` por paso de medición a CSV/TensorBoard/W&B, junto con `epoch`, `step`, `train_loss` y `test_loss` para la correlación posterior con eficiencia (epochs-to-threshold, AUC test loss, best test loss). Opcionalmente, GD por capa si el coste lo permite, útil para análisis comparativo entre FC/CNN/ResNet.
 
 ## Notes
+
+### Uso en el TFG
+
+- **Métrica que origina**: `gradient_disparity` (familia alineación, `METRIC_REGISTRY`). Es la fuente directa de esta métrica en el registro cerrado de 10.
+- **Cómo se usa**: distancia $\ell_2$ media entre los gradientes de $s$ mini-batches *independientes* sobre el gradiente bruto $\nabla L$, $\mathcal{D}_{i,j} = \|g_i - g_j\|_2$ con $\overline{\mathcal{D}} = \binom{s}{2}^{-1}\sum_{i<j}\mathcal{D}_{i,j}$ y $s = 5$ (10 pares, según el paper). Se mide en las ventanas tempranas (5/10/25/50% de épocas) y se correlaciona con generalización/eficiencia; **no** se usa el criterio de early stopping con patience del paper.
+- **Señal**: $\downarrow$ mejor (disparidad baja $\Rightarrow$ batches coherentes). El paper reporta Pearson $\rho = 0.957$ entre GD y error de test sobre 220 configuraciones.
+- **Pitfalls/decisiones clave**: es una **magnitud $\ell_2$, NO coseno** $\Rightarrow$ **no normalizar**: la cota PAC-Bayes del paper depende de $\|g_1 - g_2\|_2^2$ sin normalizar (vía $\mathrm{KL}(Q_1\|Q_2) = \tfrac{1}{2}\tfrac{\gamma^2}{\sigma^2}\|g_1-g_2\|_2^2$); por ello **contrae cuando $\|g\|\to 0$** tarde en el entrenamiento y su escala absoluta no es comparable entre optimizadores (en Adam/momentum el término KL recoge factores de promedios decadentes). Los $s$ batches deben ser **independientes** (muestreo sin solape con el siguiente train step).
+- **Sweep compartido**: comparte el *batch-grad sweep* (K = 10 batches disjuntos); `gradient_disparity` toma los **primeros 5** sin coste adicional. Convive con `cos_sim_batches`, `gradient_confusion` y `normalized_variance`.
+- **NOTA — paper comparable (delta a argumentar)**: es **uno de los 3 papers más comparables** al TFG (junto a Ru et al. 2021 y Hölzl 2025) por atacar el mismo problema —predicción temprana y barata de generalización/early-stopping. La intro debe argumentar el **delta explícito**: ellos *optimizan* un criterio de parada single-metric sin val set; el TFG es **correlacional**, no optimiza, evalúa 10 métricas + baseline en un sweep controlado (SGD/Adam × FC/CNN/ResNet × MNIST/CIFAR-10/(ImageNet)) y sitúa GD como **una métrica más** dentro de un estudio comparativo de proxies, midiendo su poder predictivo relativo en ventanas tempranas frente a alternativas de alineación y varianza.
+
+## Papers relacionados
+
+- [[Gradient-Weight Alignment as a Train-Time Proxy for Generalization in Classification Tasks]] — mismo problema (proxy train-time de generalización); compara explícitamente contra Gradient Disparity como baseline. Uno de los 3 comparables.
+- [[Speedy Performance Estimation for Neural Architecture Search]] — mismo problema (predicción temprana barata sin val set); TSE-EMA es el baseline del TFG. Uno de los 3 comparables.
+- [[Stiffness - A New Perspective on Generalization in Neural Networks]] — familia alineación: similitud entre gradientes per-sample (coseno/signo) como proxy de generalización; alternativa normalizada a la distancia $\ell_2$ de GD.
+- [[The Impact of Neural Network Overparameterization on Gradient Confusion and Stochastic Gradient Descent]] — familia alineación; gradient confusion sobre pares de gradientes de batch, comparte el mismo *batch-grad sweep* que GD.
+- [[Making Coherence Out of Nothing At All - Measuring the Evolution of Gradient Alignment]] — familia alineación; m-coherence mide alineación de gradientes como señal de generalización a lo largo del entrenamiento.
+- [[Coherent Gradients An Approach to Understanding Generalization in Gradient Descent-based Optimization]] — fundamento conceptual de la familia alineación (CGH); racionaliza por qué la coherencia/disparidad entre gradientes predice generalización.
+
+## Otros papers interesantes a revisar
+
+- **Fantastic Generalization Measures and Where to Find Them** (Jiang et al., 2019) — estudio empírico a gran escala de medidas de generalización y su correlación causal; marco de referencia para situar GD frente a otros proxies. arXiv:1912.02178
+- **Predicting Neural Network Accuracy from Weights** (Unterthiner et al., 2020) — predicción de accuracy desde estadísticos baratos del modelo; comparable como proxy temprano sin val set. arXiv:2002.11448
+- **Robust Early-Learning: Hindering the Memorization of Noisy Labels** (Xia et al., 2021) — early stopping/learning bajo label noise, escenario central de Forouzesh & Thiran. ICLR 2021 (OpenReview `Eql5b1_hTE4`)
+- **A PAC-Bayesian Approach to Spectrally-Normalized Margin Bounds for Neural Networks** (Neyshabur et al., 2018) — base PAC-Bayes de la que parte la derivación de la GD; útil para contextualizar la cota teórica. arXiv:1707.09564
+
 ## Cited By

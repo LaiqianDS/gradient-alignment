@@ -129,3 +129,16 @@ $$\text{NGV} = \frac{\text{tr}(\text{Cov}(g))}{\|\mathbb{E}[g]\|^2} \quad (\text
 
 Abajo podemos ver que usando GC (su método que aprovecha esto de manera naïve), logran reducir la varianza mucho antes que mini batch con tamaño B, con tamaño 2B y contra SVRG
 ![[Pasted image 20260521195641.png]]
+
+## Papers relacionados
+- [[An Empirical Model of Large-Batch Training]] — misma familia varianza; el gradient noise scale $\mathcal{B}_{\text{simple}} = \operatorname{tr}(\Sigma)/\|G\|^2$ es la misma ratio que NGV salvo escala (CLT: $\mathcal{B}_{\text{simple}}\approx B\cdot\text{NGV}$, Spearman esperado >0.9; fuente de `gns_simple`).
+- [[Understanding Why Neural Networks Generalize Well Through GSNR of Parameters]] — familia varianza; GSNR $= \tilde{g}^2/\rho^2$ es el SNR por parámetro, esto es, el inverso de la NGV agregado de otra forma (validar redundancia, Spearman ~0.6–0.8; fuente de `gsnr`).
+- [[Accelerating Stochastic Gradient Descent using Predictive Variance Reduction]] — SVRG aparece como baseline en este paper; su hipótesis de varianza decreciente (*strong growth*) falla en deep learning real, justo lo que la NGV creciente diagnostica.
+- [[Adam - A Method for Stochastic Optimization]] — la ratio $\hat m_t/\sqrt{\hat v_t}$ de Adam es el SNR por parámetro que motiva interpretar la NGV como inverso de un signal-to-noise.
+- [[RMSProp - Divide the gradient by a running average of its recent magnitude]] — el segundo momento no centrado $\mathbb{E}[g^2]$ que reescala el paso es el mismo estadístico de varianza que entra en la NGV.
+
+## Otros papers interesantes a revisar
+- **On the Ineffectiveness of Variance Reduced Optimization for Deep Learning** (Defazio & Bottou, NeurIPS 2019) — confirma desde otro ángulo que SVRG (baseline aquí) no acelera el deep learning moderno; refuerza la lectura empírica de Faghri y la motivación del TFG de medir, no reducir, la varianza. arXiv:1812.04529
+- **A Tail-Index Analysis of Stochastic Gradient Noise in Deep Neural Networks** (Şimşekli et al., 2019) — el ruido del gradiente es de cola pesada (no gaussiano); directamente relevante para el histograma de normas $\|g_i\|$ que se loguea como diagnóstico y para la vista distribucional de Faghri. arXiv:1901.06053
+- **The Break-Even Point on Optimization Trajectories of Deep Neural Networks** (Jastrzębski et al., 2020) — analiza el espectro de $\text{Cov}(g)$ en la fase temprana; pertinente para interpretar el crecimiento no monótono de la NGV y la elección de ventanas tempranas. arXiv:2002.09572
+- **Which Algorithmic Choices Matter at Which Batch Sizes? Insights from a Noisy Quadratic Model** (Zhang et al., 2019) — el modelo cuadrático ruidoso explica los rendimientos decrecientes con el batch size que motivan el noise scale y la NGV. arXiv:1907.04164

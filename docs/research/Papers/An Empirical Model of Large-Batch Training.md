@@ -117,3 +117,29 @@ def gns_simple(model, loss_fn, batch_small, batch_big):
 Es un ejemplo de cómo una métrica relacionada con el ruido del gradiente permite seleccionar un valor para un hiperparámetro, en este caso batch size, permitiendo aumentar paralelismo y por ende reducir tiempos, mientras se conserva el rendimiento.
 
 Parten de que se puede utilizar cierto batch size grande sin perjudicar al rendimiento, pero entre problemas, este batch size no es el mismo.
+
+### Uso en el TFG
+
+- **Métrica que origina.** `gns_simple` (familia varianza estocástica), una de las 3 métricas de varianza del `METRIC_REGISTRY` cerrado. Es el *simple gradient noise scale* de McCandlish et al.
+- **Cómo se usa.** Como proxy barato medido en entrenamiento temprano (ventanas 5/10/25/50% de épocas) sobre el gradiente bruto $\nabla L$. NO se optimiza el batch size: se mide su trayectoria y se correlaciona (Spearman) con generalización y eficiencia. Cadencia `epoch`.
+- **Fórmula clave.** $\mathcal{B}_{\text{simple}} = \mathrm{tr}(\Sigma)/\|G\|^2$, estimada sin HVPs con dos batches **disjuntos** $B_{\text{small}} = B_{\text{train}}$ y $B_{\text{big}} = 4 \cdot B_{\text{train}}$: $\widehat{\mathrm{tr}(\Sigma)} = (\|G_{\text{small}}\|^2 - \|G_{\text{big}}\|^2)/(1/B_{\text{small}} - 1/B_{\text{big}})$ y $\widehat{\|G\|^2} = (B_{\text{big}}\|G_{\text{big}}\|^2 - B_{\text{small}}\|G_{\text{small}}\|^2)/(B_{\text{big}} - B_{\text{small}})$. Coste $\approx 5\times$ un paso de entrenamiento.
+- **Señal.** Menor $\mathcal{B}_{\text{simple}}$ = menos ruido relativo del gradiente. Su vínculo con la eficiencia es más sutil que el de NGV: McCandlish lo liga al *batch size crítico* $\mathcal{B}_{\text{crit}}$, no directamente a épocas-a-umbral.
+- **Pitfalls / decisiones.** (i) `gns_exact` (ponderado por Hessiana, $\mathrm{tr}(H\Sigma)/(G^\top H G)$) **descartado**: HVPs caros y el paper muestra que `gns_simple` aproxima bien. (ii) Crece 1–2 órdenes de magnitud durante el entreno ($\|G\| \downarrow$, $\mathrm{tr}(\Sigma)$ estable) → loguear en log-scale y registrar la trayectoria, no un valor puntual. (iii) El estimador puede dar $\widehat{\mathrm{tr}(\Sigma)} < 0$ cuando el ruido domina → EMA opcional sobre numerador y denominador por separado antes de dividir.
+- **Relación con NGV (`normalized_variance`).** Por CLT $\mathcal{B}_{\text{simple}} \approx B \cdot \text{NGV}$, con Spearman esperado $> 0.9$. Redundancia a validar en el pilot; si se confirma, dropear la versión más cara. Puede compartir el barrido batch-grad con NGV (el batch big como concatenación de batches small).
+
+## Papers relacionados
+
+- [[A Study of Gradient Variance in Deep Learning]] — misma familia (varianza); NGV $\approx \mathcal{B}_{\text{simple}}/B$ por CLT, redundancia directa a validar.
+- [[Understanding Why Neural Networks Generalize Well Through GSNR of Parameters]] — misma familia (varianza); GSNR es SNR por parámetro, recíproco conceptual del ruido relativo que mide $\mathcal{B}_{\text{simple}}$.
+- [[Accelerating Stochastic Gradient Descent using Predictive Variance Reduction]] — justificación teórica del eje varianza (SVRG reduce explícitamente la varianza del estimador que aquí se cuantifica).
+- [[Disparity Between Batches as a Signal for Early Stopping]] — mismo problema (proxy barato de gradiente para predecir generalización); GD también usa pares de batches independientes.
+- [[Speedy Performance Estimation for Neural Architecture Search]] — TSE-EMA es el baseline de eficiencia del TFG; predicción temprana de rendimiento, mismo objetivo que el noise scale.
+- [[Adam - A Method for Stochastic Optimization]] — sweep de optimizadores (Adam vs SGD); el paper observa que el LR óptimo de Adam sigue power-law con $\alpha \in [0.5, 1]$ frente a $\alpha = 1$ de SGD/momentum.
+- [[RMSProp - Divide the gradient by a running average of its recent magnitude]] — usado en los experimentos de RL (A2C) del paper; $\hat v_t$ como segundo momento no centrado motiva la lectura SNR del gradiente.
+
+## Otros papers interesantes a revisar
+
+- **Don't Decay the Learning Rate, Increase the Batch Size** (Smith, Kindermann, Le, 2018) — formaliza el schedule de batch size creciente que McCandlish solo esboza (variar $B \propto \sqrt{\mathcal{B}_{\text{simple}}}$); relevante para interpretar el crecimiento del noise scale. arXiv:1711.00489.
+- **Three Factors Influencing Minima in SGD** (Jastrzębski et al., 2018) — relaciona ruido del gradiente, ratio LR/batch y temperatura de SGD ($T = \epsilon/\epsilon_{\max}$), concepto central de la sección de temperatura del paper. arXiv:1711.04623.
+- **Measuring the Effects of Data Parallelism on Neural Network Training** (Shallue et al., 2019) — estudio empírico exhaustivo de la curva pasos-vs-batch que valida y matiza el frente de Pareto hiperbólico de McCandlish. arXiv:1811.03600.
+- **On the Relation Between the Sharpest Directions of DNN Loss and the SGD Step Length** (Jastrzębski et al., 2019) — conecta la Hessiana (presente en $\mathcal{B}_{\text{noise}}$) con el LR efectivo; ayuda a justificar cuándo la aproximación $H \propto I$ de `gns_simple` es razonable. arXiv:1807.05031.

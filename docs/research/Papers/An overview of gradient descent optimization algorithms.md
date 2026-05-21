@@ -96,3 +96,22 @@ Del paper conviene **loggear como variables de control** los hiperparámetros de
 
 ## Notes
 - Introductory review
+
+### Uso en el TFG
+- **Rol**: review didáctico y **citación de respaldo**. No aporta métrica, baseline ni estudio empírico propio; no entra en el `METRIC_REGISTRY`.
+- **Justificar el sweep de optimizadores SGD + Adam**: Ruder ofrece la taxonomía y las razones de elección de cada método, sirviendo de respaldo para acotar el sweep a los dos extremos representativos —descenso por gradiente puro (SGD/momentum) frente a actualización adaptativa con primer y segundo momento (Adam)— y para descartar el resto (Adagrad, Adadelta, RMSprop, AdaMax, Nadam) como casos intermedios sin contraste cualitativo nuevo.
+- **Motivar el raw-grad rationale**: los optimizadores adaptativos (Adagrad/Adadelta/RMSprop/Adam) reescalan el gradiente $\nabla L$ mediante acumuladores de segundos momentos, alterando la magnitud e interpretación del update; esto fundamenta medir las 10 métricas sobre el **gradiente bruto** $\nabla L(w)$ y no sobre la update preacondicionada, garantizando comparabilidad SGD↔Adam.
+- **Variables de control**: respalda loggear los hiperparámetros del optimizador (lr, $\beta_1$, $\beta_2$, $\varepsilon$, momentum) y, como diagnóstico opcional, las normas de $m_t$ y $v_t$ en Adam para el análisis de robustez cross-optimizador.
+- **Qué NO aporta**: ninguna métrica de diagnóstico, ningún resultado cuantitativo (solo comparaciones cualitativas y figuras ilustrativas), ni evidencia correlacional métrica↔generalización. Se cita en *background / related work* (raw-grad rationale + elección de optimizadores), no en *methods* de las métricas.
+
+## Papers relacionados
+- [[Adam - A Method for Stochastic Optimization]] — optimizador del sweep catalogado por Ruder; combina primer momento (momentum) y segundo momento no centrado, base del régimen adaptativo a contrastar con SGD.
+- [[RMSProp - Divide the gradient by a running average of its recent magnitude]] — precursor de Adam en la taxonomía; el segundo momento $E[g^2]$ como reescalado por parámetro motiva el raw-grad rationale (medir sobre $\nabla L$, no sobre la update).
+- [[Understanding Why Neural Networks Generalize Well Through GSNR of Parameters]] — el segundo momento del gradiente que usan los métodos adaptativos (RMSprop/Adam) reaparece aquí como denominador del GSNR (SNR por parámetro), conectando preacondicionamiento y métrica de varianza.
+- [[A Study of Gradient Variance in Deep Learning]] — la varianza/segundo momento del gradiente que escala el paso adaptativo es el objeto de la Normalized Variance ($\mathbb{V}[g]/\mathbb{E}[g]^2$), familia varianza del registro.
+
+## Otros papers interesantes a revisar
+- **Decoupled Weight Decay Regularization (AdamW)** (Loshchilov & Hutter, 2019) — corrige el acoplamiento entre weight decay y el preacondicionamiento adaptativo de Adam; refina la elección de optimizadores adaptativos para el sweep. arXiv:1711.05101.
+- **On the Convergence of Adam and Beyond (AMSGrad)** (Reddi, Kale & Kumar, 2018) — señala un fallo en la prueba de convergencia de Adam y propone AMSGrad; relevante para acotar las garantías del régimen adaptativo. ICLR 2018, arXiv:1904.09237.
+- **The Marginal Value of Adaptive Gradient Methods in Machine Learning** (Wilson et al., 2017) — evidencia empírica de que los métodos adaptativos (Adam/RMSprop) generalizan peor que SGD bien ajustado; respalda directamente el interés del contraste SGD↔Adam del TFG. arXiv:1705.08292.
+- **Adaptive Subgradient Methods for Online Learning and Stochastic Optimization (AdaGrad)** (Duchi, Hazan & Singer, 2011) — fuente primaria del primer optimizador adaptativo de la taxonomía de Ruder; útil para citar el origen del acumulador de segundos momentos. JMLR 12:2121-2159.

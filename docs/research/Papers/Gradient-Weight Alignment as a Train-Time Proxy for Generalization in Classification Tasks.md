@@ -77,4 +77,33 @@ logger.log_scalars({"gwa/mean": gwa_mean, **{f"gwa/{k}": v for k, v in gwa_per_l
 
 **Logging.** GWA por capa y promedio agregado. Frecuencia: cada paso durante la ventana temprana (primeras épocas, foco del análisis predictivo), reduciendo a cada época una vez sale del régimen transitorio. Persistir en formato largo (`step, layer, gwa`) para facilitar la correlación posterior con métricas de eficiencia de entrenamiento completo.
 
+## Notes
+
+### Uso en el TFG
+
+- **Métrica que origina.** Es la fuente de `gwa` en el `METRIC_REGISTRY` (familia alineación). Score per-sample $\gamma(x_i, \mathbf{w}_T) = \cos\text{sim}(\mathbf{g}_T(x_i), \mathbf{w}_T)$: coseno entre el gradiente per-sample y los pesos del clasificador final. Agregado de época con corrección por exceso de curtosis $\text{GWA}_T = M^{(1)} / (\text{Kurt} - 3 + \beta)$, con $\beta = 1.2$.
+- **Cómo se usa (casi gratis, online, last-layer).** Estimador cerrado de la última capa $\mathbf{g}_t(x_i) = -z_i (\hat{y}_i - y_i)^\top$ (con $z_i$ latente penúltima, $\hat{y}_i = \text{softmax}(\text{logits})$): se acumula online en el forward de training, $O(B \cdot d_z \cdot C)$ por minibatch, **sin backward extra**. Es la única métrica del registro que no consume ninguno de los tres sweeps compartidos (engancha hooks al forward, acumula momentos por época).
+- **Señal.** $\uparrow$ mejor: el paper reporta Pearson 0.99 / Spearman 0.97 entre $\max_T \mathbb{E}[\mathcal{A}_T]$ y test accuracy en CIFAR-10. Cadencia `epoch` (acumulación online, scalar al cerrar la época).
+- **Pitfalls / decisiones.** (1) Excluir el bias del clasificador (norma cero $\Rightarrow$ coseno indefinido). (2) Welford para los momentos $M^{(2..4)}$; computar la curtosis desde $\sum \gamma^k$ crudos es numéricamente inestable. (3) $\beta = 1.2$ mantiene el denominador positivo en el límite uniforme; añadir `clamp` $\max(\cdot, \epsilon)$ como salvavida. (4) Convención de signo: el paper usa $\mathbf{g} = -\nabla L$; el pipeline trabaja sobre $\nabla L$ bruto, así que se guarda $\gamma_i$ crudo y se documenta el signo en la capa de análisis. (5) En arquitectura FC el clasificador final **es** la red completa (caso degenerado, marcar con flag explícito).
+- **Limitaciones heredadas del paper.** Distribuciones bimodales tardías que la corrección de curtosis no captura bien; la magnitud del score depende de la dimensionalidad latente $d_z$ (mitigable con Johnson-Lindenstrauss). Refuerzan la preferencia por comparaciones intra-arquitectura.
+- **Paper comparable más reciente (delta a argumentar).** Junto con Ru et al. (2021, TSE) y Forouzesh & Thiran (2021, Gradient Disparity), es uno de los **tres papers más comparables** al TFG (mismo problema: proxy train-time barato de generalización) y el más reciente. La intro de la tesis debe argumentar el delta frente a este: GWA es un proxy puntual *post-hoc* para early stopping y selección de modelo sobre una métrica/arquitectura; el TFG propone un estudio **correlacional cerrado** que mide 10 métricas (7 alineación + 3 varianza) + baseline en ventanas tempranas (5/10/25/50% de épocas), sobre gradiente **bruto** $\nabla L$ (no solo last-layer), barriendo SGD/Adam y FC/CNN/ResNet, para predecir generalización **y** eficiencia sin optimizar nada.
+
+## Papers relacionados
+
+- [[Stiffness - A New Perspective on Generalization in Neural Networks]] — familia alineación; cosine-stiffness es el mismo coseno entre gradientes per-sample, pero entre pares de muestras en vez de gradiente-vs-pesos.
+- [[Making Coherence Out of Nothing At All - Measuring the Evolution of Gradient Alignment]] — familia alineación; m-coherence mide alineamiento gradiente-vs-gradiente promedio, alternativa per-sample escalable como GWA.
+- [[The Impact of Neural Network Overparameterization on Gradient Confusion and Stochastic Gradient Descent]] — familia alineación; gradient confusion (min coseno entre gradientes per-sample) comparte la lectura geométrica de coherencia direccional.
+- [[Coherent Gradients An Approach to Understanding Generalization in Gradient Descent-based Optimization]] — familia alineación; marco CGH del que GWA hereda la intuición de coherencia $\to$ generalización.
+- [[A Theory of Neural Tangent Kernel Alignment and Its Influence on Training]] — familia alineación vía kernel-target alignment, también restringible a last-layer; alineamiento como predictor de aprendizaje.
+- [[Disparity Between Batches as a Signal for Early Stopping]] — paper comparable directo: proxy train-time barato para early stopping (GD); GWA lo usa como baseline competidor en sus tablas.
+- [[Speedy Performance Estimation for Neural Architecture Search]] — paper comparable directo: TSE/TSE-EMA, mismo problema de predicción temprana barata; es el baseline del TFG.
+
+## Otros papers interesantes a revisar
+
+- **Directional convergence and alignment in deep learning** (Ji & Telgarsky, 2020) — base teórica directa de GWA: bajo flujo gradiente con cross-entropy en datos separables, gradiente y pesos convergen direccionalmente ($\mathbb{E}[\gamma] \to 1$). arXiv:2006.06657.
+- **Estimating Training Data Influence by Tracing Gradient Descent (TracIn)** (Pruthi et al., 2020) — usa el gradiente per-sample (también restringido a last-layer por coste) para atribuir influencia y detectar etiquetas ruidosas, igual que el uso sample-level de $\gamma(x_i, \mathbf{w}_T)$. arXiv:2002.08484.
+- **Prevalence of Neural Collapse during the terminal phase of deep learning training** (Papyan, Han & Donoho, 2020) — explica la geometría last-layer (features y pesos del clasificador colapsando alineados) que sustenta por qué el estimador last-layer de GWA es informativo. arXiv:2008.08186 / DOI:10.1073/pnas.2015509117.
+- **Characterizing signal propagation to close the performance gap in unnormalized ResNets** / línea de proxies *zero-cost* NAS como **Zero-Cost Proxies for Lightweight NAS** (Abdelfattah et al., 2021) — proxies train-time/at-init (SNIP, GraSP, synflow, jacov) sobre gradientes; marco comparativo natural para situar el coste y poder predictivo de GWA. arXiv:2101.08134.
+- **Gradient Starvation: A Learning Proclivity in Neural Networks** (Pezeshki et al., 2021) — analiza cómo la dinámica de gradientes condiciona qué features se aprenden y la generalización; complementa la lectura de coherencia direccional con el sesgo de simplicidad que GWA observa empíricamente. arXiv:2011.09468.
+
 ## Cited By

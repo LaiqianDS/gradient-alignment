@@ -102,11 +102,29 @@ log({"kta": float(kta), "epoch": epoch})
 **Logging.** Por época se registra un escalar KTA; opcionalmente los $k$ autovalores principales de $\boldsymbol{K}$ (para inspeccionar el espectro) y, en multiclase, la matriz KSM completa.
 
 ## Notes
-- Conexión con **eje alineación** del TFG, pero a nivel kernel (operador definido por gradientes de salida respecto a parámetros), no a nivel de gradientes batch-wise.
-- Vínculo conceptual: stiffness y cosine similarity entre gradientes son aproximaciones empíricas locales de fenómenos que esta teoría formaliza globalmente.
-- Encaje en TFG: **soporte teórico** para el related work — fundamenta por qué alineación de gradientes debería correlacionar con eficiencia. No baseline directo.
-- La métrica $A(t)$ de Cortes et al. (2012) es la formalización canónica de alineación kernel-target; útil como referencia conceptual frente a métricas batch-wise tipo gradient confusion o stiffness.
-- La predicción de mayor alineación con profundidad ($\boldsymbol{K}_\infty \propto L \boldsymbol{y}\boldsymbol{y}^\top + \boldsymbol{K}_0$) sugiere que el efecto del feature learning escala con $L$: relevante al discutir por qué redes profundas finitas superan a sus contrapartes de anchura infinita.
-- *Kernel specialization* en multiclase es un fenómeno que requiere no linealidad: importante distinguir esta alineación por cabezal vs. la alineación traced/agregada.
+
+### Uso en el TFG
+
+- **Métrica que origina:** `ntk_alignment` (familia alineación). Kernel-Target Alignment de Cortes et al. (2012) sobre el NTK empírico $K_{ij} = \nabla_\theta f(x_i)\cdot\nabla_\theta f(x_j)$: $\text{KTA} = \dfrac{\langle K, Y\rangle_F}{\|K\|_F\,\|Y\|_F}$, con reducción escalar $f = z_{y_i}$ (logit de la clase correcta) e $Y$ matriz one-vs-rest $\pm 1$ por pares ($Y_{ij}=+1$ si $y_i=y_j$, $-1$ si no).
+- **Cómo se mide:** per-sample **Jacobian de $f$** (no de la loss $\ell$) vía `vmap`+`jacrev`; probe $N=256$; default **last-layer-only** (teoría aditiva por capa). Por calcular $\nabla f$ y no $\nabla L$, va en un **sweep SEPARADO** del de `stiffness` / `m_coherence` / `gsnr`.
+- **Señal:** ↑ mejor — KTA alto acelera el aprendizaje (Thm. 4.1: la alineación con el target es la solución óptima del feature map evolutivo).
+- **Pitfalls / decisiones:** $K=JJ^\top$ es PSD por construcción (random projection puede romperlo); usar $Y$ one-vs-rest $\pm 1$, no one-hot (rango trivial $[1/C,1]$); forma **sin centrar** como en Shan & Bordelon (Cortes centra). KSM multiclase off-by-default (coste $C\times$; opcional `every_k_epochs=5` en CIFAR-10).
+- **Doble rol:** (1) métrica del registry; (2) **soporte teórico** para el related work — fundamenta por qué la alineación de gradientes correlaciona con eficiencia, y conecta stiffness/cosine batch-wise (aproximaciones empíricas locales) con la formalización global a nivel kernel. La predicción $\boldsymbol{K}_\infty \propto L\,\boldsymbol{y}\boldsymbol{y}^\top + \boldsymbol{K}_0$ (mayor alineación con profundidad) y la *kernel specialization* multiclase (requiere no linealidad) son argumentos para discutir por qué redes profundas finitas superan al régimen lazy.
+
+## Papers relacionados
+
+- [[Stiffness - A New Perspective on Generalization in Neural Networks]] — familia alineación; cosine/sign-stiffness son la aproximación batch-wise local de lo que el NTK alignment formaliza globalmente.
+- [[Making Coherence Out of Nothing At All - Measuring the Evolution of Gradient Alignment]] — m-coherence mide alineación de gradientes per-sample; comparte el eje "alineación → eficiencia/generalización" a nivel de $\nabla L$.
+- [[Coherent Gradients An Approach to Understanding Generalization in Gradient Descent-based Optimization]] — la CGH (alineación de gradientes per-sample explica generalización) es el correlato empírico de la teoría kernel-target.
+- [[Gradient-Weight Alignment as a Train-Time Proxy for Generalization in Classification Tasks]] — mismo recorte last-layer y proxy de alineación train-time; comparable en diseño de medición.
+- [[The Impact of Neural Network Overparameterization on Gradient Confusion and Stochastic Gradient Descent]] — gradient confusion (coseno mínimo entre gradientes) es la versión worst-case de la (des)alineación que el NTK captura como operador.
+- [[Understanding Why Neural Networks Generalize Well Through GSNR of Parameters]] — vincula propiedades del gradiente (SNR por parámetro) con generalización; complementa la vía alineación con la vía varianza.
+
+## Otros papers interesantes a revisar
+
+- **Neural Tangent Kernel: Convergence and Generalization in Neural Networks** (Jacot, Gabriel & Hongler, 2018) — introduce el NTK y el régimen de anchura infinita; base teórica del operador $K$ que este paper hace evolucionar. arXiv:1806.07572 (NeurIPS 2018).
+- **Algorithms for Learning Kernels Based on Centered Alignment** (Cortes, Mohri & Rostamizadeh, 2012) — origen de la métrica Kernel-Target Alignment $A(K,yy^\top)$ que adopta el paper; discute la versión centrada vs. sin centrar. JMLR 13:795–828.
+- **Implicit Regularization via Neural Feature Alignment** (Baratin, George, Laurent et al., 2021) — evidencia empírica de que el NTK se alinea con el target durante el entrenamiento (fenómeno que motiva la teoría de Shan & Bordelon). arXiv:2008.00938 (AISTATS 2021).
+- **Deep Learning versus Kernel Learning: an Empirical Study of Loss Landscape Geometry and the Time Evolution of the Neural Tangent Kernel** (Fort, Dziugaite, Paul et al., 2020) — caracteriza la evolución temprana del NTK y el cambio rápido de su geometría; respalda usar la ventana temprana como señal. arXiv:2010.15110 (NeurIPS 2020).
 
 ## Cited By

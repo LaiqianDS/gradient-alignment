@@ -68,6 +68,21 @@ RMSProp se trata en este TFG como **background histórico**: precursor directo d
 **Si se incluyera como optimizador opcional** en un análisis de robustez, los diagnósticos serían análogos a los de Adam —norma de $v_t$ por capa y learning rate efectivo $\eta/\sqrt{v_t+\epsilon}$, accesibles vía `optimizer.state[p]['square_avg']` en `torch.optim.RMSprop(lr, alpha=0.99, eps=1e-8)`— y las métricas del estudio (cosine similarity, m-coherence, GNS, NGV, stiffness) se calcularían sobre el **gradiente crudo**, no sobre el update preacondicionado, manteniendo la consistencia con el criterio adoptado para Adam. La inclusión queda relegada a *future work*.
 
 ## Notes
-- Usable para comentar contexto de métodos adaptativos que usan la varianza del gradiente.
-- RMSProp escala el learning rate por una media móvil exponencial del cuadrado del gradiente (segundo momento no centrado), proxy de la varianza por parámetro.
 - Fuente original: Lecture 6e del curso "Neural Networks for Machine Learning" de Hinton (Coursera, 2012). No hay paper formal.
+
+### Uso en el TFG
+- **Rol: related work (junto a Adam), NO métrica del registry.** Precursor histórico del optimizador adaptativo; no aporta ninguna de las 10 métricas + baseline. No entra tampoco en el sweep cerrado (SGD y Adam): equivaldría a un caso intermedio (segundo momento sin momentum), sin contraste cualitativo nuevo.
+- **MeanSquare móvil como 2º momento no centrado / proxy de varianza por parámetro.** $\text{MeanSquare}(w,t) = 0.9\,\text{MeanSquare}(w,t-1) + 0.1\,(\partial E/\partial w)^2$ estima $\mathbb{E}[g^2]$ por peso vía EMA; con $\Delta w \propto (\partial E/\partial w)/\sqrt{\text{MeanSquare}(w,t)}$, el learning rate efectivo $\eta/\sqrt{\mathbb{E}[g^2]}$ es exactamente un reescalado tipo SNR por parámetro.
+- **Motiva el eje varianza del TFG.** El divisor $\sqrt{\mathbb{E}[g^2]}$ es el antecedente conceptual de las métricas de varianza del registry: `normalized_variance` ($\mathbb{V}[g]/\mathbb{E}[g]^2$, inverso de un SNR) y `gsnr` ($\tilde g^2/\rho^2$). RMSProp muestra que ya en 2012 la magnitud cuadrática del gradiente se usaba como señal local de ruido para regular el paso.
+- **Motiva el raw-grad rationale.** RMSProp ilustra que la *update* aplicada ($\propto g/\sqrt{\text{MeanSquare}}$) está reescalada por el propio segundo momento; medir las métricas sobre esa update mezclaría la señal de alineación/varianza con el preacondicionamiento del optimizador. De ahí la decisión de calcular todas las métricas sobre el **gradiente bruto** $\nabla L$, garantizando comparabilidad SGD vs Adam.
+
+## Papers relacionados
+- [[Adam - A Method for Stochastic Optimization]] — sucesor directo: formaliza el 2º momento $\hat v_t$ de RMSProp y añade 1er momento, corrección de sesgo y $\epsilon$; razón $\hat m_t/\sqrt{\hat v_t}$ como SNR.
+- [[An overview of gradient descent optimization algorithms]] — sitúa RMSProp en la taxonomía de optimizadores adaptativos (Adagrad → Adadelta → RMSprop → Adam); respaldo para justificar el sweep SGD+Adam.
+- [[Understanding Why Neural Networks Generalize Well Through GSNR of Parameters]] — usa el SNR por parámetro $\tilde g^2/\rho^2$, formalizando como métrica el cociente señal/ruido que RMSProp explota implícitamente en su divisor.
+- [[A Study of Gradient Variance in Deep Learning]] — define la varianza normalizada $\mathbb{V}[g]/\mathbb{E}[g]^2$ como inverso de un SNR, el eje varianza que RMSProp motiva históricamente.
+
+## Otros papers interesantes a revisar
+- **Adaptive Subgradient Methods for Online Learning and Stochastic Optimization (Adagrad)** (Duchi, Hazan & Singer, 2011) — origen de los learning rates por parámetro escalados por la suma acumulada de gradientes al cuadrado; RMSProp lo corrige sustituyendo la suma por una EMA. JMLR 12:2121-2159.
+- **ADADELTA: An Adaptive Learning Rate Method** (Zeiler, 2012) — variante contemporánea de RMSProp que elimina el learning rate global usando una segunda EMA sobre las updates al cuadrado. arXiv:1212.5701.
+- **On the Convergence of Adam and Beyond (AMSGrad)** (Reddi, Kale & Kumar, 2018) — analiza fallos de convergencia de los métodos con EMA del 2º momento (RMSProp/Adam) y propone una corrección; contexto teórico del divisor adaptativo. arXiv:1904.09237.

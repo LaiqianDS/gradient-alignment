@@ -58,3 +58,24 @@ Es una referencia fundacional, está en NeurIPS, todo el mundo en optimización 
 Métodos que aprovechan la varianza del gradiente
 - Establecer que la comunidad reconoce que la varianza tiene contenido informativo.
 - Marcar que tú no propones un nuevo optimizador, sino una _señal de diagnóstico_ derivada de las mismas magnitudes.
+
+### Uso en el TFG
+
+- **Rol: soporte teórico del eje varianza, NO métrica del registry.** SVRG no aporta ninguna de las 10 métricas (ni el baseline TSE-EMA); se cita en *related work* como la pieza que legitima el eje varianza del TFG: si reducir explícitamente la varianza del estimador del gradiente acelera la convergencia, entonces **medir** esa varianza durante el entrenamiento es un proxy plausible de dificultad/eficiencia de optimización.
+- **Idea + fórmula del update.** SVRG mantiene un *snapshot* $\tilde{w}$ y su gradiente full-batch periódico $\tilde{\mu} = \nabla P(\tilde{w}) = \frac{1}{n}\sum_i \nabla\psi_i(\tilde{w})$ como *control variate*, y aplica el paso interior $w \leftarrow w - \eta\,(\nabla\psi_i(w) - \nabla\psi_i(\tilde{w}) + \tilde{\mu})$. El estimador es insesgado ($\mathbb{E}_i[\nabla\psi_i(\tilde{w}) - \tilde{\mu}] = 0$) y su varianza $\to 0$ cuando $w, \tilde{w} \to w_*$, lo que permite tasa $\eta$ constante.
+- **Resultado clave que se cita.** Bajo suavidad y convexidad fuerte, esa reducción de varianza convierte la convergencia **sublineal $O(1/t)$ de SGD en lineal/geométrica $\alpha^s$** (Teorema 1). Es el argumento causal "menos varianza del gradiente $\Rightarrow$ optimización más rápida" que el TFG invoca para justificar `normalized_variance`, `gns_simple` y `gsnr`.
+- **Conexión crítica — Strong Growth Condition (MNIST vs deep learning real).** La aceleración de SVRG presupone que la varianza del estimador decae cerca del óptimo (régimen tipo *strong growth condition*, varianza $\to 0$ en $w_*$). Esa hipótesis **se cumple en problemas tipo MNIST** (los experimentos convexos/no convexos del paper la soportan) pero **falla en deep learning real (CIFAR-10/ImageNet)**, donde la varianza del gradiente *crece* durante el entrenamiento. Esto motiva la decisión central del TFG: **medir la varianza empíricamente en vez de asumirla decreciente**.
+- **Enlace con Faghri (baseline).** [[A Study of Gradient Variance in Deep Learning]] usa precisamente SVRG como baseline para mostrar este fallo: la reducción de varianza por *control variate* deja de ayudar cuando la varianza no decae, evidenciando empíricamente la ruptura de la *strong growth condition* en redes profundas. Por eso SVRG entra como justificación teórica + contraste, no como método a ejecutar (a lo sumo, *sanity check* opcional fuera de scope).
+
+## Papers relacionados
+
+- [[A Study of Gradient Variance in Deep Learning]] — usa SVRG como baseline y muestra empíricamente que su hipótesis de varianza decreciente (strong growth) falla en deep learning real; fuente directa de `normalized_variance`.
+- [[An Empirical Model of Large-Batch Training]] — formaliza la varianza del gradiente como *gradient noise scale* $\mathcal{B}_{\text{simple}} = \mathrm{tr}(\Sigma)/\|G\|^2$; mismo eje varianza, medida en vez de reducida (fuente de `gns_simple`).
+- [[Understanding Why Neural Networks Generalize Well Through GSNR of Parameters]] — GSNR $= \tilde{g}^2/\rho^2$ es el SNR por parámetro, el inverso conceptual de la varianza que SVRG reduce; fuente de `gsnr`.
+
+## Otros papers interesantes a revisar
+
+- **A Stochastic Gradient Method with an Exponential Convergence Rate for Finite Training Sets (SAG)** (Le Roux, Schmidt & Bach, 2012) — el predecesor directo citado por SVRG: logra convergencia lineal promediando gradientes, pero almacena los $n$ gradientes individuales (inviable a gran escala). Contextualiza por qué SVRG no necesita ese almacenamiento. arXiv:1202.6258
+- **Stochastic Dual Coordinate Ascent Methods for Regularized Loss Minimization (SDCA)** (Shalev-Shwartz & Zhang, 2013) — el otro método de varianza-reducida con el que SVRG se compara y se reinterpreta como reducción de varianza; JMLR 14:567-599. arXiv:1209.1873
+- **SpiderBoost / SARAH-type variance reduction for non-convex optimization** (Nguyen et al., SARAH, 2017) — extiende la reducción de varianza tipo SVRG al caso no convexo con garantías más fuertes; útil si se quiere matizar por qué la teoría de SVRG es solo heurística en redes profundas. arXiv:1703.00102
+- **On the Ineffectiveness of Variance Reduced Optimization for Deep Learning** (Defazio & Bottou, NeurIPS 2019) — argumenta empíricamente que la reducción de varianza estilo SVRG no acelera el deep learning moderno; refuerza desde otro ángulo la motivación del TFG de medir (no reducir) la varianza. arXiv:1812.04529
