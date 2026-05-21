@@ -1,7 +1,7 @@
 ---
 authors: ["Satrajit Chatterjee", "Piotr Zielinski"]
 year: 2020
-status: read
+status: to-read
 relevance: high
 last_review: 2026-05-07
 url: "https://arxiv.org/pdf/2008.01217"

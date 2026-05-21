@@ -3,7 +3,7 @@ authors:
   - Rie Johnson
   - Tong Zhang
 year: 2013
-status: read
+status: to-read
 relevance: low
 last_review: 2026-05-07
 url: https://proceedings.neurips.cc/paper_files/paper/2013/file/ac1dd209cbcc5e5d1c6e28598e8cbbe8-Paper.pdf

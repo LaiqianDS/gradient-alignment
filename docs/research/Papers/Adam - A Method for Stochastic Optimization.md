@@ -3,7 +3,7 @@ authors:
   - Diederik P. Kingma
   - Jimmy Ba
 year: 2015
-status: read
+status: to-read
 relevance: low
 last_review: 2026-05-07
 url: https://arxiv.org/pdf/1412.6980

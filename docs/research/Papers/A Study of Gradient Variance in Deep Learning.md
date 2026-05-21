@@ -110,3 +110,22 @@ log(ngv)
 **Logging.** Por época: NGV global, NGV por capa y, opcionalmente, un histograma de las normas $\|g_i\|$ para diagnosticar colas pesadas en la distribución de gradientes.
 
 ## Notes
+
+**Aporta al TFG:** métrica `normalized_variance` (NGV), familia varianza.
+
+$$\text{NGV} = \frac{\text{tr}(\text{Cov}(g))}{\|\mathbb{E}[g]\|^2} \quad (\text{inverso de SNR; <1} \Rightarrow \text{señal domina})$$
+
+- **Implementación:** K=20–40 grads de batch, streaming $S=\sum g_k$, $Q=\sum\|g_k\|^2$. Coste bajo. Comparte batch-grad sweep. → `metrics_impl.md §2.1`.
+- **Signo:** menor = mejor.
+- **Por qué normalizada y no absoluta:** varianza cruda no comparable entre escalas (CIFAR-10 ~1e-4 vs ImageNet <1e-6). NGV sí.
+
+**Para análisis:**
+- Validar redundancia NGV vs `gns_simple` (CLT: $\mathcal{B}_{simple}\approx B\cdot$NGV, Spearman >0.9) y vs `gsnr` (~0.6–0.8). Dropear cara si redundante.
+- Hallazgo contraintuitivo = sanity check: NGV **crece** durante entreno (CIFAR/ImageNet), sube tras LR drops. No monótono.
+
+**Soporte teórico (intro/related):** justifica eje varianza; conecta con Adam/RMSProp ($\hat m/\sqrt{\hat v}$ = SNR) y SVRG.
+
+**NO usar:** Gradient Clustering (optimización, fuera de scope correlacional), demostraron empíricamente (solo en algunos casos) que explotar la distribución de los gradientes a la hora de entrenar mediante un sampling de los gradientes en el mini batch, podía acelerar el entrenamiento.
+
+Abajo podemos ver que usando GC (su método que aprovecha esto de manera naïve), logran reducir la varianza mucho antes que mini batch con tamaño B, con tamaño 2B y contra SVRG
+![[Pasted image 20260521195641.png]]

@@ -1,7 +1,7 @@
 ---
 authors: ["Karthik Abinav Sankararaman", "Soham De", "Zheng Xu", "W. Ronny Huang", "Tom Goldstein"]
 year: 2020
-status: read
+status: to-read
 relevance: high
 last_review: "2026-05-07"
 url: "https://proceedings.mlr.press/v119/sankararaman20a/sankararaman20a.pdf"

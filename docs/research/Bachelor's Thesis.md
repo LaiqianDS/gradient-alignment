@@ -8,8 +8,6 @@
 - Tutor evalúa parte de la nota
 - [Notas redacción TFG (UPV)](https://poliformat.upv.es/access/content/group/GRA_14056_2025/Seminario%20Redacción%20y%20Defensa%20del%20TFG/3_Trabajo%20Final%20de%20Grado.pdf)
 
-![[Pasted image 20260327182315.png]]
-
 ## Pregunta de investigación
 ¿Pueden métricas de variabilidad y alineación de gradientes, medidas en la fase inicial del entrenamiento, predecir la eficiencia del entrenamiento completo?
 
@@ -48,7 +46,7 @@ flowchart LR
 ## Papers
 ```dataview
 TABLE authors, year, status, relevance, link(url, "Link") AS "Paper", last_review
-FROM "02 - Files/Uni/TFG/Papers"
+FROM "docs/research/Papers"
 SORT file.mtime DESC
 ```
 

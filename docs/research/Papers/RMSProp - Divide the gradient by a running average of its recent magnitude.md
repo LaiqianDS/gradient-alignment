@@ -3,7 +3,7 @@ authors:
   - Tijmen Tieleman
   - Geoffrey Hinton
 year: 2012
-status: read
+status: to-read
 relevance: low
 last_review: 2026-05-07
 url: https://www.cs.toronto.edu/~hinton/coursera/lecture6/lec6.pdf
