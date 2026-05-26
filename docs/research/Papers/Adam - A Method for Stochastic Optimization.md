@@ -7,6 +7,9 @@ status: to-read
 relevance: low
 last_review: 2026-05-07
 url: https://arxiv.org/pdf/1412.6980
+tfg_role:
+  - background
+  - method
 ---
 
 # Adam - A Method for Stochastic Optimization

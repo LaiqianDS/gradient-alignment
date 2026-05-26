@@ -9,6 +9,9 @@ status: read
 relevance: high
 last_review: 2026-05-07
 url: https://arxiv.org/pdf/2007.04532
+tfg_role:
+  - metric
+  - baseline
 ---
 
 # A Study of Gradient Variance in Deep Learning
@@ -118,6 +121,7 @@ $$\text{NGV} = \frac{\text{tr}(\text{Cov}(g))}{\|\mathbb{E}[g]\|^2} \quad (\text
 - **Implementación:** K=20–40 grads de batch, streaming $S=\sum g_k$, $Q=\sum\|g_k\|^2$. Coste bajo. Comparte batch-grad sweep. → `metrics_impl.md §2.1`.
 - **Signo:** menor = mejor.
 - **Por qué normalizada y no absoluta:** varianza cruda no comparable entre escalas (CIFAR-10 ~1e-4 vs ImageNet <1e-6). NGV sí.
+- **Aviso de nomenclatura:** el paper define dos métricas distintas que conviene no confundir. La *Average Variance* es la traza normalizada de la covarianza (varianza absoluta agregada) y **no** es comparable entre problemas de distinta escala. La *Normalized Variance* (NGV), $\mathbb{V}[g]/\mathbb{E}[g]^2$, **sí** lo es. El término "Normalized Average Variance" no aparece como tal en el paper: mezcla ambos conceptos. Para cualquier comparación cross-problema (datasets o modelos) usar la NGV; la Average Variance cruda solo tiene sentido dentro de un mismo problema.
 
 **Para análisis:**
 - Validar redundancia NGV vs `gns_simple` (CLT: $\mathcal{B}_{simple}\approx B\cdot$NGV, Spearman >0.9) y vs `gsnr` (~0.6–0.8). Dropear cara si redundante.

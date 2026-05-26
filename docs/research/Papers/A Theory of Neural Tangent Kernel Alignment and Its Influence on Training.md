@@ -7,6 +7,9 @@ status: to-read
 relevance: medium
 url: https://arxiv.org/abs/2105.14301
 last_review: 2026-05-07
+tfg_role:
+  - theory
+  - related-work
 ---
 
 # A Theory of Neural Tangent Kernel Alignment and Its Influence on Training

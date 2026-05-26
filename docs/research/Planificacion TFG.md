@@ -12,7 +12,6 @@
 - [ ] Revisar papers y cerrar lista de métricas a implementar (más de 4)
 - [ ] Montar pipeline base: carga datos, modelos, bucle entrenamiento, logging (W&B/TensorBoard), semillas fijas
 - [x] Montar setup LaTex
-- [ ] Leer papers de Forouzesh ([[Disparity Between Batches as a Signal for Early Stopping]]) y Ru y examinar área de aportación
 - [ ] **Entregable:** Repo entrena modelos×datasets con loss/accuracy logged
 
 ### Semanas 1-2 (4-17 mayo). Métricas de alineación
@@ -54,6 +53,29 @@
 
 ### Plan B septiembre
 Si correlación + intervención + redacción no caben antes 22 junio: cortar en mejor punto, defender lo hecho en septiembre con experimentos extendidos.
+
+## Cola de lectura de papers
+
+Orden recomendado para los 13 pendientes (status `to-read`). Núcleo antes de soporte; conceptual antes de escalable. Mínimo viable para cerrar diseño experimental: 1–5.
+
+### Prioridad alta — núcleo (métrica / baseline / método)
+- [ ] 1. [[Stiffness - A New Perspective on Generalization in Neural Networks|Stiffness]] (Fort, 2019) — operador base de alineación
+- [ ] 2. [[Making Coherence Out of Nothing At All - Measuring the Evolution of Gradient Alignment|Making Coherence]] (Chatterjee & Zielinski, 2020) — versión escalable de Stiffness + LR
+- [ ] 3. [[The Impact of Neural Network Overparameterization on Gradient Confusion and Stochastic Gradient Descent|Gradient Confusion]] (Sankararaman, 2020) — alineación ↔ velocidad SGD
+- [ ] 4. [[Disparity Between Batches as a Signal for Early Stopping|Disparity Between Batches]] (Forouzesh, 2021) — baseline directo del TFG
+- [ ] 5. [[Gradient-Weight Alignment as a Train-Time Proxy for Generalization in Classification Tasks|Gradient-Weight Alignment]] (Hölzl, 2025) — competidor reciente, posicionamiento
+- [ ] 6. [[Understanding Why Neural Networks Generalize Well Through GSNR of Parameters|GSNR]] (Liu, 2020) — eje varianza con marco teórico
+- [ ] 7. [[Speedy Performance Estimation for Neural Architecture Search|Speedy NAS]] (Ru, 2021) — plantilla metodológica de proxy temprano
+
+### Prioridad media — soporte / related work / contexto
+- [ ] 8. [[Coherent Gradients An Approach to Understanding Generalization in Gradient Descent-based Optimization|Coherent Gradients]] (Chatterjee, 2019) — marco conceptual previo
+- [ ] 9. [[An Empirical Model of Large-Batch Training|Empirical Model Large-Batch]] (McCandlish, 2018) — fuente `gns_simple`
+- [ ] 10. [[A Theory of Neural Tangent Kernel Alignment and Its Influence on Training|NTK Alignment]] (Shan & Bordelon, 2021) — fundamento teórico kernel
+- [ ] 11. [[An overview of gradient descent optimization algorithms|Ruder overview]] (2017) — capítulo fundamentos
+
+### Prioridad baja — background optimizadores (lectura mínima)
+- [ ] 12. [[Adam - A Method for Stochastic Optimization|Adam]] (Kingma & Ba, 2015)
+- [ ] 13. [[RMSProp - Divide the gradient by a running average of its recent magnitude|RMSProp]] (Tieleman & Hinton, 2012)
 
 ## Backlog / ideas sueltas
 - Toy problem para visualización pedagógica de métricas

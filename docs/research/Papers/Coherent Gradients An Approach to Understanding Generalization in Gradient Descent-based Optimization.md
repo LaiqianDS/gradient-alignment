@@ -6,6 +6,9 @@ status: to-read
 relevance: medium
 last_review: 2026-05-07
 url: https://arxiv.org/abs/2002.10657
+tfg_role:
+  - theory
+  - related-work
 ---
 
 # Coherent Gradients: An Approach to Understanding Generalization in Gradient Descent-based Optimization

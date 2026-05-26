@@ -10,6 +10,9 @@ status: to-read
 relevance: high
 url: https://arxiv.org/abs/2001.07384
 last_review: 2026-05-07
+tfg_role:
+  - metric
+  - theory
 ---
 
 # Understanding Why Neural Networks Generalize Well Through GSNR of Parameters

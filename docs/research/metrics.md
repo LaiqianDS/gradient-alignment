@@ -1,6 +1,6 @@
 # Métricas por Paper
 
-Resumen comparativo de las métricas utilizadas en los 15 papers leídos del TFG. Cada entrada distingue entre la métrica central propuesta o estudiada por el paper y las métricas usadas para la evaluación empírica.
+Resumen comparativo de las métricas utilizadas en los 16 papers leídos del TFG. Cada entrada distingue entre la métrica central propuesta o estudiada por el paper y las métricas usadas para la evaluación empírica.
 
 ---
 
@@ -158,6 +158,19 @@ Interpretable como el número medio de ejemplos del sample que se benefician de 
 
 ---
 
+## On the Ineffectiveness of Variance Reduced Optimization for Deep Learning (Defazio & Bottou, 2019)
+
+**Métrica(s) central(es):**
+- No propone métrica nueva. Mide directamente la **ratio de varianza** del estimador SVRG respecto al estimador SGD, $\mathrm{Var}[\hat{g}_{\text{SVRG}}]/\mathrm{Var}[\hat{g}_{\text{SGD}}]$, sobre el dataset completo en snapshots fijos del modelo. Ratio $<1$ indica reducción; ratios $\sim 2$ implican que el control variate ha quedado descorrelacionado con el gradiente estocástico, **aumentando** la varianza. Para que SVRG sea rentable la ratio debe estar por debajo de $1/3$.
+- Diagnóstico complementario: **distancia iterada** $\|w_k - \tilde{w}\|$ y **curvatura empírica** $\|\tfrac{1}{|S_i|}\sum_{j\in S_i}[f'_j(w_k) - f'_j(\tilde{w})]\|/\|w_k - \tilde{w}\|$ entre el iterado actual y el snapshot, para localizar la causa del fallo.
+
+**Métricas de evaluación:**
+- Test error sobre CIFAR-10 (LeNet, DenseNet-40-36, ResNet-110) e ImageNet (ResNet-18); comparación SGD vs SVRG vs SCSG.
+- Test error post-fine-tuning activando SVRG desde diferentes epochs en ResNet-50 ($23.61\%$ baseline SGD vs $23.65\text{–}28.60\%$ con SVRG fine-tuning) y DenseNet-169 ($23.22\%$ baseline vs $23.30\text{–}23.38\%$).
+- Varianza del paso streaming en función de iteraciones desde el snapshot.
+
+---
+
 ## RMSProp - Divide the gradient by a running average of its recent magnitude (Tieleman & Hinton, 2012)
 
 **Métrica(s) central(es):**
@@ -250,6 +263,7 @@ $$R(\mathcal{Z}, n) = 1 - \frac{1}{n}\sum_j W_j \cdot \frac{1}{r_j + 1/n},\quad 
 | Forouzesh & Thiran (2021) | Gradient Disparity $\mathcal{D}_{i,j} = \|g_i - g_j\|_2$ | Test loss/accuracy/AUC, Pearson, sensibilidad al threshold |
 | Hölzl (2025) | Gradient-Weight Alignment (GWA), score $\gamma(x_i, w_T)$ | Test accuracy, Pearson/Spearman, robustez, overhead |
 | Chatterjee & Zielinski (2020) | m-coherence $\alpha_m = m\cdot \mathbb{E}[g_z\cdot g]/\mathbb{E}[g_z\cdot g_z]$ | Train/test loss, top-1 accuracy, m-coherence por capa |
+| Defazio & Bottou (2019) | No propone métrica nueva (ratio $\mathrm{Var}[\hat{g}_{\text{SVRG}}]/\mathrm{Var}[\hat{g}_{\text{SGD}}]$, distancia iterada, curvatura empírica) | Test error CIFAR-10/ImageNet, fine-tuning vs baseline, varianza streaming |
 | Tieleman & Hinton (2012) | No propone métrica nueva (RMSProp, MeanSquare móvil) | Error train/val (cualitativo) |
 | Ru et al. (2021) | TSE, TSE-E, TSE-EMA (suma de training losses) | Spearman, Kendall, error de test vs runtime, top-10 accuracy |
 | Fort et al. (2019) | Sign-stiffness, Cosine-stiffness, class stiffness matrix, dynamic critical length $\xi$ | Loss/accuracy train-val, stiffness vs distancia, between-classes |

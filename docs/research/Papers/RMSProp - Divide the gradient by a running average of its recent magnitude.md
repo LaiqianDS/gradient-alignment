@@ -7,6 +7,9 @@ status: to-read
 relevance: low
 last_review: 2026-05-07
 url: https://www.cs.toronto.edu/~hinton/coursera/lecture6/lec6.pdf
+tfg_role:
+  - background
+  - method
 ---
 
 # RMSProp - Divide the gradient by a running average of its recent magnitude

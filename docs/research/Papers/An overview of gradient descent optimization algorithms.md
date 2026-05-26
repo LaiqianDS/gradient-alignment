@@ -2,10 +2,12 @@
 authors:
   - Sebastian Ruder
 year: 2017
-status: to-read
+status: read
 relevance: medium
 last_review: 2026-05-07
 url: https://arxiv.org/pdf/1609.04747
+tfg_role:
+  - background
 ---
 
 # An overview of gradient descent optimization algorithms

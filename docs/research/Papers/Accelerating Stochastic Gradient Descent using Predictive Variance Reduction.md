@@ -3,10 +3,13 @@ authors:
   - Rie Johnson
   - Tong Zhang
 year: 2013
-status: to-read
+status: read
 relevance: low
 last_review: 2026-05-07
 url: https://proceedings.neurips.cc/paper_files/paper/2013/file/ac1dd209cbcc5e5d1c6e28598e8cbbe8-Paper.pdf
+tfg_role:
+  - related-work
+  - theory
 ---
 
 # Accelerating Stochastic Gradient Descent using Predictive Variance Reduction
@@ -66,6 +69,14 @@ Métodos que aprovechan la varianza del gradiente
 - **Resultado clave que se cita.** Bajo suavidad y convexidad fuerte, esa reducción de varianza convierte la convergencia **sublineal $O(1/t)$ de SGD en lineal/geométrica $\alpha^s$** (Teorema 1). Es el argumento causal "menos varianza del gradiente $\Rightarrow$ optimización más rápida" que el TFG invoca para justificar `normalized_variance`, `gns_simple` y `gsnr`.
 - **Conexión crítica — Strong Growth Condition (MNIST vs deep learning real).** La aceleración de SVRG presupone que la varianza del estimador decae cerca del óptimo (régimen tipo *strong growth condition*, varianza $\to 0$ en $w_*$). Esa hipótesis **se cumple en problemas tipo MNIST** (los experimentos convexos/no convexos del paper la soportan) pero **falla en deep learning real (CIFAR-10/ImageNet)**, donde la varianza del gradiente *crece* durante el entrenamiento. Esto motiva la decisión central del TFG: **medir la varianza empíricamente en vez de asumirla decreciente**.
 - **Enlace con Faghri (baseline).** [[A Study of Gradient Variance in Deep Learning]] usa precisamente SVRG como baseline para mostrar este fallo: la reducción de varianza por *control variate* deja de ayudar cuando la varianza no decae, evidenciando empíricamente la ruptura de la *strong growth condition* en redes profundas. Por eso SVRG entra como justificación teórica + contraste, no como método a ejecutar (a lo sumo, *sanity check* opcional fuera de scope).
+![[Pasted image 20260526130825.png]]
+
+Este método lo que hace es reducir la varianza durante la optimización con garantía teórica y empírica (imagen superior). Cuando optimizamos, actualizamos $w$ moviéndonos en la dirección de un gradiente. El problema es que SGD estima ese gradiente con un único ejemplo elegido (o varios) al azar: acierta en media (es insesgado) pero resulta ruidoso, y ese ruido no desaparece en el óptimo, porque los gradientes individuales no se anulan aunque su promedio sí lo haga. Por eso SGD necesita ir bajando el paso (lr) $\eta$ hasta cero para converger, y eso lo ralentiza
+
+SVRG cambia ese estimador por uno corregido,
+$$\nabla\psi_i(w) - \nabla\psi_i(\tilde{w}) + \tilde{\mu}$$
+donde $\nabla\psi_i(w)$ es el gradiente actual (el que usaría SGD), $\nabla\psi_i(\tilde{w})$ el gradiente del mismo ejemplo o batch, pero evaluado con los parámetros del snapshot $\tilde{w}$ y $\tilde{\mu}$ es la media de la loss function con todos los ejemplos de entrenamiento con los pesos $\tilde{w}$. Sigue siendo insesgado, pero su varianza tiende a cero a medida que te acercas al óptimo, porque el término correctivo cancela el ruido propio de cada ejemplo. Eso permite usar un paso grande y constante, recupera la convergencia lineal y, a diferencia de SAG o SDCA, no exige almacenar todos los gradientes, de modo que también sirve para redes neuronales. El precio es una pasada completa por los datos de vez en cuando para recomputar $\tilde{\mu}$.
+
 
 ## Papers relacionados
 

@@ -6,6 +6,8 @@ status: to-read
 relevance: high
 last_review: 2026-05-07
 url: https://arxiv.org/abs/2510.25480
+tfg_role:
+  - metric
 ---
 
 # Gradient-Weight Alignment as a Train-Time Proxy for Generalization in Classification Tasks

@@ -1,6 +1,6 @@
 # Modelos por Paper
 
-Consolidación de las arquitecturas y modelos utilizados en los experimentos de los 15 papers del TFG. Agrupados por familia. Solo se incluyen modelos efectivamente reportados en las secciones de datasets y modelos de cada paper.
+Consolidación de las arquitecturas y modelos utilizados en los experimentos de los 16 papers del TFG. Agrupados por familia. Solo se incluyen modelos efectivamente reportados en las secciones de datasets y modelos de cada paper.
 
 ---
 
@@ -90,6 +90,16 @@ Review/Slides — sin experimentos propios. El artículo presenta una taxonomía
 
 ---
 
+## On the Ineffectiveness of Variance Reduced Optimization for Deep Learning (Defazio y Bottou, 2019)
+
+- **CNNs** — LeNet-5 modificada con batch-norm y ReLU ($\sim 62\text{k}$ parámetros) sobre CIFAR-10.
+- **ResNets** — ResNet-18 escalado a la mitad de feature planes por capa ($\sim 69\text{k}$ parámetros) y ResNet-110 ($\sim 1.7\text{M}$ parámetros) sobre CIFAR-10; ResNet-18 sobre ImageNet (90 epochs); fine-tuning de ResNet-50 sobre ImageNet activando SVRG desde epochs 0/20/40/60/80.
+- **DenseNets** — DenseNet-40-36 wide (growth rate 36, depth 40, $\sim 1.5\text{M}$ parámetros, test error $<5\%$) sobre CIFAR-10; fine-tuning de DenseNet-169 sobre ImageNet activando SVRG desde epochs 60/80.
+- **Configuración** — batch 128, momentum 0.9, weight decay $10^{-4}$, lr inicial 0.1 con decays $10\times$ en epochs 150 y 220, sampling sin reemplazo, data augmentation (random horizontal flips, random cropping $32\times32$ tras padding de 4 píxeles). Activación ELU como sanity check de suavidad frente a ReLU.
+- **Baselines de optimización** — SGD con momentum, SVRG (con transform locking, BN reset, dropout seed reuse), SCSG (streaming SVRG con mega-batch $10\text{–}32\times$ el mini-batch).
+
+---
+
 ## RMSProp - Divide the gradient by a running average of its recent magnitude (Tieleman y Hinton, 2012)
 
 Review/Slides — sin experimentos propios. Material correspondiente a la Lecture 6 (slides 6a–6e) del curso *Neural Networks for Machine Learning* de Hinton (Coursera, 2012). Recomendaciones de uso cualitativas referidas a familias de problemas: redes profundas (especialmente con cuellos de botella estrechos), redes recurrentes y redes anchas y poco profundas. La slide *Summary of learning methods for neural networks* recomienda RMSProp (con momentum opcional) para datasets grandes y redundantes y reserva métodos full-batch (gradiente conjugado, LBFGS, rprop) para datasets pequeños.
@@ -148,6 +158,7 @@ Review/Slides — sin experimentos propios. Material correspondiente a la Lectur
 | Forouzesh y Thiran, 2021 | AlexNet, VGG-13, ResNet-18, FC, modelo MRNet |
 | Hölzl, 2025 | ViT/S-16, ViT/B-16, ConvNeXt-Femto |
 | Chatterjee y Zielinski, 2020 | ResNet-18, Inception-V3 |
+| Defazio y Bottou, 2019 | LeNet-5 (BN+ReLU), ResNet-18 scaled, ResNet-110, DenseNet-40-36, ResNet-18/50 (ImageNet), DenseNet-169 (ImageNet) |
 | Tieleman y Hinton, 2012 | Slides — sin experimentos propios |
 | Ru et al., 2021 | NAS-Bench-201, DARTS, ResNet/ResNeXt search space, RWNN |
 | Fort et al., 2019 | FC 500-300-100 ReLU, CNN 3 capas (16/32/32), ResNet20v1, BERT |
@@ -160,9 +171,11 @@ Review/Slides — sin experimentos propios. Material correspondiente a la Lectur
 
 **MLPs / Fully-Connected** (9 papers): Faghri et al., Shan y Bordelon, Johnson y Zhang, Kingma y Ba, Chatterjee 2019, Forouzesh y Thiran, Fort et al., Sankararaman et al., Liu et al.
 
-**CNNs (no-ResNet)** (8 papers): Shan y Bordelon, Kingma y Ba, McCandlish et al., Forouzesh y Thiran (AlexNet), Chatterjee y Zielinski (Inception-V3), Fort et al., Sankararaman et al., Liu et al.
+**CNNs (no-ResNet)** (9 papers): Shan y Bordelon, Kingma y Ba, McCandlish et al., Forouzesh y Thiran (AlexNet), Chatterjee y Zielinski (Inception-V3), Defazio y Bottou (LeNet-5), Fort et al., Sankararaman et al., Liu et al.
 
-**ResNets / Wide ResNets** (9 papers): Faghri et al. (ResNet8/18/32), Shan y Bordelon (Wide ResNet $k=3$), McCandlish et al. (ResNet-32/50), Forouzesh y Thiran (ResNet-18), Hölzl (vía ConvNeXt — no ResNet estricto, no se contabiliza aquí), Chatterjee y Zielinski (ResNet-18), Fort et al. (ResNet20v1), Sankararaman et al. (WRN $\beta$-$\ell$), Liu et al. (ResNet18). Total con ResNet estricto: 8 papers.
+**ResNets / Wide ResNets** (10 papers): Faghri et al. (ResNet8/18/32), Shan y Bordelon (Wide ResNet $k=3$), McCandlish et al. (ResNet-32/50), Forouzesh y Thiran (ResNet-18), Hölzl (vía ConvNeXt — no ResNet estricto, no se contabiliza aquí), Chatterjee y Zielinski (ResNet-18), Defazio y Bottou (ResNet-18 scaled, ResNet-110, ResNet-50), Fort et al. (ResNet20v1), Sankararaman et al. (WRN $\beta$-$\ell$), Liu et al. (ResNet18). Total con ResNet estricto: 9 papers.
+
+**DenseNets** (1 paper): Defazio y Bottou (DenseNet-40-36 wide, DenseNet-169).
 
 **VGG** (1 paper): Forouzesh y Thiran (VGG-13).
 

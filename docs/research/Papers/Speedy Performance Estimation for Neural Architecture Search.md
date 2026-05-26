@@ -6,6 +6,8 @@ status: to-read
 relevance: high
 last_review: 2026-05-07
 url: https://proceedings.neurips.cc/paper/2021/hash/2130eb640e0a272898a51da41363542d-Abstract.html
+tfg_role:
+  - method
 ---
 
 # Speedy Performance Estimation for Neural Architecture Search

@@ -5,6 +5,8 @@ status: to-read
 relevance: high
 last_review: 2026-05-07
 url: "https://arxiv.org/pdf/2008.01217"
+tfg_role:
+  - metric
 ---
 
 # Making Coherence Out of Nothing At All: Measuring the Evolution of Gradient Alignment

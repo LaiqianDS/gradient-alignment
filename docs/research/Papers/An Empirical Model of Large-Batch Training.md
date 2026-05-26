@@ -8,6 +8,8 @@ status: to-read
 relevance: medium
 last_review: 2026-05-07
 url: https://arxiv.org/pdf/1812.06162
+tfg_role:
+  - metric
 ---
 
 # An Empirical Model of Large-Batch Training

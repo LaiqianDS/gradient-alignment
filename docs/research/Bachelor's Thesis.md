@@ -45,7 +45,7 @@ flowchart LR
 ```
 ## Papers
 ```dataview
-TABLE authors, year, status, relevance, link(url, "Link") AS "Paper", last_review
+TABLE authors, year, status, relevance, tfg_role AS "Rol TFG", link(url, "Link") AS "Paper", last_review
 FROM "docs/research/Papers"
 SORT file.mtime DESC
 ```
