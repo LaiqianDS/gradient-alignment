@@ -112,6 +112,48 @@ En el pipeline es la fuente de `gsnr` (familia varianza). Probe $M = 512$ estrat
 
 ---
 
+## Backend de logging y cadencias mixtas
+
+**Backend principal: Weights & Biases (wandb).** Razones operativas. Métricas custom heterogéneas (escalares globales, escalares por capa, histogramas de cosenos `confusion/cos_hist`, matrices de stiffness `stiffness/class_matrix`, scatter cosine-sim por capa) entran sin declarar schema vía `wandb.log({...})`, `wandb.Table`, `wandb.Histogram` y `wandb.plot.*`. La comparación de muchos runs (sweep de hparams, arquitecturas $\{$MLP, CNN-small, ResNet-18$\}$, datasets $\{$CIFAR-10, CIFAR-100, ImageNet$\}$) es nativa en UI, con agrupación y overlay por config sin tocar código. Reanudable vía `wandb.init(resume="allow")` y artefactos versionados con `wandb.Artifact` (checkpoints, dataset hash, código del run), lo que permite reproducir un run viejo bajando exactamente el mismo peso y partición. Se comparte con el tutor pegando la URL del run. Modo offline (`mode="offline"` + `wandb sync`) cubre fallos de red sin perder datos.
+
+**Descartado TensorBoard** como principal: compara peor entre runs (requiere apuntar a múltiples logdirs), los plots no triviales (matriz de class stiffness, histogramas por capa) obligan a `matplotlib` + `add_figure`, y no tiene gestión de artefactos. Queda como sanity check local opcional vía `SummaryWriter` paralelo, no como fuente de verdad.
+
+**Cadencias mixtas en wandb.** El registry combina métricas de coste muy distinto (ver tramos arriba) y cadencias derivadas (por batch, por época, cada $N$ épocas, en hitos del presupuesto). La mecánica concreta es:
+
+- `wandb.log({"train_loss": x}, step=global_step)` cada batch para la familia baseline `tse/*`; `wandb.log({"gwa/value": v}, step=global_step)` cada época; `wandb.log({"stiffness/class_matrix": M}, step=global_step)` solo cada 10 épocas. Las métricas dispersas quedan con puntos solo en los steps reales — wandb **no interpola**, el gráfico muestra huecos correctamente.
+- `step` global debe ser monotónico creciente por proceso. Para ejes con escala distinta (p.ej. `train_loss` por batch vs `gwa/value` por época): `wandb.define_metric("gwa/value", step_metric="epoch")` declara un eje custom y los gráficos se alinean por época independientemente del step global.
+- `commit=False` permite acumular varias llamadas en el mismo step antes de hacer flush al servidor, útil cuando varias métricas del mismo sweep (p.ej. todas las del batch-grad sweep $K=10$) se terminan en momentos ligeramente distintos del mismo ciclo.
+
+**Patrón Logger custom.** Capa fina que desacopla cálculo de métricas, cadencia y backend. El cómputo devuelve dicts planos `{name: value_or_tensor}`; el logger consulta la cadencia configurada y enruta a backend (wandb + parquet local). Añadir métrica nueva al registry = añadir entrada en `schedule` + función `compute_<name>(model, probe, state)`. Cadencia desacoplada de cómputo, cómputo desacoplado de backend.
+
+```python
+schedule = {
+    # baseline, coste cero
+    "tse/ema_0_999":           {"every": "batch"},
+    # familia varianza, batch-grad sweep K=10
+    "var/normalized":          {"every": "epoch"},
+    "noise_scale/simple":      {"every": "epoch", "dense_early": (0, 10, 100)},  # cada 100 steps en epochs 0-10
+    "gsnr/mean":               {"every": "epoch"},
+    # familia alineación, per-sample sweep M=512
+    "m_coherence/global":      {"every": "epoch"},
+    "stiffness/cos_within":    {"every": "epoch"},
+    "stiffness/class_matrix":  {"every_n_epochs": 10, "type": "matrix"},
+    "gradient_confusion/eta":  {"every_n_epochs": 2},  # caro, cada 2 epochs
+    "gradient_disparity/scalar": {"every": "epoch"},
+    "gwa/value":               {"every": "epoch"},
+    # NTK, sweep aparte, caro
+    "ntk/alignment":           {"every_n_epochs": 5, "dense_early": (0, 5, 200)},
+    # hitos del presupuesto, snapshot completo
+    "_window_snapshot":        {"at_pct": [5, 10, 25, 50, 100]},
+}
+```
+
+El loop de entrenamiento pregunta `logger.should_compute(name, epoch, batch, pct)` antes de invocar la función de cómputo cara (evita pagar el coste si no toca loguear) y `logger.log(name, value, step=...)` traduce a backend: wandb usa `define_metric` con `step_metric` apropiado por nombre, el dump paralelo a parquet añade fila `{run_id, epoch, batch, name, value, scope}`. El parquet en **formato largo** (no wide) aguanta cualquier cadencia sin columnas vacías, permite filtrar por `name` o `scope` sin payload extra y se carga en pandas/polars para análisis post-hoc offline e independiente de wandb (importante para reproducibilidad de la tesis si el servicio cambia o desaparece).
+
+**Persistencia local.** Dos artefactos por run en `reports/<run_id>/`. (1) `metrics.parquet` en formato largo con todas las series temporales. (2) `metrics_at_window.parquet` con los snapshots en los hitos 5/10/25/50/100% del presupuesto, ya pivotado (una fila por run, una columna por métrica/scope) para los análisis comparativos cross-run y las correlaciones Spearman/Pearson contra los proxies de eficiencia.
+
+---
+
 ## Discrepancias residuales
 
 Tras la reescritura sistemática de los 16 papers y la armonización con este resumen, las inconsistencias detectadas y resueltas se han trasladado a cada bloque correspondiente. Quedan tres puntos abiertos que conviene documentar.
