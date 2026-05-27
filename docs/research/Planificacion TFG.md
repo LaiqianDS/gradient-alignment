@@ -9,7 +9,7 @@
 - [x] GitHub repo
 - [x] EBRON: título, resumen, palabras clave
 - [x] Decidir modelos (FC, CNN simple, ResNet-18) y datasets (MNIST, CIFAR-10, CIFAR-100) finales
-- [ ] Revisar papers y cerrar lista de métricas a implementar (más de 4)
+- [x] Revisar papers y cerrar lista de métricas a implementar (más de 4)
 - [ ] Montar pipeline base: carga datos, modelos, bucle entrenamiento, logging (W&B/TensorBoard), semillas fijas
 - [x] Montar setup LaTex
 - [ ] **Entregable:** Repo entrena modelos×datasets con loss/accuracy logged
@@ -59,7 +59,7 @@ Si correlación + intervención + redacción no caben antes 22 junio: cortar en 
 Orden recomendado para los 13 pendientes (status `to-read`). Núcleo antes de soporte; conceptual antes de escalable. Mínimo viable para cerrar diseño experimental: 1–5.
 
 ### Prioridad alta — núcleo (métrica / baseline / método)
-- [ ] 1. [[Stiffness - A New Perspective on Generalization in Neural Networks|Stiffness]] (Fort, 2019) — operador base de alineación
+- [x] 1. [[Stiffness - A New Perspective on Generalization in Neural Networks|Stiffness]] (Fort, 2019) — operador base de alineación
 - [ ] 2. [[Making Coherence Out of Nothing At All - Measuring the Evolution of Gradient Alignment|Making Coherence]] (Chatterjee & Zielinski, 2020) — versión escalable de Stiffness + LR
 - [ ] 3. [[The Impact of Neural Network Overparameterization on Gradient Confusion and Stochastic Gradient Descent|Gradient Confusion]] (Sankararaman, 2020) — alineación ↔ velocidad SGD
 - [ ] 4. [[Disparity Between Batches as a Signal for Early Stopping|Disparity Between Batches]] (Forouzesh, 2021) — baseline directo del TFG

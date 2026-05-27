@@ -1,271 +1,123 @@
 # Métricas por Paper
 
-Resumen comparativo de las métricas utilizadas en los 16 papers leídos del TFG. Cada entrada distingue entre la métrica central propuesta o estudiada por el paper y las métricas usadas para la evaluación empírica.
+Resumen comparativo en prosa de las métricas centrales y de evaluación de los 16 papers del TFG. Cada bloque sintetiza la magnitud propuesta o estudiada por el trabajo, las métricas empleadas en sus experimentos y las decisiones operativas que se trasladan al pipeline del TFG (granularidad, coste y claves de logging canónicas). Al final se ofrece un plan de logging consolidado que agrupa primitivas compartidas y convenciones transversales, seguido de una sección de discrepancias residuales.
 
 ---
 
 ## A Study of Gradient Variance in Deep Learning (Faghri et al., 2020)
 
-**Métrica(s) central(es):**
-- **Average Variance** — promedio sobre las coordenadas del parámetro de la varianza del estimador del gradiente medio. Equivale a la traza normalizada de la matriz de covarianza del gradiente.
-- **Normalized Variance** — $\mathbb{V}[g] / \mathbb{E}[g]^2$. Se interpreta como el inverso de un signal-to-noise ratio (SNR). Si supera 1, el ruido domina sobre la señal del gradiente. Es comparable entre problemas de distinta escala, a diferencia de la varianza absoluta.
+La métrica central es doble. La **Average Variance** es la traza normalizada de la matriz de covarianza del gradiente, $\overline{\mathbb{V}} = \tfrac{1}{d}\sum_j \mathbb{V}[g_j]$, una varianza absoluta agregada que no es comparable entre problemas de distinta escala. La **Normalized Gradient Variance (NGV)** es el cociente $\mathbb{V}[g]/\mathbb{E}[g]^2 = \mathrm{tr}(\mathrm{Cov}(g))/\|\mathbb{E}[g]\|^2$, interpretable como el inverso de un signal-to-noise ratio; valores por encima de 1 implican ruido dominante y la métrica sí permite comparación cross-problema. La nomenclatura "Average Variance" vs "Normalized Variance" está documentada explícitamente en el archivo del paper y se preserva aquí: el término "Normalized Average Variance" del registry interno mezcla ambos conceptos y debe leerse como NGV.
 
-**Métricas de evaluación:**
-- Training loss — frente al número de iteraciones.
-- Accuracy — exactitud sobre el conjunto de entrenamiento/test.
-- Varianza máxima en las últimas iteraciones — usada en los RF models para evaluar el régimen sobreparametrizado.
-
----
+La evaluación empírica del paper reporta training loss, accuracy y la varianza máxima en las últimas iteraciones de los Random Features models. En el pipeline del TFG se computa con $K \in [20, 40]$ mini-batches independientes por medición sobre los pesos congelados, agregando en streaming $S = \sum_k g_k$ y $Q = \sum_k \|g_k\|^2$ sin materializar la matriz $K\cdot d$. Granularidad por época (overhead 3–5%), claves canónicas `var/avg`, `var/normalized` y `var/per_layer/{name}`. Coste **barato** y comparte el batch-grad sweep con `gns_simple`, `gradient_confusion` y `gradient_disparity`.
 
 ## A Theory of Neural Tangent Kernel Alignment and Its Influence on Training (Shan & Bordelon, 2021)
 
-**Métrica(s) central(es):**
-- **Kernel Alignment** $A(t)$ — métrica de Cortes et al. (2012):
-$$A(t) = \frac{\langle \boldsymbol{y}\boldsymbol{y}^\top, \boldsymbol{K}(\boldsymbol{\theta}) \rangle_F}{\|\boldsymbol{K}(\boldsymbol{\theta})\|_F\, \|\boldsymbol{y}\boldsymbol{y}^\top\|_F} = \frac{\boldsymbol{y}^\top \boldsymbol{K}(\boldsymbol{\theta}) \boldsymbol{y}}{\|\boldsymbol{K}(\boldsymbol{\theta})\|_F\, \|\boldsymbol{y}\|^2}.$$
-Mide la proyección del NTK sobre la dirección del target $\boldsymbol{y}\boldsymbol{y}^\top$.
-- **Kernel Specialization Matrix (KSM)** — $\text{KSM}(c,d) = A(\boldsymbol{K}^{c,c}, \boldsymbol{y}_d \boldsymbol{y}_d^\top) / [C^{-1} \sum_{d'} A(\boldsymbol{K}^{d',d'}, \boldsymbol{y}^d \boldsymbol{y}^{d\top})]$. Detecta la alineación preferente de cada subkernel diagonal con su propio target en clasificación multiclase.
+La métrica central es el **Kernel-Target Alignment (KTA)** de Cortes et al. (2012) sobre el NTK empírico, $A(t) = \langle \boldsymbol{y}\boldsymbol{y}^\top, \boldsymbol{K}(\boldsymbol{\theta})\rangle_F / (\|\boldsymbol{K}\|_F\,\|\boldsymbol{y}\|^2)$, acotado en $[0,1]$, junto con la **Kernel Specialization Matrix (KSM)** que detecta en clasificación multiclase si cada subkernel diagonal $\boldsymbol{K}^{c,c}$ se alinea preferentemente con su propio target. La evaluación combina pérdida $\mathcal{L}$, norma de Frobenius $\|\boldsymbol{K}\|_F$, forma bilineal $B(\boldsymbol{z}) = \boldsymbol{z}^\top \boldsymbol{K} \boldsymbol{z}$, traza $\mathrm{Tr}(\boldsymbol{K})$ y contrastes NN vs KGD vs aKGD para aislar estructura frente a magnitud.
 
-**Métricas de evaluación:**
-- Pérdida de entrenamiento $\mathcal{L}$ — dinámica de convergencia.
-- Norma de Frobenius $\|\boldsymbol{K}\|_F$ — magnitud global del NTK.
-- Forma bilineal $B(\boldsymbol{z}) = \boldsymbol{z}^\top \boldsymbol{K} \boldsymbol{z}$ y traza $\text{Tr}(\boldsymbol{K})$ — medida de anisotropía.
-- Cosine similarity — entre pesos red/profesor y entre autofunción dominante del NTK y target.
-- Comparativas NN vs. KGD vs. aKGD — aislando efectos de estructura frente a magnitud.
-
----
+En el pipeline el KTA consume el jacobiano per-ejemplo de la salida respecto a los parámetros sobre un probe **$N = 512$** estratificado (clave: el archivo del paper confirma $N=512$, no $N=256$ como aparecía en notas previas); se adopta reducción escalar al logit de la clase correcta y codificación pairwise $Y_{ij} = +1$ si $y_i = y_j$, $-1$ en caso contrario, para evitar comprimir el rango a $[1/C, 1]$. La variante canónica es last-layer-only ($P_{\text{eff}} \approx 5\text{k}$ en ResNet-18; el jacobiano completo ocuparía $\sim 24$ GB y resulta inviable). Granularidad por época, con densificación cada $K$ pasos en la ventana temprana. Coste **caro**, claves `ntk/alignment`, `ntk/frobenius` y opcionalmente `ntk/ksm`. Por calcularse sobre $\nabla f$ y no $\nabla L$, no comparte sweep con el resto de la familia alineación.
 
 ## Accelerating Stochastic Gradient Descent using Predictive Variance Reduction (Johnson & Zhang, 2013)
 
-**Métrica(s) central(es):**
-- No propone una nueva métrica de diagnóstico. Introduce el método SVRG y analiza la **varianza del incremento de pesos** $-\eta(\nabla \psi_i(w) - \nabla \psi_i(\tilde{w}) + \tilde{\mu})$ como objeto a reducir explícitamente para acelerar la convergencia.
+SVRG no propone una métrica de diagnóstico; introduce un algoritmo y analiza la **varianza del incremento de pesos** $-\eta(\nabla\psi_i(w) - \nabla\psi_i(\tilde w) + \tilde\mu)$ como objeto a reducir. La cantidad reproducible que el propio paper mide es la **ratio de varianzas** entre el estimador SVRG y el SGD vanilla, $\mathrm{Var}[\hat g_{\text{SVRG}}]/\mathrm{Var}[\hat g_{\text{SGD}}]$ (corrigiendo una discrepancia importante: el pseudocódigo previo del archivo describía el estimador two-batch GNS de McCandlish, que no aparece en el paper de Johnson y Zhang). La evaluación reporta training loss $P(w)$, suboptimalidad $P(w) - P(w_*)$, varianza del estimador y test error rate.
 
-**Métricas de evaluación:**
-- Training loss $P(w)$ — frente al número de gradientes calculados normalizado por $n$.
-- Suboptimalidad $P(w) - P(w_*)$ — residuo de pérdida respecto al óptimo estimado.
-- Varianza del estimador estocástico — comparada entre SVRG, SGD y SDCA.
-- Test error rate — sobre los conjuntos de test (con splits 50/50 en protein y covtype).
-
----
+En el TFG el rol es de **soporte teórico del eje varianza**, no métrica del registry: legitima medir $\mathbb{V}[g]$ porque su reducción explícita acelera la convergencia bajo strong growth (condición que falla en deep learning real). No se loguea ninguna clave directa; el sanity check opcional sería `svrg/var_ratio`, fuera de scope.
 
 ## Adam - A Method for Stochastic Optimization (Kingma & Ba, 2015)
 
-**Métrica(s) central(es):**
-- No propone una métrica nueva. Adam utiliza dos magnitudes internas para escalar el paso: el primer momento $m_t$ (media móvil exponencial del gradiente) y el segundo momento no centrado $v_t$ (media móvil exponencial de $g_t^2$, proxy de la varianza por parámetro). La razón $\hat{m}_t / \sqrt{\hat{v}_t}$ se interpreta como signal-to-noise ratio.
-- Cota de **regret** en marco convexo online de Zinkevich (2003): $R(T) = \sum_t [f_t(\theta_t) - f_t(\theta^*)]$, con $R(T)/T = O(1/\sqrt{T})$.
+Adam no propone una métrica nueva; emplea internamente el primer momento $m_t$ (EMA del gradiente) y el segundo momento no centrado $v_t$ (EMA de $g_t^2$), con regla de paso $\theta_t = \theta_{t-1} - \alpha\,\hat m_t/(\sqrt{\hat v_t} + \varepsilon)$. La razón $\hat m_t/\sqrt{\hat v_t}$ se interpreta como signal-to-noise ratio por parámetro y motiva conceptualmente las métricas `gsnr` y `normalized_variance`. El paper aporta también una cota de regret $R(T)/T = O(1/\sqrt{T})$ en el marco convexo online de Zinkevich. La evaluación cubre training cost (NLL/CE), test error y convergencia frente a AdaGrad, RMSProp, AdaDelta, SGD-Nesterov y SFO sobre MNIST, IMDB y CIFAR-10.
 
-**Métricas de evaluación:**
-- Training cost — negative log-likelihood en regresión logística, cross-entropy en redes.
-- Test error — implícito en las curvas de convergencia.
-- Convergencia frente a SGD-Nesterov, AdaGrad, RMSProp, AdaDelta y SFO — sobre MNIST, IMDB, MLP MNIST, CNN CIFAR-10 y VAE.
-
----
+En el pipeline Adam es **uno de los dos optimizadores del sweep** (junto con SGD), no una métrica. Las diez métricas del registry se calculan siempre sobre el gradiente **bruto** $\nabla L$ para garantizar comparabilidad cross-optimizador. Como diagnóstico de control se loguean `adam/snr_layer/{name}`, `adam/m_norm/{name}`, `adam/v_norm/{name}`, `adam/lr_eff` y `adam/update_norm/{name}`, leídos directamente de `optimizer.state[p]` tras `optimizer.step()` con coste cero. Granularidad por step en la ventana inicial y por época después.
 
 ## An Empirical Model of Large-Batch Training (McCandlish et al., 2018)
 
-**Métrica(s) central(es):**
-- **Gradient Noise Scale** $B_{\text{noise}}$ — versión exacta ponderada por la Hessiana:
-$$B_{\text{noise}} = \frac{\operatorname{tr}(H\Sigma)}{G^\top H G}.$$
-- **Simple Gradient Noise Scale** $B_{\text{simple}}$ — aproximación bajo $H \propto I$:
-$$B_{\text{simple}} = \frac{\operatorname{tr}(\Sigma)}{\|G\|^2}.$$
-Predice el batch size crítico $B_{\text{crit}}$ a partir del cual el speed-up de paralelización deja de ser lineal.
+La métrica central es el **Gradient Noise Scale**. La versión exacta ponderada por la Hessiana, $\mathcal{B}_{\text{noise}} = \mathrm{tr}(H\Sigma)/(G^\top H G)$, requiere HVPs y se descarta por coste. La forma simplificada bajo $H \propto I$, $\mathcal{B}_{\text{simple}} = \mathrm{tr}(\Sigma)/\|G\|^2$, predice el batch size crítico $\mathcal{B}_{\text{crit}} = E_{\min}/S_{\min}$. La evaluación reporta training steps $S$, ejemplos procesados $E$, frente de Pareto $(S/S_{\min}-1)(E/E_{\min}-1)=1$ y error/perplejidad/recompensa según el dominio. El rango típico de $\mathcal{B}_{\text{simple}}$ es **1k–1M** según el paper (los extremos 20 y $10^7$ corresponden a casos límite como el autoencoder SVHN y Dota 5v5, no al rango habitual; el archivo del paper corrige el rango previamente reportado de "20–$10^7$").
 
-**Métricas de evaluación:**
-- Training steps $S$ y ejemplos procesados $E$ — hasta alcanzar un rendimiento objetivo.
-- Curva de Pareto hiperbólica $(S/S_{\min} - 1)(E/E_{\min} - 1) = 1$.
-- $B_{\text{crit}} = E_{\min}/S_{\min}$ — definida como el punto donde la eficiencia de cómputo cae al 50%.
-- Error de clasificación, perplejidad, recompensa de episodio, TrueSkill (Dota) — métricas de rendimiento específicas por dominio.
-
----
+En el pipeline se prefiere el estimador **per-sample** vía `vmap` cuando es factible, $\mathcal{B}_{\text{simple}} = (\tfrac{1}{B}\sum_i \|g_i\|^2 - \|G\|^2)/\|G\|^2$, y se reserva el estimador de dos batch sizes del apéndice A.1 ($B_{\text{small}} < B_{\text{big}}$) como atajo data-paralelo de bajo coste cuando $B$ es demasiado grande para vmap. Granularidad por época en log-scale (la métrica crece 1–2 órdenes de magnitud), con densificación cada 100–500 pasos en la ventana temprana. Claves `noise_scale/simple`, `noise_scale/noise` (validación puntual) y `noise_scale/per_layer/{name}`. Coste **medio**; comparte sweep con NGV vía la relación CLT $\mathcal{B}_{\text{simple}} \approx B \cdot \text{NGV}$.
 
 ## An overview of gradient descent optimization algorithms (Ruder, 2017)
 
-**Métrica(s) central(es):**
-- No propone métricas nuevas. Se trata de un review que cataloga optimizadores (Momentum, NAG, Adagrad, Adadelta, RMSprop, Adam, AdaMax, Nadam) sin estudio empírico propio.
+Es un review que cataloga Momentum, NAG, Adagrad, Adadelta, RMSprop, Adam, AdaMax y Nadam, sin métrica propia ni estudio empírico cuantitativo. Las comparaciones son cualitativas: convergencia, escape de saddle points, estabilidad frente a oscilaciones, eficiencia computacional y robustez a sparsity. En el pipeline justifica dos decisiones de diseño: el sweep cerrado SGD + Adam como representativos extremos del espectro adaptativo, y el **raw-grad rationale** —medir todas las métricas sobre $\nabla L$ y nunca sobre el update preacondicionado— para garantizar comparabilidad cross-optimizador. Como diagnóstico opcional se loguean `opt/grad_norm`, `opt/step_norm`, `opt/lr_eff_*` y `opt/cos_step_prev` con coste prácticamente nulo, leídos del state del optimizer.
 
-**Métricas de evaluación:**
-- Velocidad de convergencia (cualitativa) — aproximación al mínimo.
-- Capacidad de escapar saddle points.
-- Estabilidad frente a oscilaciones.
-- Eficiencia computacional — coste por actualización.
-- Robustez frente a sparsity de los datos e inicializaciones pobres.
-No se reportan accuracy ni curvas cuantitativas: comparaciones cualitativas y referencias externas.
+## Coherent Gradients (Chatterjee, 2019)
 
----
+El paper formula la **Coherent Gradients Hypothesis (CGH)** vía la descomposición $\|g_t\|^2 = \sum_e \|g_t^e\|^2 + \sum_{e\neq e'}\langle g_t^e, g_t^{e'}\rangle$, donde el segundo término captura el alineamiento entre gradientes per-sample. Operacionaliza la coherencia con dos fracciones que requieren partición etiquetada del minibatch, $f_t^p = \langle g_t, g_t^p\rangle/\langle g_t, g_t\rangle$ y $f_t^c = \langle g_t, g_t^c\rangle/\langle g_t, g_t\rangle$ (con $f_t^p + f_t^c = 1$), más sus integrales acumuladas $i_t^p$ e $i_t^c$. **Discrepancia corregida**: el ratio normalizado tipo $\|\sum g_i\|^2/(N\sum\|g_i\|^2)$ a veces atribuido a este paper pertenece en realidad a m-coherence (Chatterjee & Zielinski 2020); además, la URL/identificador arXiv `2002.10657` es del preprint, mientras que el año de referencia bibliográfica es 2019.
 
-## Coherent Gradients: An Approach to Understanding Generalization in Gradient Descent-based Optimization (Chatterjee, 2019)
-
-**Métrica(s) central(es):**
-- **Fracción de la reducción de pérdida atribuible a pristine/corrupt** — $f_t^p = \langle g_t, g_t^p\rangle/\langle g_t, g_t\rangle$ y $f_t^c = \langle g_t, g_t^c\rangle/\langle g_t, g_t\rangle$, con $f_t^p + f_t^c = 1$. Cuantifica la coherencia operativa entre subconjuntos del minibatch.
-- Versiones acumuladas $i_t^p$ y $i_t^c$ — integrales temporales de las fracciones anteriores.
-- **Hipótesis Coherent Gradients (CGH)** — articulada vía $\|g_t\|^2 = \sum_e \|g_{te}\|^2 + \sum_{e\neq e'}\langle g_{te}, g_{te'}\rangle$, donde el segundo término captura el alineamiento entre gradientes per-sample.
-
-**Métricas de evaluación:**
-- Training accuracy y test/validation accuracy.
-- Training loss.
-- Fracción de ejemplos aprendidos frente al paso.
-- Overfit ajustado — $ta - [\varepsilon \cdot (1/10) + (1-\varepsilon)\cdot va]$, corrige que las etiquetas de test no estén aleatorizadas.
-- Comparación con modelo nulo (permutaciones aleatorias) para significación estadística.
-
----
+La evaluación reporta training/test accuracy, training loss, fracción de ejemplos aprendidos frente al paso, overfit ajustado $\mathrm{ta} - [\varepsilon\cdot(1/10) + (1-\varepsilon)\cdot \mathrm{va}]$ y comparación con modelo nulo de permutaciones. En el pipeline del TFG es **marco conceptual**, no métrica: $f_t^p$ y $f_t^c$ exigen label noise controlado que queda fuera de scope. La descomposición conceptual reaparece en `m_coherence`, `stiffness` y `gradient_confusion`, que sí entran al registry.
 
 ## Disparity Between Batches as a Signal for Early Stopping (Forouzesh & Thiran, 2021)
 
-**Métrica(s) central(es):**
-- **Gradient Disparity (GD)** — distancia $\ell_2$ entre gradientes de dos mini-batches independientes:
-$$\mathcal{D}_{i,j} = \|g_i - g_j\|_2.$$
-Deriva de un upper bound PAC-Bayesiano sobre $\mathbb{E}[\mathcal{R}_1] + \mathbb{E}[\mathcal{R}_2]$ donde $\mathrm{KL}(Q_1\|Q_2) = \tfrac{1}{2}\tfrac{\gamma^2}{\sigma^2}\|g_1 - g_2\|_2^2$. Promediada sobre $s$ batches ($s = 5$).
+La métrica central es la **Gradient Disparity (GD)**, distancia $\ell_2$ entre los gradientes de dos mini-batches independientes, $\mathcal{D}_{i,j} = \|g_i - g_j\|_2$, promediada sobre los $\binom{s}{2}$ pares con $s = 5$. Deriva de una cota PAC-Bayes con $\mathrm{KL}(Q_1\|Q_2) = \tfrac{1}{2}\tfrac{\gamma^2}{\sigma^2}\|g_1-g_2\|_2^2$, lo que impide normalizar por $\|g\|$ sin romper la conexión teórica. La evaluación reporta test loss, accuracy y AUC, training accuracy, Pearson $\rho = 0{,}957$ entre GD y error de test sobre 220 configuraciones, sensibilidad al threshold de early stopping (Eq. 14) y comparativa frente a $k$-fold y $k^+$-fold CV.
 
-**Métricas de evaluación:**
-- Test loss, test accuracy y test AUC (en MRNet).
-- Training accuracy.
-- Correlación de Pearson — entre GD y error de test ($\rho = 0.957$ en 220 configuraciones).
-- Sensibilidad al threshold de early stopping (Eq. 14).
-- Comparativa frente a $k$-fold y $k^+$-fold CV — diferencias absolutas de accuracy/AUC.
+En el pipeline es la fuente directa de `gradient_disparity` (familia alineación). Cadencia por época, $s = 5$ batches independientes sin solape con el step de actualización, claves `gd/scalar` y `gd/per_layer/{name}`. Coste **barato** (≈$5\times$ el coste de un step). Comparte el batch-grad sweep ($K=10$ batches disjuntos) con `gradient_confusion`, `cos_sim_batches` y `normalized_variance`.
 
----
+## Gradient-Weight Alignment as a Train-Time Proxy for Generalization (Hölzl, 2025)
 
-## Gradient-Weight Alignment as a Train-Time Proxy for Generalization in Classification Tasks (Hölzl, 2025)
+La métrica central es **GWA**. El score per-sample es la similitud coseno $\gamma(x_i, \mathbf{w}_T) = \cos\mathrm{sim}(\mathbf{g}_T(x_i), \mathbf{w}_T)$ entre gradiente per-sample y pesos del clasificador final, con convención de signo del paper $\mathbf{g} = -\nabla L$ (el pipeline del TFG opera sobre $\nabla L$ bruto, por lo que el signo se invierte y debe documentarse al interpretar el escalar). El agregado por época corrige por exceso de curtosis, $\mathrm{GWA}_T = M^{(1)}/(M^{(4)}/(M^{(2)})^2 - 3 + \beta)$ con $\beta = 1{,}2$. El estimador canónico es **last-layer-only** en forma cerrada $\mathbf{g}_t(x_i) = -z_i(\hat y_i - y_i)^\top$, no per-layer; la variante per-layer es un atajo razonable pero no la métrica del paper. La evaluación reporta test accuracy en CIFAR-10/10-N/C e ImageNet/C, AUC, Pearson 0.99 y Spearman 0.97 entre $\max_T \mathbb{E}[\mathcal{A}_T]$ y test accuracy, overhead computacional y comparativa contra val sets 90/10 y 99/1, LabelWave y Gradient Disparity.
 
-**Métrica(s) central(es):**
-- **Score per-sample** — similitud coseno entre el gradiente per-sample y los pesos:
-$$\gamma(x_i, \mathbf{w}_T) = \cos\text{sim}(\mathbf{g}_T(x_i), \mathbf{w}_T) = \frac{\mathbf{g}_T(x_i)\cdot \mathbf{w}_T}{\|\mathbf{g}_T(x_i)\|\,\|\mathbf{w}_T\|}.$$
-- **Gradient-Weight Alignment (GWA)** — esperanza con corrección por exceso de curtosis:
-$$\text{GWA}_T = \frac{\mathbb{E}_i[\mathcal{A}_T]}{\operatorname{Kurt}_i[\mathcal{A}_T] + \beta} = \frac{M_T^{(1)}}{M_T^{(4)}/(M_T^{(2)})^2 - 3 + \beta},\quad \beta = 1.2.$$
-- Estimador restringido al clasificador lineal final: $\mathbf{g}_t(x_i) = -z_i \cdot (\hat{y}_i - y_i)^\top$.
+En el pipeline es la fuente de `gwa`. Última capa por defecto, probe estratificado $M \in \{512, 1024\}$, Welford para los momentos $M^{(1..4)}$, `clamp` $\max(\cdot, \varepsilon)$ como salvavidas numérico, exclusión del bias del clasificador. Coste **casi gratis** (sin backward adicional; engancha hooks al forward y acumula online), por lo que **no consume** ninguno de los tres sweeps compartidos. Claves `gwa/score_mean`, `gwa/kurt`, `gwa/value` y `gwa/per_sample_hist`.
 
-**Métricas de evaluación:**
-- Test accuracy — sobre CIFAR-10, CIFAR-10-N, ImageNet-1k, ImageNet-C, etc.
-- Test AUC y robustez (CIFAR-C, ImageNet-C).
-- Correlación de **Pearson** y **Spearman** entre $\max_T \mathbb{E}[\mathcal{A}_T]$ y test accuracy — Pearson 0.99/0.98 y Spearman 0.97/0.93 en CIFAR-10.
-- Overhead computacional (s/época) y memoria GPU.
-- Comparación frente a val set (90/10, 99/1), LabelWave y Gradient Disparity.
+## Making Coherence Out of Nothing At All (Chatterjee & Zielinski, 2020)
 
----
+La métrica central es la **m-coherence** $\alpha_m \in [1, m]$, formalmente $\alpha = \mathbb{E}_{z,z'}[g_z\cdot g_{z'}]/\mathbb{E}_z[g_z\cdot g_z]$. **Discrepancia corregida**: el pseudocódigo previo calculaba `m_coherence = n * alpha_m`, redundante. La identidad clave $\mathbb{E}[g_z\cdot g] = \|g\|^2$ permite el estimador escalable $\alpha_m = \|\sum_i g_i\|^2 / \sum_i \|g_i\|^2$, que ya devuelve un valor en escala $[1, m]$ (1 = ortogonalidad, $m$ = alineamiento perfecto); no hay que multiplicar de nuevo por $n$. La evaluación reporta loss y top-1 accuracy en train y test, m-coherence global y por capa (primera conv, intermedia, FC final) y la trayectoria parabólica frente al paso. El recíproco $1/\alpha$ es la *gradient diversity* de Yin et al. (2018).
 
-## Making Coherence Out of Nothing At All: Measuring the Evolution of Gradient Alignment (Chatterjee & Zielinski, 2020)
-
-**Métrica(s) central(es):**
-- **m-coherence** $\alpha_m = m\cdot\alpha$ — con
-$$\alpha := \frac{\mathbb{E}_{z,z'}[g_z\cdot g_{z'}]}{\mathbb{E}_z[g_z\cdot g_z]} = \frac{\mathbb{E}[g_z\cdot g]}{\mathbb{E}[g_z\cdot g_z]}.$$
-Interpretable como el número medio de ejemplos del sample que se benefician de un paso a lo largo del gradiente de un ejemplo aleatorio. En el límite ortogonal $\alpha_m = 1$; en alineación perfecta $\alpha_m = m$.
-- Cálculo eficiente $O(m)$ vía $\mathbb{E}[g_z\cdot g] = \|g\|^2$ (acumulación streaming de $g$ y de $\sum\|g_z\|^2$).
-
-**Métricas de evaluación:**
-- Loss en train y test.
-- Top-1 accuracy en train y test.
-- m-coherence por capa (primera conv, intermedia, FC final) y global.
-- Trayectoria frente al número de pasos.
-
----
+En el pipeline es la fuente de `m_coherence`. Streaming $O(m)$ con acumuladores $S = \sum_i g_i$ y $Q = \sum_i \|g_i\|^2$, gradientes **per-sample** obligatorios (el Corolario 3.1 prueba que los mini-batches inflan la coherencia), `model.eval()` y misma muestra fija a lo largo del entrenamiento. Probe $m \in [512, 2048]$. Coste **medio**, claves `mcoh/global` y `mcoh/per_layer/{name}`. Comparte el sweep per-sample $\nabla L$ con `stiffness` y `gsnr`.
 
 ## On the Ineffectiveness of Variance Reduced Optimization for Deep Learning (Defazio & Bottou, 2019)
 
-**Métrica(s) central(es):**
-- No propone métrica nueva. Mide directamente la **ratio de varianza** del estimador SVRG respecto al estimador SGD, $\mathrm{Var}[\hat{g}_{\text{SVRG}}]/\mathrm{Var}[\hat{g}_{\text{SGD}}]$, sobre el dataset completo en snapshots fijos del modelo. Ratio $<1$ indica reducción; ratios $\sim 2$ implican que el control variate ha quedado descorrelacionado con el gradiente estocástico, **aumentando** la varianza. Para que SVRG sea rentable la ratio debe estar por debajo de $1/3$.
-- Diagnóstico complementario: **distancia iterada** $\|w_k - \tilde{w}\|$ y **curvatura empírica** $\|\tfrac{1}{|S_i|}\sum_{j\in S_i}[f'_j(w_k) - f'_j(\tilde{w})]\|/\|w_k - \tilde{w}\|$ entre el iterado actual y el snapshot, para localizar la causa del fallo.
+El paper no propone métrica nueva: adopta la **ratio $\mathrm{Var}[\hat g_{\text{SVRG}}]/\mathrm{Var}[\hat g_{\text{SGD}}]$** como instrumento de diagnóstico, complementada con la **distancia iterada** $\|w_k - \tilde w\|$ y la **curvatura empírica** $\|\tfrac{1}{|S_i|}\sum_j (f'_j(w_k) - f'_j(\tilde w))\|/\|w_k - \tilde w\|$ para localizar el origen del fallo. Ratios $\sim 2$ implican que el control variate ha quedado descorrelacionado e inyecta varianza; la rentabilidad real exige ratios $< 1/3$. La evaluación reporta test error en CIFAR-10 (LeNet, DenseNet-40-36, ResNet-110) e ImageNet (ResNet-18), test error post fine-tuning con SVRG activado desde diferentes épocas en ResNet-50 e DenseNet-169, y varianza del paso streaming en función de iteraciones desde el snapshot.
 
-**Métricas de evaluación:**
-- Test error sobre CIFAR-10 (LeNet, DenseNet-40-36, ResNet-110) e ImageNet (ResNet-18); comparación SGD vs SVRG vs SCSG.
-- Test error post-fine-tuning activando SVRG desde diferentes epochs en ResNet-50 ($23.61\%$ baseline SGD vs $23.65\text{–}28.60\%$ con SVRG fine-tuning) y DenseNet-169 ($23.22\%$ baseline vs $23.30\text{–}23.38\%$).
-- Varianza del paso streaming en función de iteraciones desde el snapshot.
-
----
+En el pipeline es **refuerzo empírico del eje varianza**, no métrica del registry: junto a SVRG (Johnson & Zhang) y Faghri cierra el triángulo lógico que justifica medir la varianza en lugar de reducirla. Si interesara como sanity check, las claves serían `svrg_diag/var_ratio`, `svrg_diag/iterate_distance` y `svrg_diag/curvature`. La distancia iterada $\|w_k - w_{k-K}\|$ entre checkpoints consecutivos es un proxy trivial de movimiento del iterado integrable como `weight_drift`.
 
 ## RMSProp - Divide the gradient by a running average of its recent magnitude (Tieleman & Hinton, 2012)
 
-**Métrica(s) central(es):**
-- No propone métrica nueva. Introduce el algoritmo RMSProp con la media móvil exponencial del cuadrado del gradiente:
-$$\text{MeanSquare}(w, t) = 0.9\, \text{MeanSquare}(w, t-1) + 0.1\left(\tfrac{\partial E}{\partial w}(t)\right)^2,\quad \Delta w(t) \propto \frac{\partial E/\partial w(t)}{\sqrt{\text{MeanSquare}(w, t)}}.$$
-Conecta segundo momento no centrado del gradiente con el learning rate efectivo.
+No propone métrica nueva. Introduce la regla $\mathrm{MeanSquare}(w, t) = 0{,}9\,\mathrm{MeanSquare}(w, t-1) + 0{,}1\,(\partial E/\partial w)^2$ y $\Delta w(t) \propto (\partial E/\partial w)/\sqrt{\mathrm{MeanSquare}(w, t)}$, anclando el eje varianza al conectar el segundo momento no centrado del gradiente con el learning rate efectivo. **Discrepancias documentadas**: PyTorch usa `alpha = 0{,}99` por defecto en `torch.optim.RMSprop` frente al `0{,}9` de la slide original de Hinton, lo que cambia la vida media efectiva del estimador en un orden de magnitud (≈100 vs ≈10 pasos); el término de estabilidad numérica $\varepsilon = 10^{-8}$, ausente en la formulación original, es obligado en cualquier implementación práctica para evitar pasos divergentes en parámetros con $\mathrm{MeanSquare} \to 0$.
 
-**Métricas de evaluación:**
-- Comparaciones cualitativas — error de entrenamiento/validación a lo largo de las épocas, oscilaciones, comportamiento en mesetas, condicionamiento del paisaje y velocidad de convergencia. No hay tablas cuantitativas.
-
----
+La evaluación es puramente cualitativa: error train/val a lo largo de épocas, oscilaciones, comportamiento en mesetas, condicionamiento. En el pipeline es **background histórico**, no entra al sweep cerrado (equivaldría a un caso intermedio entre SGD y Adam sin contraste nuevo). Si se loguease, claves `rmsprop/ms_norm_layer/{name}`, `rmsprop/lr_eff_layer/{name}` y `rmsprop/snr_layer/{name}` leídas del state.
 
 ## Speedy Performance Estimation for Neural Architecture Search (Ru et al., 2021)
 
-**Métrica(s) central(es):**
-- **Training Speed Estimator (TSE)** — suma de pérdidas de entrenamiento durante SGD:
-$$\text{TSE} = \sum_{t=1}^{T}\frac{1}{B}\sum_{i=1}^{B}\ell(f_{\theta_{t,i}}(\mathbf{X}_i), \mathbf{y}_i).$$
-- **TSE-E** — variante con burn-in: $\text{TSE-E} = \sum_{t=T-E+1}^{T}\tfrac{1}{B}\sum_i \ell(\cdot)$.
-- **TSE-EMA** — media móvil exponencial con $\gamma = 0.9$ (o $0.999$):
-$$\text{TSE-EMA} = \sum_{t=1}^{T}\gamma^{T-t}\frac{1}{B}\sum_i \ell(\cdot).$$
+La métrica central es el **Training Speed Estimator (TSE)** y sus variantes: $\mathrm{TSE} = \sum_t \tfrac{1}{B}\sum_i \ell$, $\mathrm{TSE\text{-}E} = \sum_{t=T-E+1}^T \tfrac{1}{B}\sum_i \ell$ (burn-in $E=1$) y $\mathrm{TSE\text{-}EMA} = \sum_t \gamma^{T-t}\,\bar\ell_t$ (con $\gamma \in \{0{,}9, 0{,}999\}$). La evaluación reporta Spearman y Kendall entre ranking predicho y verdadero en test, error de test mínimo frente a runtime, precisión media del top-10 en one-shot NAS y comparativa frente a TSE base, TLmini, SoVL, VAccES, LcSVR, JacCov, SNIP y SynFlow.
 
-**Métricas de evaluación:**
-- Correlación de **Spearman** entre ranking predicho y ranking verdadero en test (también **Kendall** en apéndices).
-- Error de test mínimo frente al runtime — eficiencia de búsqueda.
-- Precisión media del top-10 de arquitecturas seleccionadas (one-shot).
-- Comparación con baselines: TSE base, TLmini, SoVL, VAccES, LcSVR, y zero-cost JacCov/SNIP/SynFlow.
+En el pipeline es el **BASELINE PREDICTOR** obligatorio (tag `metric_kind="baseline"`), no métrica del registry. Coste **cero**: la train loss ya se computa en el forward. Cualquier métrica de gradiente del TFG debe superar a TSE-EMA en Spearman frente a los proxies de eficiencia (épocas-a-umbral, AUC test loss, mejor test loss) sobre las mismas ventanas, o el coste de instrumentar gradientes no se justifica. Claves `tse/cumulative`, `tse/e_window`, `tse/ema_0_9` y `tse/ema_0_999`, congeladas en los hitos 5/10/25/50% del presupuesto.
 
----
+## Stiffness (Fort et al., 2019)
 
-## Stiffness: A New Perspective on Generalization in Neural Networks (Fort et al., 2019)
+La métrica central es la **stiffness** en dos variantes complementarias sobre pares per-sample: $S_{\mathrm{sign}} = \mathbb{E}[\mathrm{sign}(\vec g_1 \cdot \vec g_2)]$ (más informativa between-class) y $S_{\cos} = \mathbb{E}[\cos(\vec g_1, \vec g_2)]$ (preferible within-class), agregadas en la **matriz de class stiffness** $C(c_a, c_b)$. La **dynamic critical length** $\xi$ —distancia umbral donde la stiffness intra-clase cruza cero— queda fuera del scope del TFG, igual que el análisis stiffness vs distancia en input. **Discrepancias documentadas**: el paper usa $|\vec g|$ para la norma euclídea, mientras que aquí y en el resto de archivos se unifica a $\|\vec g\|$ (impacto matemático nulo); el split del probe se etiqueta como "val-val" o "train-train" según convenga al código y no afecta a la métrica; el tamaño del probe se reduce de $N \approx 500$ del paper a **$M = 256$** en el TFG por consistencia con `m_coherence` y `gsnr` y presión de memoria, lo que aumenta la varianza estadística del estimador (especialmente en la diagonal de $C$) y debe tenerse en cuenta al interpretar variaciones entre épocas.
 
-**Métrica(s) central(es):**
-- **Sign-stiffness** — $S_{\text{sign}}((X_1,y_1),(X_2,y_2);f) = \mathbb{E}[\operatorname{sign}(\vec{g}_1\cdot\vec{g}_2)]$, en $[-1,1]$.
-- **Cosine-stiffness** — $S_{\cos}((X_1,y_1),(X_2,y_2);f) = \mathbb{E}[\cos(\vec{g}_1,\vec{g}_2)]$.
-- **Class stiffness matrix** $C(c_a, c_b) = \mathbb{E}_{X_1\in c_a, X_2\in c_b, X_1\neq X_2}[S((X_1,y_1),(X_2,y_2))]$ — captura generalización intra-clase (diagonal) y transferencia entre clases (extra-diagonal).
-- **Dynamic critical length** $\xi$ — distancia umbral donde la stiffness intra-clase cruza cero (ajuste lineal stiffness vs distancia en input).
+La evaluación reporta loss y accuracy en train y validación, stiffness vs distancia en input, regímenes train-train/train-val/val-val y suma extra-diagonal $S_{\text{between classes}}$. En el pipeline (`stiffness`, familia alineación) se computa last-layer-only por defecto en ResNet-18 ($P_{\text{eff}} \approx 5\text{k}$ vs $11{,}7$M de full-parameter), full-parameter en MLP y CNN-small. La ventana predictiva es temprana (la stiffness decae a 0 cuando entra el overfitting). Claves `stiffness/cos_within`, `stiffness/cos_between`, `stiffness/sign_within`, `stiffness/sign_between`, `stiffness/cos_global`, `stiffness/sign_global`, más volcado periódico de `stiffness/class_matrix`. Coste **medio**, comparte sweep per-sample $\nabla L$ con `m_coherence` y `gsnr`.
 
-**Métricas de evaluación:**
-- Loss y accuracy en train y validación.
-- Stiffness vs distancia en el espacio de entrada — con $\text{distance}(\vec{X}_1, \vec{X}_2) = 1 - \tfrac{\vec{X}_1\cdot\vec{X}_2}{|\vec{X}_1||\vec{X}_2|}\in[0,2]$.
-- Stiffness en regímenes train-train, train-val y val-val.
-- Suma extra-diagonal $S_{\text{between classes}} = \tfrac{1}{N_c(N_c-1)}\sum_{c_1}\sum_{c_2\neq c_1} C(c_1,c_2)$.
+## The Impact of Neural Network Overparameterization on Gradient Confusion and SGD (Sankararaman et al., 2020)
 
----
+La métrica central es la **gradient confusion** $\eta \geq 0$, máxima similitud negativa entre gradientes per-sample: $\langle\nabla f_i, \nabla f_j\rangle \geq -\eta$ para todo $i\neq j$. Empíricamente se estima en su versión coseno $\hat\eta = -\min_{i\neq j} \cos(\nabla f_i, \nabla f_j)$, reportando además la densidad completa de los $\binom{M}{2}$ cosenos. La evaluación reporta valores de confusion (mín y densidad sobre 100 pares al final de cada época), training loss a lo largo de 200 epochs, test accuracy final y ablations de profundidad, anchura, batch normalization y skip connections.
 
-## The Impact of Neural Network Overparameterization on Gradient Confusion and Stochastic Gradient Descent (Sankararaman et al., 2020)
-
-**Métrica(s) central(es):**
-- **Gradient Confusion** $\eta \ge 0$ — máxima similitud negativa entre gradientes per-sample. Las pérdidas $\{f_i\}$ tienen gradient confusion acotada por $\eta$ si para todo $i\neq j$ y un $w\in\mathbb{R}^d$ fijado:
-$$\langle \nabla f_i(w), \nabla f_j(w)\rangle \ge -\eta.$$
-$\eta$ pequeña $\Rightarrow$ gradientes armoniosos y SGD rápido; $\eta$ grande $\Rightarrow$ anti-correlación entre gradientes y SGD lento.
-
-**Métricas de evaluación:**
-- Valores de gradient confusion empíricos — mínimo y densidad de similitudes coseno por pares (100 pares de mini-batches al final de cada epoch).
-- Training loss a lo largo de 200 epochs.
-- Test accuracy final.
-- Ablations de profundidad, anchura, batch normalization y skip connections.
-
----
+En el pipeline es la fuente de `gradient_confusion`. $M = 50$ pares (recortado desde los 100 del paper por presupuesto de memoria $M\cdot P$, $\approx 2{,}3$ GB en ResNet-18 fp32), `model.eval()`, batches disjuntos sin reemplazo. Como `min` es un estimador de extremo ruidoso, se loguean simultáneamente `confusion/eta`, `confusion/min_cos`, `confusion/median_cos`, `confusion/p05_cos`, `confusion/frac_neg` y `confusion/cos_hist`. Coste **caro** cuando se ejecuta sobre el dataset completo; comparte batch-grad sweep con `gradient_disparity`, `cos_sim_batches` y `normalized_variance`.
 
 ## Understanding Why Neural Networks Generalize Well Through GSNR of Parameters (Liu et al., 2020)
 
-**Métrica(s) central(es):**
-- **Gradient Signal-to-Noise Ratio (GSNR)** por parámetro:
-$$r(\theta_j) = \frac{\tilde{g}^2(\theta_j)}{\rho^2(\theta_j)},\quad \tilde{g}(\theta_j) = \mathbb{E}_{(x,y)\sim\mathcal{Z}}[g(x,y,\theta_j)],\quad \rho^2(\theta_j) = \operatorname{Var}_{(x,y)\sim\mathcal{Z}}[g(x,y,\theta_j)].$$
-- **One-Step Generalization Ratio (OSGR)** — $R(\mathcal{Z}, n) = \mathbb{E}[\Delta L[D']]/\mathbb{E}[\Delta L[D]]$. Bajo aproximación de no-overfitting:
-$$R(\mathcal{Z}, n) = 1 - \frac{1}{n}\sum_j W_j \cdot \frac{1}{r_j + 1/n},\quad \sum_j W_j = 1.$$
+La métrica central es el **Gradient Signal-to-Noise Ratio (GSNR)** por parámetro, $r(\theta_j) = \tilde g^2(\theta_j)/\rho^2(\theta_j)$ con $\tilde g(\theta_j) = \mathbb{E}_i[g_{i,j}]$ y $\rho^2(\theta_j) = \mathrm{Var}_i[g_{i,j}]$, complementada con el **One-Step Generalization Ratio (OSGR)** $R(\mathcal{Z}, n) = 1 - \tfrac{1}{n}\sum_j W_j/(r_j + 1/n)$ bajo aproximación de no-overfitting. La evaluación reporta train/test loss, OSGR empírico promediado sobre $M=10$ datasets, Pearson 0.907–0.968 entre lados de la ec. del OSGR, fracción $p_{\text{same\_sign}}$ de parámetros con gradiente del mismo signo (crece de ~50% a ~56% durante el entrenamiento), correlación pesos vs $\Delta g_D$ y GSNR medio para configuraciones congeladas vs no congeladas.
 
-**Métricas de evaluación:**
-- Train loss $L[D]$ y test loss $L[D']$.
-- OSGR empírico — promediando sobre $M=10$ conjuntos de entrenamiento.
-- Correlación de **Pearson** entre lado izquierdo y derecho de la ec. del OSGR — entre 0.907 y 0.968 en MNIST.
-- Proporción $p_{\text{same\_sign}}$ — porcentaje de parámetros con gradiente del mismo signo entre muestras (~50% $\to$ ~56% durante el entrenamiento).
-- Correlación entre pesos $W^{(l)}_{s,c}$ y $\Delta g^{(l)}_{D,s,c}$ — confirma la retroalimentación positiva.
-- GSNR medio para configuraciones congeladas vs. no congeladas — en el toy dataset.
+En el pipeline es la fuente de `gsnr` (familia varianza). Probe $M = 512$ estratificado, Welford streaming, agregación por **mean** (nunca sum, incomparable entre arquitecturas con distinto $P$), varianza insesgada ($\div M-1$), filtrado de parámetros muertos (ReLU muertas, biases inicializados a cero) por umbral sobre $\|g_j\|$, y reporte de **median y p95** además de la media porque la cola pesada de $r_j$ sesga la agregación. El OSGR no se implementa porque exige $M$ runs independientes. Claves `gsnr/mean`, `gsnr/median`, `gsnr/p95`, `gsnr/per_layer/{name}` y opcionalmente `gsnr/hist` y `p_same_sign`. Coste **medio**, comparte sweep per-sample $\nabla L$ con `m_coherence` y `stiffness`.
 
 ---
 
-## Tabla comparativa
+## Plan de logging consolidado
 
-| Paper | Métrica central | Métricas evaluación |
-|-------|-----------------|---------------------|
-| Faghri et al. (2020) | Average Variance, Normalized Variance $\mathbb{V}[g]/\mathbb{E}[g]^2$ | Training loss, accuracy, varianza máxima |
-| Shan & Bordelon (2021) | Kernel Alignment $A(t)$, Kernel Specialization Matrix (KSM) | Loss, $\|K\|_F$, traza, cosine similarity, forma bilineal |
-| Johnson & Zhang (2013) | No propone métrica nueva (SVRG, reducción de varianza del estimador) | Training loss, suboptimalidad $P(w)-P(w_*)$, varianza, test error |
-| Kingma & Ba (2015) | No propone métrica nueva (Adam usa $m_t$, $v_t$, regret $O(\sqrt{T})$) | Training cost (NLL/CE), test error, convergencia |
-| McCandlish et al. (2018) | $B_{\text{noise}} = \operatorname{tr}(H\Sigma)/(G^\top H G)$, $B_{\text{simple}} = \operatorname{tr}(\Sigma)/\|G\|^2$ | $S$, $E$, frente de Pareto, $B_{\text{crit}}$, error/perplejidad/recompensa |
-| Ruder (2017) | No propone métrica nueva (review) | Convergencia, saddle points, eficiencia (todo cualitativo) |
-| Chatterjee (2019) | Coherent Gradients Hypothesis; $f_t^p$, $f_t^c$ y sus integrales | Train/test accuracy, training loss, overfit ajustado |
-| Forouzesh & Thiran (2021) | Gradient Disparity $\mathcal{D}_{i,j} = \|g_i - g_j\|_2$ | Test loss/accuracy/AUC, Pearson, sensibilidad al threshold |
-| Hölzl (2025) | Gradient-Weight Alignment (GWA), score $\gamma(x_i, w_T)$ | Test accuracy, Pearson/Spearman, robustez, overhead |
-| Chatterjee & Zielinski (2020) | m-coherence $\alpha_m = m\cdot \mathbb{E}[g_z\cdot g]/\mathbb{E}[g_z\cdot g_z]$ | Train/test loss, top-1 accuracy, m-coherence por capa |
-| Defazio & Bottou (2019) | No propone métrica nueva (ratio $\mathrm{Var}[\hat{g}_{\text{SVRG}}]/\mathrm{Var}[\hat{g}_{\text{SGD}}]$, distancia iterada, curvatura empírica) | Test error CIFAR-10/ImageNet, fine-tuning vs baseline, varianza streaming |
-| Tieleman & Hinton (2012) | No propone métrica nueva (RMSProp, MeanSquare móvil) | Error train/val (cualitativo) |
-| Ru et al. (2021) | TSE, TSE-E, TSE-EMA (suma de training losses) | Spearman, Kendall, error de test vs runtime, top-10 accuracy |
-| Fort et al. (2019) | Sign-stiffness, Cosine-stiffness, class stiffness matrix, dynamic critical length $\xi$ | Loss/accuracy train-val, stiffness vs distancia, between-classes |
-| Sankararaman et al. (2020) | Gradient Confusion $\eta$ ($\langle\nabla f_i,\nabla f_j\rangle \ge -\eta$) | Densidad de similitudes coseno, training loss, test accuracy |
-| Liu et al. (2020) | GSNR $r(\theta_j) = \tilde{g}^2/\rho^2$, OSGR $R(\mathcal{Z},n)$ | Train/test loss, OSGR empírico, Pearson, $p_{\text{same\_sign}}$ |
+**Primitivas compartidas.** El pipeline reutiliza cuatro objetos transversales para amortizar coste. (1) **Gradientes per-sample** $\{g_i\}$ obtenidos vía `torch.func.vmap(grad(...))` sobre un probe estratificado fijo: alimentan `m_coherence`, `stiffness`, `gsnr` y la variante per-sample de `gns_simple`, con tamaños habituales $M \in \{256, 512, 1024\}$ según métrica. (2) **Batch-grad sweep**: $K = 10$ minibatches disjuntos sobre los pesos congelados, compartidos por `normalized_variance`, `gns_simple` (variante two-batch), `gradient_disparity` y `gradient_confusion`. (3) **EMA del optimizador** ($m_t$, $v_t$ en Adam, $\mathrm{MeanSquare}$ en RMSProp), leída del state sin coste extra, alimenta diagnósticos `adam/*` y `rmsprop/*` y motiva conceptualmente las métricas SNR. (4) **NTK / jacobiano** $\boldsymbol{J} = \nabla_\theta f$ para `ntk_alignment`, sweep separado del resto porque opera sobre $\nabla f$ y no sobre $\nabla L$. Adicionalmente, `gwa` se computa enganchando hooks al forward y acumulando en streaming, sin consumir ningún sweep.
+
+**Granularidad temporal recomendada.** Una medición por época durante toda la corrida, con densificación a cada $K$ pasos (típicamente $K \in [50, 500]$ según dataset) en la **ventana temprana** —las primeras 5–10 épocas en CIFAR-10, primer 5–10% del presupuesto en otros casos— porque es donde la señal predictiva es más fuerte para la familia alineación (stiffness, m-coherence, GWA) y donde la NGV y el GNS exhiben sus mayores cambios. Para reporting transversal se congelan los valores en los hitos 5%, 10%, 25%, 50% y 100% del presupuesto y se persisten en `metrics_at_window.parquet`.
+
+**Convención de claves de log.** Se adopta el patrón uniforme `<metric>/<scope>` con sub-namespaces jerárquicos cuando aplica. Escalar global: `gwa/value`, `mcoh/global`, `noise_scale/simple`, `var/normalized`, `ntk/alignment`, `gd/scalar`, `confusion/eta`, `gsnr/mean`, `stiffness/cos_global`, `tse/ema_0_999`. Versión por capa: `<metric>/per_layer/{name}` (p.ej. `mcoh/per_layer/layer1.0.conv1`, `var/per_layer/fc`, `gsnr/per_layer/{name}`). Diagnósticos de distribución: `<metric>/hist`, `<metric>/median`, `<metric>/p95`, `<metric>/median_cos`, `<metric>/p05_cos`. Diagnósticos del optimizador: `opt/*` (genéricos), `adam/*` y `rmsprop/*` (específicos del estado). Baseline: `tse/*` con tag `metric_kind="baseline"` en el parquet de resultados.
+
+**Coste relativo.** Tres tramos. **Barato** (overhead $<5\%$): `tse_ema` (cero, subproducto del forward), diagnósticos `adam/*` y `rmsprop/*` (lectura del state), `var/avg`, `var/normalized` (acumuladores $S$, $Q$ sobre $K$ batches), `gwa` (forward hooks, sin backward extra), `gradient_disparity` ($s=5$ pares). **Medio**: `m_coherence`, `gsnr`, `stiffness` (gradientes per-sample con `vmap` sobre probe $M \in [256, 1024]$), `gns_simple` cuando se computa per-sample. **Caro**: `ntk_alignment` (jacobiano per-ejemplo, $\approx 24$ GB full-parameter en ResNet-18; mitigado con last-layer-only), `gradient_confusion` con $M$ grande sobre el dataset completo (memoria $M \cdot P$). El sanity check opcional de SVRG sería también caro (snapshot full-batch por época + dos backward por step).
+
+---
+
+## Discrepancias residuales
+
+Tras la reescritura sistemática de los 16 papers y la armonización con este resumen, las inconsistencias detectadas y resueltas se han trasladado a cada bloque correspondiente. Quedan tres puntos abiertos que conviene documentar.
+
+Primero, la convención de signo. `gwa` adopta $\mathbf{g} = -\nabla L$ en el paper de Hölzl mientras que el pipeline del TFG opera sobre $\nabla L$ bruto; el signo del coseno se invierte pero el orden relativo y la magnitud se conservan. Se guarda $\gamma_i$ crudo y la inversión de signo se aplica en la capa de análisis. En `stiffness`, los autores trabajan con el gradiente bruto y no surge esta cuestión.
+
+Segundo, la dualidad per-sample vs two-batch en `gns_simple`. La versión per-sample con `vmap` es la ruta principal cuando el probe cabe en memoria; el estimador two-batch del apéndice A.1 del paper de McCandlish queda como alternativa data-paralela de bajo coste. Ambas variantes son matemáticamente equivalentes en expectativa pero numéricamente distintas: la two-batch puede dar $\widehat{\mathrm{tr}(\Sigma)} < 0$ cuando el ruido domina, lo que exige EMA sobre numerador y denominador por separado antes de dividir.
+
+Tercero, las decisiones de granularidad estructural varían por métrica. `gwa` es last-layer-only canónicamente; `stiffness` y `ntk_alignment` son last-layer-only por defecto en ResNet-18 pero full-parameter en arquitecturas pequeñas; `m_coherence`, `gsnr` y `gradient_confusion` se computan globalmente con desagregación opcional por capa. Esta heterogeneidad refleja restricciones de memoria reales ($M \cdot P$ y $N \cdot P$ son bloqueantes en GPUs de consumo) y la justificación teórica del paper original; al comparar métricas conviene reportar explícitamente el scope estructural en cada figura.
