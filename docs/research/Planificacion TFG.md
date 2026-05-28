@@ -61,7 +61,7 @@ Orden recomendado para los 13 pendientes (status `to-read`). Núcleo antes de so
 ### Prioridad alta — núcleo (métrica / baseline / método)
 - [x] 1. [[Stiffness - A New Perspective on Generalization in Neural Networks|Stiffness]] (Fort, 2019) — operador base de alineación
 - [ ] 2. [[Making Coherence Out of Nothing At All - Measuring the Evolution of Gradient Alignment|Making Coherence]] (Chatterjee & Zielinski, 2020) — versión escalable de Stiffness + LR
-- [ ] 3. [[The Impact of Neural Network Overparameterization on Gradient Confusion and Stochastic Gradient Descent|Gradient Confusion]] (Sankararaman, 2020) — alineación ↔ velocidad SGD
+- [x] 3. [[The Impact of Neural Network Overparameterization on Gradient Confusion and Stochastic Gradient Descent|Gradient Confusion]] (Sankararaman, 2020) — alineación ↔ velocidad SGD
 - [ ] 4. [[Disparity Between Batches as a Signal for Early Stopping|Disparity Between Batches]] (Forouzesh, 2021) — baseline directo del TFG
 - [ ] 5. [[Gradient-Weight Alignment as a Train-Time Proxy for Generalization in Classification Tasks|Gradient-Weight Alignment]] (Hölzl, 2025) — competidor reciente, posicionamiento
 - [ ] 6. [[Understanding Why Neural Networks Generalize Well Through GSNR of Parameters|GSNR]] (Liu, 2020) — eje varianza con marco teórico

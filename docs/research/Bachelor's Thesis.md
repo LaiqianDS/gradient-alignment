@@ -50,6 +50,13 @@ FROM "docs/research/Papers"
 SORT file.mtime DESC
 ```
 
+## Conceptos
+```dataview
+TABLE file.mtime AS "Editado"
+FROM "docs/research/Conceptos"
+SORT file.mtime DESC
+```
+
 ## Ranking para la tesis
 
 ### Núcleo (citar y comparar contra)

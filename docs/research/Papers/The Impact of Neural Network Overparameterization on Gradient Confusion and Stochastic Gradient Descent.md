@@ -1,10 +1,15 @@
 ---
-authors: ["Karthik Abinav Sankararaman", "Soham De", "Zheng Xu", "W. Ronny Huang", "Tom Goldstein"]
+authors:
+  - Karthik Abinav Sankararaman
+  - Soham De
+  - Zheng Xu
+  - W. Ronny Huang
+  - Tom Goldstein
 year: 2020
-status: to-read
+status: read
 relevance: high
-last_review: "2026-05-07"
-url: "https://proceedings.mlr.press/v119/sankararaman20a/sankararaman20a.pdf"
+last_review: 2026-05-07
+url: https://proceedings.mlr.press/v119/sankararaman20a/sankararaman20a.pdf
 tfg_role:
   - metric
 ---
@@ -86,6 +91,8 @@ def gradient_confusion(model, loss_fn, loader, M=100):
 ```
 
 **Claves de logging.** Por checkpoint se registran `confusion/eta` (la $\hat\eta$ del paper, con signo invertido respecto al mínimo coseno), `confusion/min_cos` (el mínimo coseno crudo, preferido por consistencia con las demás métricas coseno del TFG donde *mayor es mejor*) y `confusion/cos_hist` (el histograma de los $\binom{M}{2}$ cosenos). De este histograma se extraen `confusion/median_cos`, `confusion/p05_cos` y `confusion/frac_neg` para correlacionar tanto el peor caso como la masa de la distribución con las métricas de eficiencia (epochs-to-threshold, AUC test loss, best test loss).
+
+**Interpretación de la señal.** Conviene fijar la convención porque conviven dos signos en el logging. En `confusion/eta` (la $\hat\eta$ del paper, mínimo coseno **con** signo invertido) la lectura natural es **cuanto más alto, peor**: valores grandes indican al menos un par de mini-batches con gradientes en oposición que ralentizan SGD, mientras que valores cercanos a cero indican gradientes que no se contradicen y entrenamiento armonioso con learning rate constante. En `confusion/min_cos` (mínimo coseno **sin** invertir el signo) la lectura se alinea con las demás métricas coseno del TFG: **mayor `min_cos` = mejor** (gradientes más alineados o al menos no opuestos), `min_cos` muy negativo = peor (par fuertemente anti-correlacionado). Los descriptores de masa siguen la misma lógica que `min_cos`: `confusion/median_cos` y `confusion/p05_cos` van con la convención coseno (mayor = mejor), mientras que `confusion/frac_neg` (fracción de pares con coseno negativo) sigue la convención del peor caso (mayor = peor). Operativamente, el objetivo del diseño arquitectónico (anchura, batch normalization, skip connections, inicializaciones ortogonales) es mantener $\hat\eta$ tan bajo como sea posible durante el entrenamiento, y las predicciones empíricas del paper sobre CIFAR-10 son consistentes con esa lectura: anchura $\downarrow\hat\eta$, profundidad $\uparrow\hat\eta$, BN+skip $\downarrow\hat\eta$. Por construcción `eta` es un estimador de extremo y muy ruidoso: si `eta` es alto pero `median_cos` sigue cerca de cero y `p05_cos` no está muy desplazado a negativo, lo que se observa es ruido de cola y no confusion estructural; solo cuando el peor caso y la masa típica se desplazan a la vez hay un problema real de geometría que ralentizará SGD.
 
 **Gotchas.** Por construcción $\hat\eta$ es un estimador de **extremo** y como tal es muy sensible al ruido de muestreo: un único par especialmente desalineado puede dominar el escalar y ocultar el comportamiento típico. La práctica recomendada en el TFG es reportar simultáneamente el **percentil 5%** y la **mediana** del histograma de cosenos junto al mínimo, de modo que la señal robusta provenga de la cola y de la masa central, no del peor par aislado. Otros puntos a vigilar: BatchNorm debe fijarse en modo evaluación para no contaminar gradientes con estadísticas de batch distintas; en Adam los productos internos sobre $\nabla f$ no reflejan la dirección efectiva de actualización (modulada por momentos adaptativos), por lo que conviene reportar $\hat\eta$ sobre el **gradiente bruto** $\nabla L$ y, si se quiere comparar regímenes, opcionalmente también sobre el paso preacondicionado; los mini-batches deben muestrearse **disjuntos** sin reemplazo dentro de la medición.
 

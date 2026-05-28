@@ -1,0 +1,14 @@
+
+El Neural Tangent Kernel se define como $K(x, x'; \theta) = \nabla_\theta f(x, \theta) \cdot \nabla_\theta f(x', \theta)$, es decir, el producto interno entre los jacobianos de la salida de la red respecto a sus parámetros evaluados en dos inputs distintos. Es una manera de medir cuánto se parecen dos entradas desde el punto de vista del optimizador, porque dos entradas con kernel grande comparten "presión de aprendizaje" sobre los mismos parámetros y se mueven juntas durante el entrenamiento.
+
+El resultado clásico de Jacot, Gabriel y Hongler en 2018 es que en el límite de anchura infinita, con parametrización adecuada (la llamada parametrización NTK), el NTK permanece constante durante todo el entrenamiento. La dinámica de la función aprendida $f$ se vuelve entonces lineal en sus parámetros (no en sus entradas), y resolver el entrenamiento equivale a hacer kernel gradient descent con $K$ fijo desde la inicialización. Esto es teóricamente muy potente porque convierte una red infinita en un objeto cerrado y analizable como una regresión kernel clásica.
+
+Este límite se llama [[Régimen lazy]] precisamente porque la red no aprende features nuevas: la representación interna que usa al final del entrenamiento es esencialmente la misma que al principio, solo cambia la combinación lineal que produce la salida. Es teóricamente tratable pero empíricamente pobre. Las redes que de verdad funcionan (anchura finita, ReLU, datos estructurados) están fuera del régimen lazy: su NTK empírico evoluciona durante el entrenamiento, alineándose con el target, y esa evolución es justo lo que llamamos [[Feature learning]].
+
+La métrica estándar para cuantificar ese alineamiento es la kernel-target alignment (KTA): $A(K, yy^\top) = \langle K, yy^\top\rangle_F / (\|K\|_F \|y\|^2)$. Mide qué fracción de la matriz Gram del NTK se proyecta sobre la dirección de la tarea, que en clasificación binaria es la matriz rango-uno $yy^\top$. Un ejemplo concreto de su uso: si entrenas un MLP simple en MNIST midiendo la KTA cada epoch, observas que sube desde un valor pequeño en la inicialización (decenas de centésimas) hasta un valor próximo a 1 al final del entrenamiento, y esa subida correlaciona estrechamente con la accuracy de test. En cambio, si fuerzas a la red a operar en régimen lazy (escalando los pesos finales a gran magnitud), la KTA se queda anclada en el valor inicial y la accuracy de test es mucho peor.
+
+## Enlaces
+
+- KTA y el modelo OFE de feature learning: [[A Theory of Neural Tangent Kernel Alignment and Its Influence on Training]]
+- Conexión NTK-stiffness como productos internos de gradientes: [[Stiffness - A New Perspective on Generalization in Neural Networks]]
+- NTK y proxies relacionados como predictores en NAS: [[Speedy Performance Estimation for Neural Architecture Search]]

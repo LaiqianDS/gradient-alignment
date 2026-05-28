@@ -1,0 +1,13 @@
+
+Gradient confusion es una cota inferior $\eta \geq 0$ tal que $\langle \nabla f_i(w), \nabla f_j(w)\rangle \geq -\eta$ para todo par de [[Gradientes per-sample]]. Mide, en el peor caso, cuán antagónicos llegan a ser los gradientes individuales: si $\eta$ es pequeña, los ejemplos cooperan en promedio; si es grande, hay pares que tiran en direcciones opuestas con fuerza, y SGD acaba avanzando muy poco en la dirección agregada.
+
+Es el extremo negativo de la [[Coherencia de gradientes]], y conecta con teoría de convergencia clásica de manera muy directa. Bajo suavidad de Lipschitz (gradiente $L$-suave) y la condición Polyak-Lojasiewicz que generaliza la convexidad fuerte, SGD con paso constante converge linealmente a un entorno del óptimo cuyo radio escala con $\eta$. La fórmula típica es $\mathbb{E}\|\nabla F(w_T)\|^2 \leq \rho(F(w_1)-F^*)/T + \rho \eta$, así que cuando $T$ es grande, lo que queda es un "suelo" de pérdida proporcional a la confusion. Reducir $\eta$ es lo que permite a SGD acercarse más al óptimo sin tener que decaer el learning rate.
+
+Empíricamente, el comportamiento de la confusion frente a la arquitectura es muy específico. Crece con la profundidad de la red, porque las capas que se componen empeoran progresivamente la alineación entre gradientes per-sample: dos imágenes parecidas al entrar producen activaciones cada vez más distintas a medida que pasan por más capas no lineales. En cambio, crece poco o incluso decrece con la anchura, lo que es una de las explicaciones formales de por qué la [[Sobreparametrización]] ayuda a SGD: redes muy anchas tienen un espacio de gradientes tan grande que los ejemplos casi nunca compiten entre sí. Por ejemplo, en una red lineal con anchura $h$ y entradas isotrópicas, la confusion empírica decae como $1/h$.
+
+Hay un punto práctico muy relevante para entender por qué las arquitecturas modernas funcionan. Batch normalization y skip connections reducen drásticamente la confusion incluso a profundidades donde redes vanilla colapsan. En una ResNet-50 la confusion se mantiene moderada hasta profundidades de centenares de capas, mientras que una red plana de la misma profundidad sin BN ni skips entraría en confusion catastrófica antes de poder entrenarse. Esto da una explicación cuantitativa de por qué esas dos invenciones (introducidas originalmente como heurísticas) fueron las que destrabaron el deep learning realmente profundo.
+
+## Enlaces
+
+- Definición formal, cotas de convergencia y experimentos profundidad/anchura: [[The Impact of Neural Network Overparameterization on Gradient Confusion and Stochastic Gradient Descent]]
+- Conexión con coherencia y stiffness en una misma familia: [[Making Coherence Out of Nothing At All - Measuring the Evolution of Gradient Alignment]]
