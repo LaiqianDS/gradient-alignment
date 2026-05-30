@@ -13,6 +13,7 @@ last_review: 2026-05-07
 tfg_role:
   - metric
   - theory
+tfg_note: "Eje varianza con marco teórico: GSNR alto → menor gap de generalización."
 ---
 
 # Understanding Why Neural Networks Generalize Well Through GSNR of Parameters

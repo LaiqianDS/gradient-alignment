@@ -10,6 +10,7 @@ url: https://proceedings.neurips.cc/paper_files/paper/2013/file/ac1dd209cbcc5e5d
 tfg_role:
   - related-work
   - theory
+tfg_note: "SVRG; reducción de varianza para acelerar SGD; related-work."
 ---
 
 # Accelerating Stochastic Gradient Descent using Predictive Variance Reduction

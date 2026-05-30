@@ -2,6 +2,16 @@
 
 Estudio correlacional. Objetivo único: cuantificar en qué medida métricas de variabilidad y alineación de gradientes medidas en la fase inicial del entrenamiento predicen indicadores de eficiencia del entrenamiento completo. La componente de intervención (early stopping basado en la señal) queda explícitamente fuera del alcance del TFG por restricciones de tiempo. Puede mencionarse como trabajo futuro.
 
+## Pregunta de investigación
+
+¿Pueden métricas de variabilidad y alineación de gradientes, medidas en la fase inicial del entrenamiento, predecir la eficiencia del entrenamiento completo?
+
+Sub-preguntas:
+- **Métricas**: ¿qué métrica es estable y computacionalmente viable?
+- **Resultado**: ¿predicen velocidad de convergencia o rendimiento final?
+- **Robustez**: ¿se mantiene la relación across learning rates y optimizadores?
+- **(Fuera de alcance, futuro)**: intervención basada en la señal (ej. ajuste dinámico de LR, early stopping).
+
 ## Hipótesis operativa
 
 La variabilidad y/o alineación de los gradientes, medida a través de distintas métricas en una fracción inicial del entrenamiento, correlaciona significativamente con indicadores de eficiencia del entrenamiento completo, bajo variaciones de learning rate y optimizador, en arquitecturas de visión por computador.
@@ -18,7 +28,7 @@ Hipótesis falsada si las correlaciones son débiles (|ρ| < 0.3) o inestables e
 
 ### Variables independientes (métricas tempranas)
 
-Pendiente de cerrar la lista definitiva antes de empezar los experimentos. Candidatas actuales repartidas en dos familias:
+Pendiente de cerrar la lista definitiva antes de empezar los experimentos (ver "Decisiones abiertas"). Candidatas actuales repartidas en dos familias:
 
 - **Alineación / coherencia direccional**: cosine similarity entre gradientes de batches, gradient confusion, stiffness, m-coherence.
 - **Variabilidad estocástica**: gradient noise scale, normalized gradient variance.
@@ -32,10 +42,23 @@ Fracciones fijas del presupuesto total de entrenamiento. Barrido en 5%, 10%, 25%
 ### Setup de entrenamiento
 
 - Datasets: MNIST, CIFAR-10, CIFAR-100. Decidido 2026-05-14.
-- Arquitecturas: FC, CNN simple, ResNet-18. Decidido 2026-05-14.
+- Arquitecturas: FC, CNN simple, ResNet (variante por cerrar — candidata ResNet-18). Familia decidida 2026-05-14.
 - Label noise: descartado en v1. Backlog si sobra tiempo (replicaría Forouzesh / Chatterjee&Zielinski).
 - Learning rates: varios por condición.
 - Optimizadores: al menos SGD y Adam.
+
+## Procedimiento
+
+```mermaid
+flowchart LR
+    A["Preparar datos\nMNIST / CIFAR-10 / CIFAR-100"] --> B["Entrenar modelos\nFC, CNN simple, ResNet"]
+    B --> C["Logging métricas alineación + variabilidad\npor batch/época"]
+    C --> D["Registrar eficiencia\n(épocas-a-umbral, AUC, best loss)"]
+    D --> E["Barrido ventana temprana\n5% / 10% / 25% / 50%"]
+    E --> F["Correlación Spearman + Pearson\ncon corrección FDR"]
+    F --> G["Análisis robustez\ncross arch × dataset × LR × optimizador"]
+    G --> H["Resultados y conclusiones"]
+```
 
 ## Protocolo de análisis
 
@@ -45,7 +68,9 @@ Fracciones fijas del presupuesto total de entrenamiento. Barrido en 5%, 10%, 25%
 - Lista de métricas cerrada antes de ejecutar los experimentos para evitar p-hacking.
 - Análisis por condición (arquitectura × dataset) y agregado, para evaluar robustez cross-setting.
 
-## Convergencia de la literatura (15 papers revisados)
+## Convergencia de la literatura
+
+Corpus de **16 papers** en el vault (`Papers/`). Los recuentos `/15` de abajo se basan en los 15 que proponen métrica o setup; queda fuera *On the Ineffectiveness of Variance Reduced Optimization for Deep Learning* (related-work, no aporta dataset/arquitectura/métrica al recuento). Esto es distinto del progreso de lectura, que vive en `Planificacion TFG.md`.
 
 Extraído de `metrics.md`, `datasets.md` y `models.md`. Justifica el setup propuesto.
 
@@ -61,12 +86,12 @@ Extraído de `metrics.md`, `datasets.md` y `models.md`. Justifica el setup propu
 - CNNs no-ResNet (típicamente 3 capas conv con filtros 3×3): 8/15.
 - ViT / ConvNeXt: 2/15 (Hölzl, Fort) — fuera de scope.
 
-**Métricas tempranas** (dos familias en `Estado TFG.md` confirmadas por la literatura):
+**Métricas tempranas** (las dos familias de §Diseño experimental, confirmadas por la literatura):
 - **Alineación / coherencia direccional** (7 papers): NTK alignment (Shan & Bordelon), GWA (Hölzl), m-coherence (Chatterjee & Zielinski), stiffness (Fort et al.), gradient confusion η (Sankararaman et al.), gradient disparity $\|g_i - g_j\|_2$ (Forouzesh & Thiran), Coherent Gradients $f_t^p$ (Chatterjee).
 - **Variabilidad estocástica** (3 papers): normalized variance $\mathbb{V}[g]/\mathbb{E}[g]^2$ (Faghri et al.), GSNR $\tilde{g}^2/\rho^2$ (Liu et al.), gradient noise scale $B_{\text{simple}} = \operatorname{tr}(\Sigma)/\|G\|^2$ (McCandlish et al.).
 
 **Implicación para el TFG**:
-- Setup fijado: MNIST + CIFAR-10 + CIFAR-100 × {FC, CNN simple, ResNet-18} × ambas familias de métricas.
+- Setup fijado: MNIST + CIFAR-10 + CIFAR-100 × {FC, CNN simple, ResNet} × ambas familias de métricas.
 - Coincide con el setup propuesto en este documento.
 - ImageNet, transformers y dominios non-vision (Atari, Dota, MNLI) quedan explícitamente fuera del scope.
 
@@ -77,19 +102,9 @@ Extraído de `metrics.md`, `datasets.md` y `models.md`. Justifica el setup propu
 3. **Diferenciación frente a literatura existente** (McCandlish 2018, Faghri 2020). Aporte a defender: comparativa rigurosa entre múltiples familias de métricas, barrido en fracciones tempranas, análisis de robustez cross-architecture/cross-dataset. Debe ser explícito en la intro.
 4. **Coherencia título–contenido.** El título actual enfatiza "alineación". Si el análisis acaba apoyándose más en métricas de variabilidad, revisar el título de la memoria (el de EBRON ya está comprometido).
 
-## Próximos pasos
+## Decisiones abiertas
 
-Orden de prioridad. Pasos 1 y 2 son bloqueantes: sin ellos, lanzar experimentos = desperdicio.
+Unknowns de diseño aún sin cerrar. La *acción* para resolverlos vive en `Planificacion TFG.md` ("Pasos inmediatos").
 
-1. **Cerrar lista definitiva de métricas.** Antes de tocar código. Evita p-hacking. Candidatas ya identificadas en dos familias (alineación/coherencia y variabilidad estocástica); decidir cuáles entran y cuáles no.
-2. **Calcular budget de cómputo total.** runs × arquitectura × dataset × optimizador × LR × seeds, con n ≥ 30 por celda. Si no cuadra, recortar condiciones ahora, no después. Vinculado al riesgo #1.
-3. **Decidir grid de hiperparámetros.**
-   - Optimizadores: SGD + Adam (mínimo).
-   - LRs: barrido por condición.
-   - Presupuesto de épocas fijo por dataset.
-   - Umbral de accuracy primario por dataset (define VD1, "épocas hasta umbral").
-4. **Pilot run reducido.** MNIST × FC × SGD × 3 LRs × 5 seeds. Valida pipeline (logging de gradientes, cálculo de métricas, storage) antes de escalar. Detecta bugs baratos.
-5. **Priorizar métricas baratas primero.** cosine similarity batch-wise, normalized variance, GSNR, gradient noise scale. Diferir m-coherence y gradient confusion (riesgo #2: posible abandono si overhead inviable). Medir overhead real en el pilot.
-6. **Preregistrar análisis estadístico.** Spearman primaria + Benjamini-Hochberg/FDR. Documentar antes de ver resultados. Evita p-hacking ex-post.
-7. **Setup del repo experimental.** Configuración via YAML/Hydra, seeds fijas, storage de trayectorias por step, separación raw/processed.
-8. **Revisar título de la memoria.** Vinculado al riesgo #4. Decidir si "alineación" sigue siendo eje central o si conviene framing más neutro (p. ej. "métricas tempranas de gradiente").
+- **Lista definitiva de métricas.** Las dos familias están fijadas (alineación/coherencia + variabilidad estocástica), pero la selección concreta dentro de cada una no está cerrada. Bloqueante antes de experimentos para evitar p-hacking.
+- **Variante de ResNet.** Familia decidida (FC, CNN simple, ResNet); falta fijar la variante concreta. Candidata: ResNet-18.

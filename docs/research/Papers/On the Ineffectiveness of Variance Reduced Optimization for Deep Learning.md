@@ -9,6 +9,7 @@ last_review: 2026-05-26
 url: https://arxiv.org/pdf/1812.04529
 tfg_role:
   - related-work
+tfg_note: "Related-work; la reducción de varianza es poco efectiva en deep learning."
 ---
 
 # On the Ineffectiveness of Variance Reduced Optimization for Deep Learning

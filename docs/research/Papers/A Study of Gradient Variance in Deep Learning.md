@@ -12,6 +12,7 @@ url: https://arxiv.org/pdf/2007.04532
 tfg_role:
   - metric
   - baseline
+tfg_note: "Eje varianza; varianza normalizada como estadístico predictivo, observación contraintuitiva."
 ---
 
 # A Study of Gradient Variance in Deep Learning

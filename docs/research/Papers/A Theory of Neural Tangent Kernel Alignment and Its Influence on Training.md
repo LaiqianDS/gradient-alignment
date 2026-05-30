@@ -10,6 +10,7 @@ last_review: 2026-05-07
 tfg_role:
   - theory
   - related-work
+tfg_note: "Fundamento teórico de alineación a nivel kernel."
 ---
 
 # A Theory of Neural Tangent Kernel Alignment and Its Influence on Training

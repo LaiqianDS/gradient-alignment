@@ -12,6 +12,7 @@ last_review: 2026-05-07
 url: https://proceedings.mlr.press/v119/sankararaman20a/sankararaman20a.pdf
 tfg_role:
   - metric
+tfg_note: "Alineación ↔ velocidad de SGD; la sobreparametrización reduce la confusión."
 ---
 
 # The Impact of Neural Network Overparameterization on Gradient Confusion and Stochastic Gradient Descent

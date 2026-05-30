@@ -8,6 +8,7 @@ last_review: 2026-05-07
 url: https://arxiv.org/abs/2510.25480
 tfg_role:
   - metric
+tfg_note: "Competidor reciente (2025); posicionamiento competitivo."
 ---
 
 # Gradient-Weight Alignment as a Train-Time Proxy for Generalization in Classification Tasks

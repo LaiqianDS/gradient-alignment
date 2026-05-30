@@ -9,6 +9,7 @@ url: https://arxiv.org/abs/2002.10657
 tfg_role:
   - theory
   - related-work
+tfg_note: "Marco conceptual previo de coherencia de gradientes."
 ---
 
 # Coherent Gradients: An Approach to Understanding Generalization in Gradient Descent-based Optimization

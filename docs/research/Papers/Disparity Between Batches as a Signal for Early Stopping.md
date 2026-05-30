@@ -2,13 +2,14 @@
 authors:
   - Mahsa Forouzesh
 year: 2021
-status: to-read
+status: read
 relevance: high
-last_review: 2026-05-07
+last_review: 2026-05-30
 url: https://link.springer.com/chapter/10.1007/978-3-030-86520-7_14
 tfg_role:
   - metric
   - baseline
+tfg_note: "Baseline directo del TFG; métrica comparable natural."
 ---
 
 # Disparity Between Batches as a Signal for Early Stopping

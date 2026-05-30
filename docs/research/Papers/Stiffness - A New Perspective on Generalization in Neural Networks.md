@@ -11,6 +11,7 @@ last_review: 2026-05-07
 url: https://arxiv.org/abs/1901.09491
 tfg_role:
   - metric
+tfg_note: "Operador base de alineación: coseno entre gradientes de ejemplos."
 ---
 # Stiffness: A New Perspective on Generalization in Neural Networks
 

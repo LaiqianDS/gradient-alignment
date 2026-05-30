@@ -10,6 +10,7 @@ url: https://www.cs.toronto.edu/~hinton/coursera/lecture6/lec6.pdf
 tfg_role:
   - background
   - method
+tfg_note: "Optimizador base; background."
 ---
 
 # RMSProp - Divide the gradient by a running average of its recent magnitude

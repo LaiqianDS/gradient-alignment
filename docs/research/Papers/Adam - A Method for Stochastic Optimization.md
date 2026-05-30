@@ -10,6 +10,7 @@ url: https://arxiv.org/pdf/1412.6980
 tfg_role:
   - background
   - method
+tfg_note: "Optimizador base; background."
 ---
 
 # Adam - A Method for Stochastic Optimization

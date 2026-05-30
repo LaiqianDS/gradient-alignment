@@ -8,6 +8,7 @@ last_review: 2026-05-07
 url: https://arxiv.org/pdf/1609.04747
 tfg_role:
   - background
+tfg_note: "Survey de fundamentos (SGD, momentum, Adam); solo capítulo de fundamentos."
 ---
 
 # An overview of gradient descent optimization algorithms
