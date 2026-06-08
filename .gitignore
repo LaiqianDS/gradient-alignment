@@ -2,3 +2,5 @@ data/
 .DS_Store
 .obsidian
 PDFs/
+
+__pycache__/
