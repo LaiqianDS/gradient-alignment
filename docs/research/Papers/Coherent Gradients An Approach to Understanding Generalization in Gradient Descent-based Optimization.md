@@ -1,15 +1,14 @@
 ---
 authors:
   - Satrajit Chatterjee
-year: 2019
+year: 2019 # año bibliográfico/workshop; el año de publicación en arXiv difiere (verificar contra la fuente)
 status: to-read
 relevance: medium
-last_review: 2026-05-07
 url: https://arxiv.org/abs/2002.10657
 tfg_role:
   - theory
   - related-work
-tfg_note: "Marco conceptual previo de coherencia de gradientes."
+tfg_note: "Coherent Gradients Hypothesis: ejemplos similares producen gradientes similares, y las direcciones que muchos ejemplos refuerzan son las que generalizan. Marco conceptual de toda la familia alineación (su estimador operativo es m-coherence)."
 ---
 
 # Coherent Gradients: An Approach to Understanding Generalization in Gradient Descent-based Optimization
@@ -46,11 +45,13 @@ Se reportan training accuracy y validation/test accuracy a lo largo del entrenam
 
 $$i_t^p = \frac{1}{|p|} \sum_{t'=0}^{t} \langle g_{t'}, g_{t'}^p \rangle, \quad i_t^c = \frac{1}{|c|} \sum_{t'=0}^{t} \langle g_{t'}, g_{t'}^c \rangle,$$
 
+(normalización exacta a verificar contra el PDF)
+
 y un overfit ajustado definido como $\text{ta} - [\varepsilon \cdot (1/10) + (1 - \varepsilon) \cdot \text{va}]$ para corregir el hecho de que las etiquetas de test no están aleatorizadas.
 
 ### Conclusiones
 
-Los experimentos respaldan cualitativamente la CGH. En primer lugar, al aumentar el ruido de etiquetas, el realized learning rate disminuye porque los gradientes per-sample se vuelven menos alineados; los ejemplos pristine se aprenden más rápido que los corrupt, y a una tasa cercana a la del caso 0% de ruido, mientras que los corrupt se aprenden a una tasa cercana a la del 100%. En segundo lugar, las trayectorias de $f_t^p$ y $f_t^c$ muestran un cruce: inicialmente los pristine dominan la reducción de pérdida pese a tener menos masa relativa en algunos casos —en la práctica del paper, $f_t^p \approx 0.7$ indica que en torno al 70% de la mejora viene del subconjunto pristine—, y sólo al final del entrenamiento los corrupt acaparan el descenso de la norma del gradiente; este patrón no aparece en los mundos nulos (excepto débilmente en el 75%), lo que refuerza la significación. En tercer lugar, winsorized SGD con $c > 1$ impide que la training accuracy supere la proper accuracy del dataset (es decir, evita memorizar etiquetas corruptas) y la tasa de overfit decrece monótonamente con $c$; sin embargo, valores grandes de $c$ degradan también la capacidad de fit y, por construcción, el paso ya no es estrictamente de descenso. El autor concluye que la CGH ofrece una explicación unificada de varios fenómenos empíricos —aprendizaje más lento con etiquetas aleatorias, robustez a label noise, beneficio del early stopping, mejora con mayor capacidad, esquemas de inicialización adversarial y detección de patrones comunes incluso bajo etiquetas aleatorias— y abre direcciones para SGD modificadas con garantías de generalización (y privacidad), así como conexiones con la Lottery Ticket Hypothesis y con métricas afines como stiffness (Fort et al., 2019) y gradient confusion (Sankararaman et al., 2019).
+Los experimentos respaldan cualitativamente la CGH. En primer lugar, al aumentar el ruido de etiquetas, el realized learning rate disminuye porque los gradientes per-sample se vuelven menos alineados; los ejemplos pristine se aprenden más rápido que los corrupt, y a una tasa cercana a la del caso 0% de ruido, mientras que los corrupt se aprenden a una tasa cercana a la del 100%. En segundo lugar, las trayectorias de $f_t^p$ y $f_t^c$ muestran un cruce: inicialmente los pristine dominan la reducción de pérdida pese a tener menos masa relativa en algunos casos —a modo ilustrativo, un valor aproximado como $f_t^p \approx 0.7$ indicaría que en torno al 70% de la mejora viene del subconjunto pristine (cifra orientativa, verificar magnitud exacta contra el PDF)—, y sólo al final del entrenamiento los corrupt acaparan el descenso de la norma del gradiente; este patrón no aparece en los mundos nulos (excepto débilmente en el 75%), lo que refuerza la significación. En tercer lugar, winsorized SGD con $c > 1$ impide que la training accuracy supere la proper accuracy del dataset (es decir, evita memorizar etiquetas corruptas) y la tasa de overfit decrece monótonamente con $c$; sin embargo, valores grandes de $c$ degradan también la capacidad de fit y, por construcción, el paso ya no es estrictamente de descenso. El autor concluye que la CGH ofrece una explicación unificada de varios fenómenos empíricos —aprendizaje más lento con etiquetas aleatorias, robustez a label noise, beneficio del early stopping, mejora con mayor capacidad, esquemas de inicialización adversarial y detección de patrones comunes incluso bajo etiquetas aleatorias— y abre direcciones para SGD modificadas con garantías de generalización (y privacidad), así como conexiones con la Lottery Ticket Hypothesis y con métricas afines como stiffness (Fort et al., 2019) y gradient confusion (Sankararaman et al., 2019).
 
 ## Medición y pipeline
 
@@ -108,7 +109,7 @@ logger.log_scalar("cgh/aligned_fraction", aligned_fraction.item(), step=t)
 
 ### Discrepancias detectadas
 
-- **URL de arXiv.** El frontmatter apunta a `arxiv.org/abs/2002.10657`, identificador que en arXiv corresponde a un preprint posterior; la primera versión del trabajo "Coherent Gradients" (Chatterjee, 2019) circula con identificador `arXiv:2002.10657` desde febrero de 2020, mientras que el título y autoría suelen citarse con año 2019 por la fecha del workshop original. Conviene homogeneizar año y URL al criterio bibliográfico del TFG (mantener 2019 como año de referencia o actualizar a 2020 según la convención fijada).
+- **URL de arXiv.** El frontmatter apunta a `arxiv.org/abs/2002.10657`, mientras que el título y autoría suelen citarse con año 2019 por la fecha del workshop original, de modo que el año de publicación en arXiv y el año bibliográfico podrían no coincidir. Conviene homogeneizar año y URL al criterio bibliográfico del TFG (mantener 2019 como año de referencia o ajustar según la convención fijada) (id arXiv y año a verificar contra la fuente).
 - **Operacionalización de coherencia.** Versiones previas del archivo introducían un estimador propio $\|\sum_i g_i\|^2 / (N \sum_i \|g_i\|^2)$ como "coherencia" supuestamente derivada de este paper. El paper no define ese ratio: las métricas explícitas son $f_t^p$ y $f_t^c$ (que requieren partición pristine/corrupt) y la descomposición heurística. El estimador escalable de tipo cociente normalizado es la **m-coherence** de Chatterjee & Zielinski (2020); atribuirlo a este paper inducía a confusión.
 
 ## Papers relacionados

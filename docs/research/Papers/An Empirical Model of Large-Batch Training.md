@@ -6,11 +6,10 @@ authors:
 year: 2018
 status: to-read
 relevance: medium
-last_review: 2026-05-07
 url: https://arxiv.org/pdf/1812.06162
 tfg_role:
   - metric
-tfg_note: "Fuente de gns_simple; caso canónico métrica → hiperparámetro."
+tfg_note: "Origen de `gns_simple` (gradient noise scale: ruido del gradiente relativo a su norma) que predice a priori el batch size crítico. Eje varianza; caso canónico de métrica de ruido → elección de hiperparámetro."
 ---
 
 # An Empirical Model of Large-Batch Training
@@ -75,7 +74,7 @@ donde $\Sigma$ es la covarianza por ejemplo del gradiente estocástico y $G$ el 
 
 $$\mathcal{B}_{\text{simple}} = \frac{\mathrm{tr}(\Sigma)}{\|G\|^2} = \frac{\tfrac{1}{B}\sum_{i=1}^B \|g_i\|^2 - \|G\|^2}{\|G\|^2}.$$
 
-Si el coste per-sample es prohibitivo, sigue siendo válido el estimador de dos batch sizes $B_{\text{small}} < B_{\text{big}}$ del apéndice A.1 del paper, con $\widehat{\|G\|^2} = (B_{\text{big}}\|G_{\text{big}}\|^2 - B_{\text{small}}\|G_{\text{small}}\|^2)/(B_{\text{big}} - B_{\text{small}})$ y $\widehat{\mathrm{tr}(\Sigma)} = (\|G_{\text{small}}\|^2 - \|G_{\text{big}}\|^2)/(1/B_{\text{small}} - 1/B_{\text{big}})$, promediados con EMA antes de dividir.
+Conviene notar que esta forma con la media empírica $G = \tfrac{1}{B}\sum_i g_i$ es **sesgada**: el numerador estima $(1 - 1/B)\,\mathrm{tr}(\Sigma)$ en vez de $\mathrm{tr}(\Sigma)$, esto es, sesgada a la baja por el factor $(B-1)/B$; la ruta insesgada es aplicar la corrección $1/(B-1)$ (factor $B/(B-1)$) o usar el estimador de dos batches. Si el coste per-sample es prohibitivo, sigue siendo válido el estimador de dos batch sizes $B_{\text{small}} < B_{\text{big}}$ del apéndice A.1 del paper, con $\widehat{\|G\|^2} = (B_{\text{big}}\|G_{\text{big}}\|^2 - B_{\text{small}}\|G_{\text{small}}\|^2)/(B_{\text{big}} - B_{\text{small}})$ y $\widehat{\mathrm{tr}(\Sigma)} = (\|G_{\text{small}}\|^2 - \|G_{\text{big}}\|^2)/(1/B_{\text{small}} - 1/B_{\text{big}})$, promediados con EMA antes de dividir.
 
 **Granularidad.** Una medición por época durante toda la corrida; cada $K$ pasos ($K \in [100, 500]$) en la ventana temprana (primeras 5-10 épocas), donde la trayectoria de $\mathcal{B}_{\text{simple}}$ es más informativa. La frecuencia debe bastar para capturar el crecimiento monótono observado en el paper (uno o dos órdenes de magnitud a lo largo del entrenamiento).
 
@@ -101,7 +100,7 @@ def noise_scale_simple(model, loss_fn, batch):
     G = per_sample_grads.mean(dim=0)              # (P,)
     sq_norms = (per_sample_grads ** 2).sum(dim=1) # (B,)
     G_sq = (G ** 2).sum()
-    tr_Sigma = sq_norms.mean() - G_sq             # tr(Cov[g_i])
+    tr_Sigma = sq_norms.mean() - G_sq             # tr(Cov[g_i]); sesgado a la baja (B-1)/B con la media empirica, corregir con B/(B-1) si se quiere insesgado
     return (tr_Sigma / G_sq).item(), G_sq.item(), tr_Sigma.item()
 
 # Logging por época: aplicar EMA sobre tr_Sigma y G_sq antes de dividir.
@@ -112,7 +111,7 @@ def noise_scale_simple(model, loss_fn, batch):
 
 ## Discrepancias detectadas
 
-La versión previa del documento mezclaba dos derivaciones del estimador (per-sample vs. dos batch sizes) sin distinguir entre el ideal teórico (per-sample grads sobre $B$ muestras, $\mathcal{B}_{\text{simple}} = (\sum_i \|g_i\|^2/B - \|G\|^2)/\|G\|^2$) y el atajo data-paralelo del apéndice A.1. Esta versión adopta el per-sample con `vmap`/microbatching como ruta principal, reservando el estimador de dos batch sizes como alternativa de bajo coste. Las notas previas reportaban $\mathcal{B}_{\text{simple}} \in [20, 10^7]$; el rango típico citado en el paper para tareas estándar es de 1k–1M, y los extremos (autoencoder SVHN y Dota 5v5) deben leerse como casos límite, no como rango típico.
+La versión previa del documento mezclaba dos derivaciones del estimador (per-sample vs. dos batch sizes) sin distinguir su rigor estadístico. La forma per-sample con la media empírica ($\mathcal{B}_{\text{simple}} = (\sum_i \|g_i\|^2/B - \|G\|^2)/\|G\|^2$) es en realidad el **estimador naive sesgado** (a la baja por $(B-1)/B$, ver arriba), mientras que el estimador de dos batch sizes ($B_{\text{small}}, B_{\text{big}}$) del apéndice A.1 es el **insesgado**. Esta versión adopta el per-sample con `vmap`/microbatching como ruta principal por su simplicidad, reservando el estimador de dos batch sizes como alternativa de bajo coste e insesgada. Las notas previas reportaban $\mathcal{B}_{\text{simple}} \in [20, 10^7]$; el rango típico citado en el paper para tareas estándar es de 1k–1M, y los extremos (autoencoder SVHN y Dota 5v5) deben leerse como casos límite, no como rango típico.
 
 ## Notes
 
@@ -120,7 +119,7 @@ Es un ejemplo de cómo una métrica relacionada con el ruido del gradiente permi
 
 ### Uso en el TFG
 
-La métrica que origina es `gns_simple` (familia varianza estocástica), una de las tres métricas de varianza del `METRIC_REGISTRY` cerrado del TFG. Se utiliza como proxy barato medido en entrenamiento temprano (ventanas 5/10/25/50% de épocas) sobre el gradiente bruto $\nabla L$. No se optimiza el batch size: se mide su trayectoria y se correlaciona (Spearman) con generalización y eficiencia, con cadencia por época. La fórmula clave es $\mathcal{B}_{\text{simple}} = \mathrm{tr}(\Sigma)/\|G\|^2$, estimada sin HVPs con dos batches disjuntos $B_{\text{small}} = B_{\text{train}}$ y $B_{\text{big}} = 4 \cdot B_{\text{train}}$, a un coste aproximado de $5\times$ un paso de entrenamiento. Menor $\mathcal{B}_{\text{simple}}$ implica menos ruido relativo del gradiente; su vínculo con la eficiencia es más sutil que el de NGV, dado que McCandlish lo liga al batch size crítico $\mathcal{B}_{\text{crit}}$, no directamente a épocas-a-umbral. La versión exacta `gns_exact` (ponderada por Hessiana, $\mathrm{tr}(H\Sigma)/(G^\top H G)$) se descarta por el coste de los HVPs y porque el paper muestra que `gns_simple` la aproxima bien. La métrica crece 1-2 órdenes de magnitud durante el entreno ($\|G\| \downarrow$, $\mathrm{tr}(\Sigma)$ estable), por lo que conviene loguear en log-scale y registrar la trayectoria; el estimador puede dar $\widehat{\mathrm{tr}(\Sigma)} < 0$ cuando el ruido domina, lo que se mitiga con EMA opcional sobre numerador y denominador por separado antes de dividir. Por CLT $\mathcal{B}_{\text{simple}} \approx B \cdot \text{NGV}$, con Spearman esperado $> 0.9$ frente a `normalized_variance`; la redundancia se valida en el pilot y, si se confirma, se dropea la versión más cara. Puede compartir el barrido batch-grad con NGV usando el batch big como concatenación de batches small.
+La métrica que origina es `gns_simple` (familia varianza estocástica), una de las tres métricas de varianza del `METRIC_REGISTRY` cerrado del TFG. Se utiliza como proxy barato medido en entrenamiento temprano (ventanas 5/10/25/50% de épocas) sobre el gradiente bruto $\nabla L$. No se optimiza el batch size: se mide su trayectoria y se correlaciona (Spearman) con generalización y eficiencia, con cadencia por época. La fórmula clave es $\mathcal{B}_{\text{simple}} = \mathrm{tr}(\Sigma)/\|G\|^2$, estimada sin HVPs con el estimador de dos batch sizes $B_{\text{small}} = B_{\text{train}}$ y $B_{\text{big}} = 4 \cdot B_{\text{train}}$ (donde el batch big se forma concatenando cuatro batches small, compartiendo así el barrido), a un coste aproximado de $5\times$ un paso de entrenamiento. Menor $\mathcal{B}_{\text{simple}}$ implica menos ruido relativo del gradiente; su vínculo con la eficiencia es más sutil que el de NGV, dado que McCandlish lo liga al batch size crítico $\mathcal{B}_{\text{crit}}$, no directamente a épocas-a-umbral. La versión exacta `gns_exact` (ponderada por Hessiana, $\mathrm{tr}(H\Sigma)/(G^\top H G)$) se descarta por el coste de los HVPs y porque el paper muestra que `gns_simple` la aproxima bien. La métrica crece 1-2 órdenes de magnitud durante el entreno ($\|G\| \downarrow$, $\mathrm{tr}(\Sigma)$ estable), por lo que conviene loguear en log-scale y registrar la trayectoria; el estimador puede dar $\widehat{\mathrm{tr}(\Sigma)} < 0$ cuando el ruido domina, lo que se mitiga con EMA opcional sobre numerador y denominador por separado antes de dividir. Por CLT $\mathcal{B}_{\text{simple}} \approx B \cdot \text{NGV}$, con Spearman esperado $> 0.9$ frente a `normalized_variance`; la redundancia se valida en el pilot y, si se confirma, se dropea la versión más cara. Comparte además el barrido batch-grad con NGV.
 
 ## Papers relacionados
 

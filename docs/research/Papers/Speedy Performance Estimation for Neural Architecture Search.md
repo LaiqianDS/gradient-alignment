@@ -4,11 +4,10 @@ authors:
 year: 2021
 status: to-read
 relevance: high
-last_review: 2026-05-07
 url: https://proceedings.neurips.cc/paper/2021/hash/2130eb640e0a272898a51da41363542d-Abstract.html
 tfg_role:
   - method
-tfg_note: "Plantilla metodológica de proxy temprano para predicción final."
+tfg_note: "Origen del baseline `tse_ema` (suma exponencialmente ponderada de la train loss, coste cero). El listón a batir: toda métrica de gradiente debe superarlo en correlación o no se justifica instrumentar gradientes. Uno de los 3 papers más comparables."
 ---
 
 # Speedy Performance Estimation for Neural Architecture Search

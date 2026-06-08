@@ -7,12 +7,11 @@ authors:
 year: 2020
 status: read
 relevance: high
-last_review: 2026-05-07
 url: https://arxiv.org/pdf/2007.04532
 tfg_role:
   - metric
   - baseline
-tfg_note: "Eje varianza; varianza normalizada como estadístico predictivo, observación contraintuitiva."
+tfg_note: "Origen de `normalized_variance` (NGV: varianza del gradiente relativa a su media, inverso del SNR). Eje varianza; hallazgo contraintuitivo clave: la NGV crece durante el entrenamiento en CIFAR/ImageNet en vez de decrecer."
 ---
 
 # A Study of Gradient Variance in Deep Learning
@@ -75,20 +74,20 @@ Los autores reconocen como limitaciones que algunas contribuciones son empírica
 
 **Granularidad estructural.** Loguear NGV global (un escalar por época) y NGV por capa (un escalar por capa y época). En la práctica las primeras capas convolucionales y las capas finales (fully-connected del clasificador) suelen presentar regímenes muy distintos: agregar todo en un único escalar puede ocultar inversiones de tendencia.
 
-**Coste y memoria.** Coste de cómputo: $K$ pasadas backward por medición, sin paso del optimizer; con $K = 30$ y medición cada época en CIFAR-10, equivale aproximadamente a un overhead del 3–5% del coste total de entrenamiento. Memoria: con acumuladores streaming basta con almacenar dos buffers del tamaño del modelo (suma de gradientes y suma de cuadrados); orden de magnitud $\mathcal{O}(d)$ floats, donde $d$ es el número de parámetros. **No** es necesario almacenar los $K$ vectores de gradiente completos: $K \cdot d$ floats sería prohibitivo en ResNet-18 fp32 ($\approx 11.7$M × $K = 30 \approx 1.3$ GB) y se evita por completo con streaming.
+**Coste y memoria.** Coste de cómputo: $K$ pasadas backward por medición, sin paso del optimizer; con $K = 30$ y medición cada época en CIFAR-10, equivale aproximadamente a un overhead del 3–5% del coste total de entrenamiento. Memoria: con acumuladores streaming basta con almacenar dos buffers del tamaño del modelo (suma de gradientes y suma de cuadrados); orden de magnitud $\mathcal{O}(d)$ floats, donde $d$ es el número de parámetros. **No** es necesario almacenar los $K$ vectores de gradiente completos: $K \cdot d$ floats sería prohibitivo en ResNet-18 fp32 ($\approx 11.7$M × $K = 30 \approx 1.4$ GB) y se evita por completo con streaming.
 
-**Trucos numéricos.** Acumulación **Welford streaming** para la varianza coordenada a coordenada cuando se quiere precisión numérica (evita el cancelamiento catastrófico de $\mathbb{E}[g^2] - \mathbb{E}[g]^2$ con flotantes). Para el agregado global basta con dos acumuladores $S = \sum_k g_k$ y $Q = \sum_k \|g_k\|^2$, y luego $\text{tr}(\text{Cov}) = Q/K - \|S/K\|^2$. Se recomienda fp32 (o fp64 si el modelo está en bf16/fp16) para los acumuladores.
+**Trucos numéricos.** Acumulación **Welford streaming** para la varianza coordenada a coordenada cuando se quiere precisión numérica (evita el cancelamiento catastrófico de $\mathbb{E}[g^2] - \mathbb{E}[g]^2$ con flotantes). Para el agregado global basta con dos acumuladores $S = \sum_k g_k$ y $Q = \sum_k \|g_k\|^2$, y luego (forma insesgada de Bessel, $\div(K-1)$) $\text{tr}(\text{Cov}) = (Q - \|S\|^2/K)/(K-1)$. Se recomienda fp32 (o fp64 si el modelo está en bf16/fp16) para los acumuladores.
 
 **Claves de log.** Se sugiere la siguiente convención de nombres (compatible con TensorBoard / wandb):
 
 - `var/avg` — Average Variance global (varianza absoluta agregada, $\frac{1}{d}\sum_j \mathbb{V}[g_j]$).
 - `var/normalized` — NGV global ($\text{tr}(\text{Cov}) / \|\mathbb{E}[g]\|^2$).
-- `var/per_layer/{name}` — NGV por capa, donde `{name}` es el nombre del módulo (`layer1.0.conv1`, `fc`, etc.).
+- `var/per_layer/{name}` — NGV por tensor de parámetros, donde `{name}` es el nombre devuelto por `named_parameters()`, esto es, una entrada por tensor de peso/bias (`layer1.0.conv1.weight`, `fc.bias`, etc.), no una por módulo.
 - `var/grad_norm_hist` (opcional) — histograma de $\|g_k\|$ sobre los $K$ batches, útil para diagnosticar colas pesadas en la distribución de gradientes.
 
 **Interpretación de la señal.** Conviene fijar la convención por clave porque la lectura "menor es mejor" del registro no se traduce sin matices en una métrica que empíricamente **crece** durante el entrenamiento. En `var/avg` (Average Variance, $\frac{1}{d}\sum_j \mathbb{V}[g_j]$) la convención formal es **cuanto más bajo, mejor** dentro de un mismo problema: una varianza coordenada agregada baja indica que el estimador del gradiente medio es preciso y que un paso de SGD avanza en la dirección de descenso esperada; sin embargo, la magnitud absoluta **no** es comparable entre datasets ($\sim 10^{-4}$ en CIFAR-10, $< 10^{-6}$ en ImageNet, $\sim 10^{-8}$ en MNIST tardío) y solo tiene sentido leerla relativamente a su propia trayectoria. En `var/normalized` (NGV global, $\text{tr}(\text{Cov})/\|\mathbb{E}[g]\|^2$) la convención teórica es la misma — **menor = mejor**, con NGV $<1$ indicando que la señal del gradiente medio domina sobre el ruido y NGV $\gtrsim 1$ que un paso individual es esencialmente direccional-ruido —, pero la lectura operativa requiere cuidado: el paper documenta que la NGV **crece** monotónicamente en CIFAR-10/ImageNet a lo largo del entrenamiento y sube tras los LR drops, así que un aumento sostenido **no** debe interpretarse como degradación de la optimización ni como criterio de parada; es el régimen esperado. La señal útil es comparativa entre arquitecturas, datasets o configuraciones de batch size, no la pendiente intra-corrida. En `var/per_layer/{name}` la convención por capa es **mayor NGV = capa más ruidosa**, y la lectura informativa es la heterogeneidad: si una capa (típicamente las convolucionales tempranas o el fully-connected final) domina la covarianza global, ahí está la fuente del ruido y ahí debe atacarse (re-inicialización, regularización, ajuste de learning rate por grupo). En `var/grad_norm_hist` la lectura no es monótona sino distribucional: colas pesadas o bimodalidad indican una distribución de gradientes con estructura — potencialmente explotable con muestreo estratificado, o señal de outliers/etiquetas corruptas. Operativamente, el objetivo del TFG con esta métrica no es minimizar la NGV (es imposible en CIFAR/ImageNet por construcción) sino usarla como diagnóstico del régimen SNR y validar su correlación con `gns_simple` (CLT predice Spearman $> 0.9$) y `gsnr` (Spearman $\sim 0.6$–$0.8$). Por construcción la NGV es sensible a la norma del gradiente medio en el denominador y muy ruidosa cerca de mínimos locales o tras convergencia parcial de una capa: solo cuando el global y el desglose por capa se mueven a la vez hay un cambio estructural real en la geometría del problema.
 
-**Gotchas.** El más serio es la **estabilidad numérica al dividir por $\|\mathbb{E}[g]\|^2$ pequeño**: cerca de un mínimo (o en pleno entrenamiento de una capa que ya ha convergido) la norma del gradiente medio cae varios órdenes de magnitud y la NGV explota artificialmente. Mitigaciones: añadir un $\varepsilon = 10^{-12}$ en el denominador, reportar log-NGV en lugar de NGV cruda, o limitar el rango ploteado. Segundo, los $K$ batches deben ser **independientes y sin reemplazo dentro de la medición** para que la varianza estimada sea insesgada; reutilizar el mismo batch sesga hacia cero. Tercero, la NGV no es monótona: contra-intuitivamente, en CIFAR-10 e ImageNet **crece** durante el entrenamiento y sube tras los LR drops, así que no debe usarse como criterio de parada simple.
+**Gotchas.** El más serio es la **estabilidad numérica al dividir por $\|\mathbb{E}[g]\|^2$ pequeño**: cerca de un mínimo (o en pleno entrenamiento de una capa que ya ha convergido) la norma del gradiente medio cae varios órdenes de magnitud y la NGV explota artificialmente. Mitigaciones: añadir un $\varepsilon = 10^{-12}$ en el denominador, reportar log-NGV en lugar de NGV cruda, o limitar el rango ploteado. Segundo, los $K$ batches deben ser **independientes y sin reemplazo dentro de la medición**: la independencia es necesaria pero no suficiente para insesgadez, hay que combinarla con la corrección de Bessel ($\div(K-1)$) del estimador de varianza; reutilizar el mismo batch sesga hacia cero. Tercero, la NGV no es monótona: contra-intuitivamente, en CIFAR-10 e ImageNet **crece** durante el entrenamiento y sube tras los LR drops, así que no debe usarse como criterio de parada simple.
 
 **Pseudocódigo PyTorch.**
 
@@ -121,7 +120,7 @@ def measure_ngv(model, loss_fn, sampler, K=30, eps=1e-12):
     for name, p in model.named_parameters():
         if p.grad is None: continue
         mean = S[p] / K
-        var  = Q[p] / K - mean.pow(2)        # Var[g_j] coord-a-coord
+        var  = (Q[p] - S[p].pow(2) / K) / (K - 1)  # Var[g_j] coord-a-coord, insesgada (Bessel)
         var.clamp_(min=0)                    # ruido fp puede dar negativos
         tr_cov   = var.sum().item()
         mean_sq  = mean.pow(2).sum().item()

@@ -77,7 +77,7 @@ Orden de prioridad. Pasos 1 y 2 son bloqueantes: sin ellos, lanzar experimentos 
 5. **Priorizar métricas baratas primero.** cosine similarity batch-wise, normalized variance, GSNR, gradient noise scale. Diferir m-coherence y gradient confusion (riesgo #2: posible abandono si overhead inviable). Medir overhead real en el pilot.
 6. **Preregistrar análisis estadístico.** Spearman primaria + Benjamini-Hochberg/FDR. Documentar antes de ver resultados. Evita p-hacking ex-post.
 7. **Setup del repo experimental.** Configuración via YAML/Hydra, seeds fijas, storage de trayectorias por step, separación raw/processed.
-8. **Revisar título de la memoria.** Vinculado al riesgo #4 de `Estado TFG.md`. Decidir si "alineación" sigue siendo eje central o si conviene framing más neutro (p. ej. "métricas tempranas de gradiente").
+
 
 ## Cola de lectura
 
@@ -95,7 +95,7 @@ SORT file.name ASC
 ### Leídos
 
 ```dataview
-TABLE relevance AS "Prio", last_review AS "Revisado", tfg_note AS "Por qué"
+TABLE relevance AS "Prio", tfg_note AS "Por qué"
 FROM "docs/research/Papers"
 WHERE status = "read"
 SORT file.name ASC

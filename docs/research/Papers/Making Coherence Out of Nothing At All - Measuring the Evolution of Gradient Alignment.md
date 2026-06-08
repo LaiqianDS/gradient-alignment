@@ -3,11 +3,10 @@ authors: ["Satrajit Chatterjee", "Piotr Zielinski"]
 year: 2020
 status: to-read
 relevance: high
-last_review: 2026-05-07
 url: "https://arxiv.org/pdf/2008.01217"
 tfg_role:
   - metric
-tfg_note: "Versión escalable de Stiffness (m-coherence) + observación sobre LR."
+tfg_note: "Origen de `m_coherence`: formalización escalable y O(m) de la Coherent Gradients Hypothesis (coherencia per-sample normalizada, rango [1, m]). Núcleo de la familia alineación."
 ---
 
 # Making Coherence Out of Nothing At All: Measuring the Evolution of Gradient Alignment
@@ -22,7 +21,7 @@ El trabajo se sitúa en la línea abierta por la *Coherent Gradients hypothesis*
 
 ### Aportación
 
-La contribución central es la introducción de la **m-coherence**, denotada $\alpha_m$, como métrica de alineamiento de gradientes por ejemplo con una interpretación intuitiva directa: sobre una muestra de tamaño $m$, m-coherence indica el número medio de ejemplos (incluyéndose a sí mismo) que se benefician de un pequeño paso a lo largo del gradiente de un ejemplo aleatorio. Frente a métricas previas como el producto interior por pares, la sign/cosine stiffness de Fort et al. (2019) o la gradient confusion de Sankararaman et al. (2019), $\alpha_m$ resulta más interpretable, matemáticamente más limpia, escala-invariante en el sentido apropiado y, sobre todo, computacionalmente eficiente: requiere $O(m)$ operaciones en lugar de $O(m^2)$, lo que permite utilizar muestras dos órdenes de magnitud mayores. Los autores también señalan que el recíproco de $\alpha$ coincide con la *gradient diversity* previamente usada en cotas teóricas (Yin et al. 2018, Jain et al. 2018), conectando la métrica con la literatura sobre convergencia de mini-batch SGD.
+La contribución central es la introducción de la **m-coherence**, denotada $\alpha_m$, como métrica de alineamiento de gradientes por ejemplo con una interpretación intuitiva directa: sobre una muestra de tamaño $m$, m-coherence indica el número medio de ejemplos (incluyéndose a sí mismo) que se benefician de un pequeño paso a lo largo del gradiente de un ejemplo aleatorio. Frente a métricas previas como el producto interior por pares, la sign/cosine stiffness de Fort et al. (2019) o la gradient confusion de Sankararaman et al. (2019), $\alpha_m$ resulta más interpretable, matemáticamente más limpia, escala-invariante en el sentido apropiado y, sobre todo, computacionalmente eficiente: requiere $O(m)$ operaciones en lugar de $O(m^2)$, lo que permite utilizar muestras dos órdenes de magnitud mayores. Los autores también señalan que el recíproco de $\alpha_m$ coincide con la *gradient diversity* previamente usada en cotas teóricas (Yin et al. 2018, Jain et al. 2018), conectando la métrica con la literatura sobre convergencia de mini-batch SGD.
 
 ### Metodología
 
@@ -50,7 +49,7 @@ Los resultados articulan varios hallazgos. Con etiquetas reales la coherencia in
 
 **Métrica concreta.** Se adopta la m-coherence $\alpha_m(w)$ de Chatterjee y Zielinski (2020) sobre el gradiente bruto $\nabla L$. Partiendo de la definición $\alpha := \mathbb{E}_{z, z'}[g_z \cdot g_{z'}] / \mathbb{E}_z[g_z \cdot g_z]$, y dado que sobre una muestra finita de tamaño $m$ se cumple $\sum_{z, z'} g_z \cdot g_{z'} = \|\sum_z g_z\|^2$, la métrica admite la forma escalable
 
-$$\alpha_m = \frac{m \cdot \|g\|^2}{\sum_z \|g_z\|^2} = \frac{\|\sum_i g_i\|^2}{\sum_i \|g_i\|^2}, \qquad \text{m-coherence} \equiv m\cdot\alpha,$$
+$$\alpha_m = \frac{\|\sum_i g_i\|^2}{\sum_i \|g_i\|^2}, \qquad \text{m-coherence} \equiv m\cdot\alpha,$$
 
 equivalente al cociente entre el producto interior medio por pares (incluyendo el término $z = z'$) y la norma cuadrática media. La identidad $\mathbb{E}[g_z\cdot g] = \|g\|^2$ es la pieza clave que reduce el cómputo de $O(m^2)$ —el bucle ingenuo sobre pares— a $O(m)$: basta acumular un vector y un escalar, sin enumerar pares ni materializar la matriz $N\times N$.
 
@@ -99,7 +98,7 @@ Si se registra *on-the-fly* durante el entrenamiento, pueden reutilizarse los gr
 - **Cómo se usa.** Se mide $\alpha_m$ sobre un probe fijo de $m \in [512, 2048]$ en las ventanas tempranas (5/10/25/50% de épocas) y se correlaciona (Spearman/Pearson) con métricas de eficiencia (épocas-hasta-umbral, AUC de test loss) y generalización. No se optimiza. Comparte el barrido per-sample $\nabla L$ con `stiffness` y `gsnr`.
 - **Señal.** Mayor $\alpha_m$ es mejor: alta coherencia temprana se asocia con convergencia más rápida y mejor generalización. (Matiz del paper: con etiquetas aleatorias la coherencia crece a mitad de entrenamiento; en el TFG sin label noise se espera la trayectoria de etiquetas reales.)
 - **Cómputo $O(m)$ streaming.** Acumuladores $S = \sum_i g_i$ (vector $P$) y $Q = \sum_i \|g_i\|^2$ (escalar); $\alpha_m = \|S\|^2/Q$. No materializar la matriz $(m, P)$ (≈47 GB para $m = 1024$, ResNet-18 fp32).
-- **Pitfalls y decisiones.** Solo per-sample —los mini-batches inflan la coherencia (Cor 3.1), nunca medir per-batch—; forzar fp32 ($Q$ hace underflow en fp16); la diagonal $z = z'$ se mantiene en la definición; `model.eval()` y misma muestra fija en todas las épocas. El recíproco $1/\alpha$ es la *gradient diversity* de las cotas de mini-batch SGD (Yin et al. 2018), útil para conectar con el eje teórico.
+- **Pitfalls y decisiones.** Solo per-sample —los mini-batches inflan la coherencia (Cor 3.1), nunca medir per-batch—; forzar fp32 ($Q$ hace underflow en fp16); la diagonal $z = z'$ se mantiene en la definición; `model.eval()` y misma muestra fija en todas las épocas. El recíproco $1/\alpha_m$ es la *gradient diversity* de las cotas de mini-batch SGD (Yin et al. 2018), útil para conectar con el eje teórico.
 
 ## Papers relacionados
 

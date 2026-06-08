@@ -5,12 +5,11 @@ authors:
 year: 2012
 status: to-read
 relevance: low
-last_review: 2026-05-07
 url: https://www.cs.toronto.edu/~hinton/coursera/lecture6/lec6.pdf
 tfg_role:
   - background
   - method
-tfg_note: "Optimizador base; background."
+tfg_note: "Optimizador adaptativo: divide el gradiente por la raíz de un EMA de su magnitud cuadrática. Related-work, no métrica ni parte del sweep; ese divisor (SNR por parámetro) es el antecedente conceptual del eje varianza."
 ---
 
 # RMSProp - Divide the gradient by a running average of its recent magnitude
@@ -57,7 +56,7 @@ RMSProp se presenta como una receta práctica para entrenamiento por mini-batche
 
 **Rol en el TFG.** RMSProp no aporta una métrica nueva al *registry* del estudio: es **background histórico** y precursor directo de Adam, y su relevancia consiste en explicitar la pieza —el segundo momento adaptativo $v_t = \rho\, v_{t-1} + (1-\rho)\, g_t^2$ con actualización $\Delta w \propto -\eta\, g_t / (\sqrt{v_t} + \epsilon)$— que Adam hereda, generaliza y combina con primer momento, corrección de sesgo y $\epsilon$ explícito. La justificación de Adam como optimizador del *sweep* se apoya, en parte, en este precedente conceptual. El *sweep* cerrado de la pregunta de investigación (RQ: las métricas de gradiente en etapa temprana predicen la eficiencia de entrenamiento completo) se restringe a **SGD y Adam**, suficientes para contrastar régimen no preacondicionado y régimen con segundo momento más momentum; añadir RMSProp incrementaría el coste experimental sin aportar contraste cualitativo nuevo, pues equivale aproximadamente a un caso intermedio (segundo momento sin momentum) entre SGD y Adam. Su inclusión como optimizador opcional en un análisis de robustez queda relegada a *future work*.
 
-**Entradas.** Si se incluyera RMSProp como optimizador opcional, las cantidades que el TFG observa son las que el propio optimizador mantiene internamente: la media móvil del cuadrado del gradiente $\text{MeanSquare}(w,t)$ por parámetro, accesible en PyTorch como `optimizer.state[p]['square_avg']` para cada parámetro `p` de `torch.optim.RMSprop`. A partir de ella se derivan dos magnitudes diagnósticas: el *learning rate* efectivo por parámetro $\eta_{\text{eff}} = \eta/\sqrt{\text{MeanSquare}+\epsilon}$ y la razón $g/\sqrt{\text{MeanSquare}}$, una señal tipo SNR que indica cuántas desviaciones cuadráticas recientes vale el gradiente actual. Estas magnitudes no requieren *forward*/*backward* adicionales: se leen del *state* del optimizador después de `optimizer.step()`.
+**Entradas.** Si se incluyera RMSProp como optimizador opcional, las cantidades que el TFG observa son las que el propio optimizador mantiene internamente: la media móvil del cuadrado del gradiente $\text{MeanSquare}(w,t)$ por parámetro, accesible en PyTorch como `optimizer.state[p]['square_avg']` para cada parámetro `p` de `torch.optim.RMSprop`. A partir de ella se derivan dos magnitudes diagnósticas: el *learning rate* efectivo por parámetro $\eta_{\text{eff}} = \eta/\sqrt{\text{MeanSquare}+\epsilon}$ (nótese que `torch.optim.RMSprop` suma $\epsilon$ **fuera** de la raíz, $\sqrt{\text{MeanSquare}}+\epsilon$, a diferencia de Adam que lo suma dentro; relevante al leer el estado del optimizador) y la razón $g/\sqrt{\text{MeanSquare}}$, una señal tipo SNR que indica cuántas desviaciones cuadráticas recientes vale el gradiente actual. Estas magnitudes no requieren *forward*/*backward* adicionales: se leen del *state* del optimizador después de `optimizer.step()`.
 
 **Logging.** Por capa se registran tres escalares: norma de $\text{MeanSquare}$ (`rmsprop/ms_norm_layer/{name}`), *learning rate* efectivo $\eta/\sqrt{\text{MeanSquare}+\epsilon}$ promediado o en sus percentiles (`rmsprop/lr_eff_layer/{name}`) y razón $g/\sqrt{\text{MeanSquare}+\epsilon}$ como SNR local. A nivel global se reporta un histograma sobre todos los parámetros del modelo para detectar colas largas (parámetros con $\text{MeanSquare}$ minúscula y por tanto pasos efectivos enormes) y desbalances inter-capa.
 

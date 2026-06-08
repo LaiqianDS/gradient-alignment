@@ -4,11 +4,10 @@ authors:
 year: 2017
 status: read
 relevance: medium
-last_review: 2026-05-07
 url: https://arxiv.org/pdf/1609.04747
 tfg_role:
   - background
-tfg_note: "Survey de fundamentos (SGD, momentum, Adam); solo capítulo de fundamentos."
+tfg_note: "Survey didáctico de variantes de SGD (momentum, Adagrad, RMSProp, Adam). Background: respalda acotar el sweep a SGD+Adam y medir sobre el gradiente bruto. No aporta métrica."
 ---
 
 # An overview of gradient descent optimization algorithms
@@ -71,7 +70,7 @@ Más allá del raw-grad rationale, el paper sugiere una batería compacta de **m
 
 Como **claves de log sugeridas** se proponen `opt/grad_norm`, `opt/grad_norm_layer/<l>`, `opt/step_norm`, `opt/step_norm_layer/<l>`, `opt/lr_eff_mean`, `opt/lr_eff_p50`, `opt/lr_eff_p95`, `opt/cos_step_prev` y, específicas de Adam, `opt/m_norm_layer/<l>`, `opt/v_norm_layer/<l>` y `opt/lr_eff_biascorr`. La extracción se hace sobre `optimizer.state[p]` (`exp_avg`, `exp_avg_sq` en Adam; `sum` en Adagrad) tras `optimizer.step()`, sin coste adicional de forward/backward.
 
-Conviene anticipar varios **gotchas**. Comparar lr efectivos entre optimizadores requiere normalizar: el $\eta$ nominal de SGD no es comparable con $\eta/(\sqrt{\hat v_t}+\varepsilon)$ de Adam, y dentro de Adam el lr efectivo varía por parámetro y por step, por lo que tiene sentido reportar la distribución (mediana, p95) más que un escalar. En Adam, los primeros pasos están dominados por la corrección de sesgo y el lr efectivo nominal subestima el real si se omite el factor $\sqrt{1-\beta_2^t}/(1-\beta_1^t)$. La norma del paso $\|\Delta w\|$ es invariante de reescalado de $\eta$ en Adam pero no en SGD, lo que distorsiona comparaciones directas si se varía la learning rate del sweep. Por último, en cualquier régimen de medición fuera del bucle de entrenamiento conviene hacer snapshot y restore de `optimizer.state_dict()` para evitar contaminar $m_t$ y $v_t$ con los gradientes del probe; SGD puro no necesita este cuidado, pero el pipeline lo trata de forma uniforme para mantener la simetría cross-optimizador.
+Conviene anticipar varios **gotchas**. Comparar lr efectivos entre optimizadores requiere normalizar: el $\eta$ nominal de SGD no es comparable con $\eta/(\sqrt{\hat v_t}+\varepsilon)$ de Adam, y dentro de Adam el lr efectivo varía por parámetro y por step, por lo que tiene sentido reportar la distribución (mediana, p95) más que un escalar. En Adam, los primeros pasos están dominados por la corrección de sesgo y el lr efectivo nominal subestima el real si se omite el factor $\sqrt{1-\beta_2^t}/(1-\beta_1^t)$. La norma del paso $\|\Delta w\|$ es aproximadamente invariante al reescalado de la **magnitud del gradiente** en Adam (el cociente por coordenada $\hat m_t/\sqrt{\hat v_t}$ es casi independiente de la escala de $g$) pero no en SGD, donde $\|\Delta w\| = \eta\|g\|$ escala directamente con $\|g\|$; nótese que $\|\Delta w\|$ sí escala linealmente con $\eta$ en ambos optimizadores ($\Delta w = \eta\,\hat m_t/(\sqrt{\hat v_t}+\varepsilon)$ en Adam), por lo que variar la learning rate del sweep distorsiona igualmente las comparaciones directas de $\|\Delta w\|$ entre optimizadores. Por último, en cualquier régimen de medición fuera del bucle de entrenamiento conviene hacer snapshot y restore de `optimizer.state_dict()` para evitar contaminar $m_t$ y $v_t$ con los gradientes del probe; SGD puro no necesita este cuidado, pero el pipeline lo trata de forma uniforme para mantener la simetría cross-optimizador.
 
 ## Notes
 - Introductory review

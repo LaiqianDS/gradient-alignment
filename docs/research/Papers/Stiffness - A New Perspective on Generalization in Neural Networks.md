@@ -7,11 +7,10 @@ authors:
 year: 2019
 status: read
 relevance: high
-last_review: 2026-05-07
 url: https://arxiv.org/abs/1901.09491
 tfg_role:
   - metric
-tfg_note: "Operador base de alineación: coseno entre gradientes de ejemplos."
+tfg_note: "Origen de `stiffness` (coseno/signo entre gradientes per-sample de dos ejemplos: alto si actualizar con uno mejora el otro), desagregado within/between clase. Operador base de la familia alineación; decae al empezar el overfitting."
 ---
 # Stiffness: A New Perspective on Generalization in Neural Networks
 
@@ -65,7 +64,7 @@ acotada en $[0,2]$. Por último, introducen la **dynamic critical length** $\xi$
 
 Los resultados empíricos articulan varias conclusiones. En primer lugar, la stiffness funciona como herramienta diagnóstica del overfitting. En estados iniciales del entrenamiento la stiffness intra-clase es alta y la stiffness entre clases crece a medida que la red aprende features compartidas; cuando arranca el overfitting (marcado en la Figura 3 con la zona naranja), tanto la stiffness within-class como between-classes regresan hacia 0, indicando que las actualizaciones de gradiente sobre un ejemplo dejan de beneficiar incluso a los demás miembros de su misma clase. Esto sugiere que la métrica podría usarse como criterio de early stopping observable únicamente sobre el train set, sin necesidad de un val set.
 
-En segundo lugar, la stiffness es sensible al contenido semántico. En CIFAR-100 la matriz de class stiffness exhibe estructura de *coarse-grain* alineada con super-clases (grupos de cinco clases semánticamente conectadas, como los mamíferos pequeños o los vehículos terrestres) e incluso super-super-clases (la distinción living/non-living). Esto demuestra que la red captura jerarquías semánticas más allá del nivel de etiqueta usado en el entrenamiento. Como ejemplo concreto, las entradas $C(\text{leopard}, \text{tiger})$ aparecen marcadamente más altas que $C(\text{leopard}, \text{truck})$, sin que el modelo haya visto nunca la etiqueta "felino".
+En segundo lugar, la stiffness es sensible al contenido semántico. En CIFAR-100 la matriz de class stiffness exhibe estructura de *coarse-grain* alineada con super-clases (grupos de cinco clases semánticamente conectadas, como los mamíferos pequeños o los vehículos terrestres) e incluso super-super-clases (la distinción living/non-living). Esto demuestra que la red captura jerarquías semánticas más allá del nivel de etiqueta usado en el entrenamiento. Como ejemplo concreto, a modo de ejemplo esperable, las entradas $C(\text{leopard}, \text{tiger})$ aparecen marcadamente más altas que $C(\text{leopard}, \text{truck})$, sin que el modelo haya visto nunca la etiqueta "felino".
 
 En tercer lugar, la dynamic critical length $\xi$ depende sistemáticamente del learning rate: learning rates mayores producen $\xi$ menores, es decir, funciones aprendidas localmente más maleables (menor stiffness) y más fáciles de doblar mediante actualizaciones de gradiente, incluso cuando logran accuracy comparable. Este hallazgo apunta a un rol regularizador del learning rate sobre el *tipo* de función aprendida y no solo sobre la velocidad de convergencia.
 
@@ -79,7 +78,7 @@ $$S_{\mathrm{sign}} = \mathbb{E}_{i\neq j}\big[\mathrm{sign}(\nabla_W \ell_i \cd
 
 La variante de signo es más informativa para la stiffness *between-class*, mientras que la de coseno es preferible para la *within-class*. Siguiendo el paper, se distinguen ambas: within-class restringe la esperanza a pares con $y_i = y_j$ y captura generalización intra-clase; between-class restringe a $y_i \neq y_j$ y mide transferencia entre clases.
 
-**Entradas.** La métrica consume gradientes per-sample $\nabla_W \ell(x_k; W)$ calculados sobre un *probe set* fijo y disjunto del batch de entrenamiento. En la práctica del TFG se usará un probe estratificado por clase, muestreado una sola vez al inicio del run y reutilizado en cada medición para que la varianza temporal refleje cambios reales en el modelo y no resampling. Tamaños sugeridos en línea con el paper: $N \approx 500$ ejemplos para datasets de 10 clases (MNIST, Fashion-MNIST, CIFAR-10). Para el TFG el default operativo es $M = 256$, compartido con el sweep de per-sample grads de `m_coherence` y `gsnr`.
+**Entradas.** La métrica consume gradientes per-sample $\nabla_W \ell(x_k; W)$ calculados sobre un *probe set* fijo y disjunto del batch de entrenamiento. En la práctica del TFG se usará un probe estratificado por clase, muestreado una sola vez al inicio del run y reutilizado en cada medición para que la varianza temporal refleje cambios reales en el modelo y no resampling. Tamaños sugeridos en línea con el paper: $N \approx 500$ ejemplos para datasets de 10 clases (MNIST, Fashion-MNIST, CIFAR-10). Para el TFG el default operativo es $M = 256$, del mismo bloque de per-sample grads que `m_coherence` y `gsnr` (cada uno con su propio $M$; ver Notes).
 
 **Granularidad temporal.** Una medición por época durante toda la corrida. En la fase inicial —las primeras 5–10 épocas, que es donde Fort et al. muestran la señal más predictiva— se densifica el muestreo a cada $K$ pasos (típicamente $K=50$ o $K=100$ en CIFAR-10) para resolver bien la ventana temprana. Para reporting en runs largos basta con loguear en los hitos 5%, 10%, 25%, 50% y 100% de épocas, que es la convención del comparador de generalización del TFG.
 

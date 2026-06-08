@@ -26,7 +26,7 @@ Fuente de verdad única: [[Estado TFG]]. Se muestran aquí por transclusión (no
 
 ## Papers
 ```dataview
-TABLE authors, year, status, relevance, tfg_role AS "Rol TFG", reading_order AS "Orden", thesis_rank AS "Rank", link(url, "Link") AS "Paper", last_review
+TABLE authors, year, status, relevance, tfg_role AS "Rol TFG", reading_order AS "Orden", thesis_rank AS "Rank", link(url, "Link") AS "Paper"
 FROM "docs/research/Papers"
 SORT reading_order ASC
 ```
@@ -38,19 +38,7 @@ FROM "docs/research/Conceptos"
 SORT file.mtime DESC
 ```
 
-## Ranking para la tesis
-Papers a citar y comparar, ordenados por `thesis_rank`. La columna Rol da la pista núcleo (metric/baseline) vs soporte (related-work/theory). Los papers sin `thesis_rank` (Adam, RMSProp, SVRG, On the Ineffectiveness) no entran en el ranking.
-
-```dataview
-TABLE thesis_rank AS "#", authors, tfg_role AS "Rol", tfg_note AS "Por qué"
-FROM "docs/research/Papers"
-WHERE thesis_rank
-SORT thesis_rank ASC
-```
-
 ## Papers relacionados
-Enlaces a todas las notas de paper, derivados del frontmatter (reemplaza la antigua lista manual "Related files").
-
 ```dataview
 LIST
 FROM "docs/research/Papers"
