@@ -8,25 +8,84 @@ El *qué decidimos y por qué* vive aquí; el *estado resultante del diseño*, e
 
 Bloquean experimentos. La acción para resolverlas vive en [[3 - Progreso]] (Pasos inmediatos).
 
-- **Lista definitiva de métricas.** Las dos familias están fijadas (alineación/coherencia + variabilidad estocástica), pero la selección concreta dentro de cada una no está cerrada. Bloqueante antes de experimentos para evitar p-hacking.
-- **Variante de ResNet.** Familia decidida (FC, CNN simple, ResNet); falta fijar la variante concreta. Candidata: ResNet-18.
+- *Ninguna.* La última ("Lista definitiva de métricas") se cerró el 2026-06-09: la lista *medida* es el registro completo en todos los runs; la *reportada* en la memoria se decide a posteriori por poda con prueba, lo cual no bloquea experimentos.
 
 ## Tomadas (log)
 
-### 2026-06-09 — Decisiones de ejecución
+### 2026-06-09
+
+#### Pilot de calibración: un run por celda, presupuesto doblado
+
+Concreta el "se calibran en el pilot" de presupuestos y umbrales (decisión "Matriz de runs congelada") en un protocolo ejecutable: `src/run_pilot.py`, módulo aparte del launcher de producción.
+
+- **Qué corre.** Un run por celda (24 en total), LR en el centro de la rejilla (SGD 1e-2, Adam 1e-3 — los defaults canónicos de cada optimizador), seed 0 y **el doble del presupuesto candidato** (40/80/120/160 épocas). La asimetría que lo justifica: recortar una curva generosa a posteriori es gratis, estirar una corta es relanzar — el presupuesto define `progress_frac`, las ventanas y el AUC, así que debe quedar bien puesto *antes* de los ~960 runs. El coste del pilot (24 runs a 2×) es ~5% del de la matriz.
+- **Qué responde.** (1) *Presupuesto*: dónde se aplana la test loss de los runs bien tuneados → presupuesto final = meseta + margen, redondeado a múltiplo de 20 (conserva el snap exacto de `windows`). (2) *Umbral*: debe cruzarse hacia el 30–60% del presupuesto por CNN/ResNet a LR centrado — cruzado en la época 1 no discrimina velocidad, cruzado por casi nadie censura media matriz. `--report` imprime por celda best acc/loss, época de meseta (primera a <2% de la mejor loss) y época de cruce del umbral candidato; la decisión la toma el investigador, no el script.
+- **Aislado de `reports/` a propósito.** Los pilots escriben en `reports_pilot/` (gitignored): `run_matrix` da por hecho un punto de la rejilla si existe `reports/<run_name>/summary.json`, y un pilot con LR de rejilla y seed 0 dentro de `reports/` se contabilizaría después como run de producción — entrenado con el presupuesto viejo.
+- **Módulo aparte y no flag `--pilot`** para no enhebrar condicionales (out_dir, épocas, ejes de barrido) por el launcher de producción justo antes de usarlo en serio; `run_pilot` reutiliza de `run_matrix` el naming y las celdas (identidad espejada por construcción) y puede retirarse tras la calibración.
+- **De paso cierra** las validaciones que el diseño difería al pilot: overhead real de las métricas caras (m-coherence, gradient confusion), redundancia GNS≈B·NGV, centrado de la rejilla de LR y GPU-h reales por run.
+- **Tras el pilot:** fijar presupuesto/umbral definitivos editando los 24 YAML de celda *y* `config.py::DATASET_BUDGET` (la fuente de celdas regeneradas), y registrar aquí los valores finales con su evidencia.
+
+#### Se mide todo, siempre — `active_metrics` eliminado
+
+Cierra la pendiente "Lista definitiva de métricas" en su parte bloqueante: la lista *medida* queda cerrada por construcción (el registro completo, 8 métricas de gradiente + baseline TSE); la *reportada* sigue el cauce de la poda con prueba.
+
+- **Sin mecanismo de filtrado previo.** Se elimina el knob `active_metrics` de `Config`, de `FIXED_KNOBS`, de los 24 YAML de celda y del runner (`select_metrics` desaparece): el código ya no *puede* producir runs con subconjuntos de métricas. Cualquier descarte se decide a posteriori sobre datos ya ejecutados, nunca desactivando métricas de antemano.
+- **Dataset homogéneo por construcción.** Sin subselección configurable, ninguna celda puede acabar con columnas ausentes por configuración. La única vía de ausencia que queda es el fallo en runtime (`measure` aísla fallos por métrica para no abortar el run); vigilar en el pilot que ninguna métrica falle sistemáticamente, porque sería un descarte silencioso de facto.
+- **Si el overhead del pilot resultara inviable**, la respuesta tampoco es desactivar de antemano: se decide con las mediciones del pilot en la mano, por el cauce de "Poda de métricas redundantes, con prueba" (abajo).
+
+#### Justificación valor a valor de los knobs congelados
+
+La matriz congelada fija números concretos (`src/config.py::FIXED_KNOBS`, `DATASET_BUDGET`; escritos explícitamente en cada YAML de `experiments/`). Aquí queda el porqué de cada uno; los que ya tienen decisión propia (rejilla de LR, seeds, métricas) solo se referencian.
+
+- **`batch_size = 128`.** Tres razones. (1) *Comparabilidad de las métricas*: varias métricas dependen del batch de entrenamiento — la gradient disparity no es comparable entre runs con batch distinto (su varianza decrece como $1/m$; gotcha documentado en la nota de Forouzesh & Thiran) y el GNS se lee relativo a B ($\mathcal{B}_{\text{simple}} \approx B \cdot \text{NGV}$ por TLC). Barrer B entremezclaría el predictor con el knob; fijarlo lo neutraliza. (2) *Es el valor del corpus*: Sankararaman et al. (gradient confusion) usan exactamente mini-batches de 128 en el mismo trío MNIST/CIFAR-10/CIFAR-100. (3) *Práctico*: cabe en memoria con las cuatro combinaciones dataset×modelo y da longitudes de época razonables (391 pasos/época en CIFAR, 469 en MNIST, 782 en Tiny-ImageNet).
+- **`momentum = 0.9` (SGD).** Es el default canónico de la literatura (lo usan los baselines del corpus que entrenan con momentum, p. ej. Chatterjee & Zielinski). No es pregunta de la tesis, así que no se barre — cada eje extra multiplica la matriz. Dos consecuencias deliberadas: (a) las métricas leen el gradiente bruto ∇L, nunca el update con momentum, así que el valor no entra en las métricas — solo da forma a la trayectoria (mismo argumento que el weight decay); (b) la rejilla de LR de SGD está centrada *asumiendo* 0.9 (el paso efectivo estacionario se amplifica ~1/(1−β) = 10×): cambiar el momentum obligaría a recentrar la rejilla.
+- **`weight_decay = 0`.** Ya justificado en [[1 - Diseño]] §Matriz de runs: las métricas leen ∇L de la pérdida, así que el decay no entra en su valor; se fija a 0 solo para no introducir un eje de trayectoria extra. Coincide además con el setup de varios papers del corpus (Sankararaman y Chatterjee & Zielinski entrenan sin weight decay precisamente para aislar la dinámica).
+- **`probe_size = 256` (M).** Equilibrio memoria–estadística. *Memoria*: la matriz de gradientes per-sample pesa ~M×P×4 bytes; con M=256 los modelos FC/CNN caben holgados y ResNet-18 se cubre con la decisión last-layer-only (con sus ~11M de parámetros completos serían ~11 GB). *Estadística*: M=256 da 256·255/2 ≈ 32.6k pares para las métricas del Gram per-ejemplo (confusion, stiffness, m-coherence) — varianza muestral sobrada para un estimador por medición. *Comparabilidad*: M se congela porque cambia la varianza de todos los estimadores; probes de distinto tamaño entre runs harían las comparaciones cross-modelo peras-con-manzanas (es la razón del aviso de memoria en `train.py` en lugar de un cap silencioso). El probe además es fijo durante el run (mismas 256 muestras siempre): la serie temporal mide la evolución del modelo, no el remuestreo.
+- **`metric_every_steps = 100`.** La cadencia densa va en *pasos*, no épocas, porque la ventana temprana necesita resolución intra-época (en MNIST el snapshot del 5% es la época 1: sin filas densas solo habría un punto). Con 100 salen del orden de 10 (MNIST) a 60 (Tiny-ImageNet) mediciones densas por run — suficiente para resolver el transitorio inicial y acotado en coste, porque cada medición evalúa el registro completo de métricas (per-sample grads vía vmap + Gram) sobre el probe.
+- **`early_window_frac = 0.10`.** La densificación cubre justo las ventanas de análisis más tempranas (5% y 10%), que es donde vive la hipótesis (H4: el poder predictivo satura pronto). Más allá del 10% la dinámica se enlentece y la cadencia por época basta. Las filas densas no alimentan los snapshots pero quedan en `trajectory.parquet`, dejando margen para ventanas sub-5% a posteriori sin relanzar runs.
+- **`windows = [0.05, 0.10, 0.25, 0.50, 1.0]`.** Los cuatro primeros son el barrido de fracción temprana del diseño (§Ventana temporal: el barrido es en sí un resultado reportable, H4), espaciados ~geométricamente como la rejilla de LR; el 1.0 ancla el extremo "entrenamiento completo" como referencia de saturación. Los valores se eligieron junto a los presupuestos para que cada fracción caiga exacta en frontera de época (ver siguiente punto).
+- **Presupuestos de épocas 20/40/60/80 (MNIST/CIFAR-10/CIFAR-100/Tiny-ImageNet).** Escalan con la dificultad del dataset: sin augmentation las curvas se aplanan antes que en los schedules SOTA, y el presupuesto se dimensiona para que los runs bien tuneados lleguen a meseta sin pagar épocas muertas en ~960 runs. Todos múltiplos de 20 *a propósito*: cada fracción de `windows` cae exacta en frontera de época (0.05×20=1, 0.25×60=15…), así que el snap a posteriori no introduce desfase. Son puntos de partida: el pilot puede moverlos (los YAML editados a mano sobreviven a `--init`).
+- **Umbrales de accuracy 0.97/0.75/0.35/0.25.** Calibrados *por dataset* (no por modelo) para ser alcanzables-pero-no-triviales sin augmentation: por debajo del techo razonable de las arquitecturas competentes bien tuneadas (FC llega a ~0.98 en MNIST; CNN/ResNet-18 a ~0.75–0.85 en CIFAR-10; ResNet-18 a ~0.4–0.5 en CIFAR-100 y ~0.3–0.4 en Tiny-ImageNet), pero lo bastante altos para que el nº de épocas hasta cruzarlos tenga rango dinámico — un umbral que todo run cruza en la época 1 no discrimina velocidad. El umbral único por dataset hace VD1 comparable dentro de cada celda y entre celdas del mismo dataset; el precio asumido es que las arquitecturas débiles quedan censuradas (FC en CIFAR-100/Tiny-ImageNet, y previsiblemente buena parte de FC en CIFAR-10), y esas celdas se sostienen sobre las VD secundarias. Igual que los presupuestos, se recalibran tras el pilot si quedan mal centrados.
+- **Seeds `{0,1,2,3,4}` y rejilla de LR.** Justificados en sus decisiones propias (abajo en esta misma fecha): 5 seeds compartidas para comparación pareada SGD↔Adam y 8 LR por optimizador priorizando dispersión del predictor.
+- **Métricas = todas, sin knob.** Ya no hay valor que justificar: el antiguo `active_metrics` se eliminó (decisión "Se mide todo, siempre" arriba). Se computa el registro completo en toda la rejilla y la lista reportada se poda después con prueba.
+
+#### Rejilla de LR uniforme por optimizador
+
+Al implementar el lanzador (`src/config.py::LR_GRID`, `src/run_matrix.py`) la rejilla de SGD quedó distinta de la congelada en la matriz: una sola rejilla log-espaciada en medias décadas por optimizador, **idéntica para FC, CNN y ResNet-18** — SGD `{3e-4 … 1.0}` — en lugar de `{0.005 … 0.5}` para CNN/ResNet-18 con FC desplazada una década abajo. Adam no cambia. Se adopta la versión implementada como decisión y se actualiza [[1 - Diseño]] §Matriz de runs.
+
+- **Por qué uniforme y no por modelo.** El lanzador deriva la identidad de cada run (y su directorio de salida) solo de (modelo, dataset, optimizador, lr, seed); una rejilla por modelo añadiría lógica condicional y rompería la simetría de la rejilla sin cambiar lo que se mide. En su lugar, un rango ancho (3,5 décadas, vs. 2 de la spec original) cubre a la vez los óptimos bajos de FC y los altos de CNN/ResNet-18.
+- **El coste es asumible por diseño.** En cada celda sobran puntos en un extremo u otro (divergen o no alcanzan umbral), pero esos runs censurados son justo los que pueblan el eje de eficiencia (VD1), y con 40 runs/celda hay margen sobre el suelo n ≥ 30.
+- **Simetría SGD↔Adam.** Misma forma de rejilla, desplazada una década (el paso efectivo de Adam va preescalado por 1/√v): la comparación pareada entre optimizadores (H5) no confunde forma de rejilla con efecto del optimizador.
+- **Riesgo y válvula de escape.** Medias décadas dan menos resolución alrededor del óptimo que la rejilla original; si tras el pilot el óptimo de alguna celda cae descentrado o entre puntos, se recalibra el centro (ya previsto en la spec congelada).
+
+#### Matriz de runs congelada
+
+Resuelve el budget de cómputo y cierra la variante de ResNet. Spec ejecutable en [[1 - Diseño]] §Matriz de runs.
+
+- **Rejilla completa, sin recortar.** Se ejecuta la matriz entera: {MNIST, CIFAR-10, CIFAR-100, Tiny-ImageNet} × {FC, CNN simple, ResNet-18} × {SGD, Adam} = 24 celdas. Habilitado por disponer de GPU/cluster dedicado; el budget (riesgo #1 de [[1 - Diseño]]) deja de apretar y se descarta el subset "~18-24 runs".
+- **Profundidad por celda.** 8 LR × 5 seeds = 40 runs/celda → ~960 runs, por encima del suelo n ≥ 30. A conteo fijo se prioriza más LR distintos (dan la dispersión del predictor) sobre más seeds (que dan IC). Mismas seeds {0,1,2,3,4} en todas las celdas para comparación pareada entre SGD y Adam (sostiene H5).
+- **Tiny-ImageNet entra.** Como cabe en cómputo, se confirma el condicional anterior: cuarto dataset, sube el techo de dificultad sobre CIFAR-100. Actualizado [[1 - Diseño]] §Setup de entrenamiento.
+- **ResNet-18 fija la variante.** La rejilla se congela con ResNet-18 (adaptada a imágenes pequeñas, ya en código). Cierra la pendiente "Variante de ResNet".
+- **Todas las métricas implementadas en toda la rejilla.** El cluster hace viables las caras (m-coherence, gradient confusion); en ResNet-18 las per-sample van last-layer-only. Computar el conjunto completo de antemano no contradice "no añadir métricas a posteriori": la lista *reportada* se decide luego por poda con prueba (pendiente "Lista definitiva de métricas" + decisión de poda de abajo).
+- **Horizonte septiembre.** La rejilla completa asume el Plan B de septiembre ([[3 - Progreso]]); no se compromete a entrar antes del 22-jun.
+
+#### Decisiones de ejecución
 
 Refinan el diseño cerrado de [[1 - Diseño]].
 
 - **Entrenar hasta convergencia, medir durante todo el trayecto.** Cada run se entrena hasta una convergencia definida de antemano (umbral ε sobre la pérdida, el mismo que ancla "épocas-hasta-umbral") y las métricas se registran a lo largo de *todo* el entrenamiento, no solo en la fracción $f$. Da la serie temporal completa y permite elegir el $f$ predictivo a posteriori.
 - **NTK: se menciona, no se calcula.** El NTK alignment se descarta del cómputo. Su justificación teórica descansa en el límite de anchura infinita —irreal en la práctica— y su cálculo es caro (jacobiano per-ejemplo). Se menciona en la redacción como marco teórico de la alineación, no como métrica medida.
 - **Doble eje temporal en el análisis: época y % de convergencia.** Correlacionar por época absoluta y también normalizando por el porcentaje de convergencia hacia ε. "Época 10" no significa lo mismo entre problemas de distinta dificultad; el eje "fracción del camino a ε" hace comparables las curvas (mitiga el confusor de dificultad de [[1 - Diseño]] §Confusores).
-- **Tiny ImageNet — lo incorporamos si es posible (de momento, sí).** La intención por defecto es sumarlo a los datasets, para que el estudio sea **más completo** y suba el techo de dificultad por encima de CIFAR-100. Solo lo dejaremos fuera si no cabe en el presupuesto de cómputo (sobre todo por las métricas caras). Si finalmente entra, actualizar [[1 - Diseño]] §Setup de entrenamiento.
+- **Tiny-ImageNet — lo incorporamos si es posible (de momento, sí).** La intención por defecto es sumarlo a los datasets, para que el estudio sea *más completo* y suba el techo de dificultad por encima de CIFAR-100. Solo lo dejaremos fuera si no cabe en el presupuesto de cómputo (sobre todo por las métricas caras). Si finalmente entra, actualizar [[1 - Diseño]] §Setup de entrenamiento.
 - **Poda de métricas redundantes, con prueba.** Si dos métricas se comportan casi igual y miden casi lo mismo (pares colineales: GNS≈B·NGV, GSNR primo de NGV, clúster del Gram per-ejemplo), descartar una para aligerar análisis y redacción, pero solo demostrándolo (correlación alta, comportamiento solapado). Habilita análisis a nivel de familias.
 - **Varias runs, varias seeds.** Múltiples runs variando seed (y demás ejes) para tener réplicas con las que hacer tests de hipótesis sobre las correlaciones, no leer un único número. Conecta con el objetivo n ≥ 30 por celda (riesgo #1 de [[1 - Diseño]]).
 - **Baseline = loss (confirmado).** El baseline es la curva de loss (TSE + val-loss tempranas); toda métrica de gradiente se juzga por su valor incremental sobre ella (ΔR², no ρ crudo). Detalle en [[1 - Diseño]] §Baselines y §Hipótesis a contrastar (H2).
 
-### 2026-05-14 — Setup base: datasets y arquitecturas
+### 2026-05-14
 
-- **Decisión:** datasets MNIST + CIFAR-10 + CIFAR-100; familias de arquitectura FC + CNN simple + ResNet; optimizadores SGD y Adam (mínimo).
-- **Por qué:** convergencia de la literatura — el núcleo común de los 15 papers con setup. Ver [[1 - Diseño]] §Convergencia de la literatura.
-- **Estado:** firme. Queda abierta la variante concreta de ResNet (ver Pendientes).
+#### Setup base: datasets y arquitecturas
+
+Fija el núcleo experimental del estudio. Detalle en [[1 - Diseño]] §Convergencia de la literatura.
+
+- **Setup mínimo por convergencia de la literatura.** Datasets MNIST + CIFAR-10 + CIFAR-100; familias de arquitectura FC + CNN simple + ResNet; optimizadores SGD y Adam (mínimo). Es el núcleo común de los 15 papers con setup.
+- **Variante de ResNet, abierta.** El resto es firme; la variante concreta quedó pendiente (cerrada el 2026-06-09 con ResNet-18).

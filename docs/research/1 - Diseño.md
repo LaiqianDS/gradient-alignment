@@ -39,10 +39,12 @@ Formalización falsable de la hipótesis operativa en seis contrastes, cada uno 
 
 ### Variables independientes (métricas tempranas)
 
-Pendiente de cerrar la lista definitiva antes de empezar los experimentos (ver [[2 - Decisiones]]). Candidatas actuales repartidas en dos familias:
+El conjunto *computado* está implementado y fijado en código (`src/metrics/`, 8 métricas + baseline); la lista *reportada* se poda después por colinealidad con prueba (ver [[2 - Decisiones]]). Dos familias:
 
-- **Alineación / coherencia direccional**: cosine similarity entre gradientes de batches, gradient confusion, stiffness, m-coherence.
-- **Variabilidad estocástica**: gradient noise scale, normalized gradient variance.
+- **Alineación / coherencia direccional**: gradient confusion, stiffness, m-coherence, gradient disparity, GWA.
+- **Variabilidad estocástica**: gradient noise scale, normalized gradient variance, GSNR.
+
+Dos candidatas tempranas no aparecen como métricas separadas: la *cosine similarity entre gradientes de batches* queda subsumida (stiffness y gradient confusion se construyen sobre los cosenos por pares de gradientes per-ejemplo), y el *NTK alignment* se menciona como marco teórico pero no se computa (decisión 2026-06-09 en [[2 - Decisiones]]).
 
 La lista se cierra antes de ejecutar los experimentos. No se añaden métricas a posteriori.
 
@@ -50,13 +52,26 @@ La lista se cierra antes de ejecutar los experimentos. No se añaden métricas a
 
 Fracciones fijas del presupuesto total de entrenamiento. Barrido en 5%, 10%, 25%, 50%. El barrido en sí mismo es un resultado reportable (cuán temprano basta para predecir).
 
+Cómo se mide en la práctica (`src/train.py`): las métricas se registran al final de *cada* época durante todo el entrenamiento, y además densamente (cada `metric_every_steps=100` pasos) dentro de la ventana temprana (`early_window_frac=10%` de los pasos totales). Los snapshots de 5/10/25/50/100% no se miden en el instante exacto: se eligen *a posteriori* de la trayectoria completa, tomando para cada fracción la época cuyo progreso sea más cercano (`metrics_at_window.parquet`). Con los presupuestos congelados (20/40/60/80 épocas, todos múltiplos de 20), el snap es exacto: cada fracción de `windows` cae justo en una frontera de época (0,05×20=1, 0,25×60=15, etc.), así que no hay desfase entre fracción nominal y época elegida. Las filas densas de la ventana temprana no alimentan estos snapshots, pero quedan en `trajectory.parquet`: si el análisis pidiera ventanas por debajo del 5% (1–2%), bastaría extender el snap a posteriori sin relanzar ningún run.
+
 ### Setup de entrenamiento
 
-- Datasets: MNIST, CIFAR-10, CIFAR-100. Decidido 2026-05-14.
-- Arquitecturas: FC, CNN simple, ResNet (variante por cerrar — candidata ResNet-18). Familia decidida 2026-05-14.
+- Datasets: MNIST, CIFAR-10, CIFAR-100, Tiny-ImageNet. Núcleo decidido 2026-05-14; Tiny-ImageNet confirmado 2026-06-09 (ver [[2 - Decisiones]]).
+- Normalización: media/desviación por canal del *training set* de cada dataset, sin augmentation (estudio sensible al determinismo). Constantes verificadas por recálculo desde cero (2026-06-09): MNIST/CIFAR-10/CIFAR-100 coinciden a <5e-5. **Caveat de reproducibilidad:** Tiny-ImageNet coincide solo a ~6e-4 (media exacta, std algo menor en los tres canales); el desfase es consistente con la decodificación JPEG (versión de libjpeg/Pillow), así que su normalización exacta depende del entorno — fijar versiones si se quiere reproducir bit a bit.
+- Arquitecturas: FC, CNN simple, ResNet-18. Familia decidida 2026-05-14; variante ResNet-18 fijada 2026-06-09.
 - Label noise: descartado en v1. Backlog si sobra tiempo (replicaría Forouzesh / Chatterjee&Zielinski).
-- Learning rates: varios por condición.
-- Optimizadores: al menos SGD y Adam.
+- Learning rates: varios por condición (rejilla concreta en §Matriz de runs).
+- Optimizadores: SGD y Adam.
+
+### Matriz de runs (congelada 2026-06-09)
+
+Rejilla completa: cuatro datasets × tres arquitecturas × dos optimizadores = **24 celdas** (celda = dataset × arquitectura × optimizador, la unidad del objetivo n ≥ 30 de §Riesgos abiertos #1). Decisión y justificación en [[2 - Decisiones]].
+
+- **Profundidad.** 8 LR × 5 seeds = 40 runs por celda → **~960 runs**, por encima del suelo n ≥ 30. La dispersión del predictor la dan los LR, no las seeds; de ahí que se priorice el nº de LR. Seeds compartidas {0,1,2,3,4} en todas las celdas para comparación pareada entre SGD y Adam (H5).
+- **Rejilla de LR (log-espaciada en medias décadas, por optimizador — no por modelo).** 8 puntos por optimizador, la misma rejilla para FC, CNN y ResNet-18 (decisión 2026-06-09 en [[2 - Decisiones]]). SGD (momentum 0,9): `{3e-4, 1e-3, 3e-3, 1e-2, 3e-2, 1e-1, 3e-1, 1.0}`. Adam: `{3e-5, 1e-4, 3e-4, 1e-3, 3e-3, 1e-2, 3e-2, 1e-1}` (misma forma, desplazada una década abajo porque su paso efectivo va preescalado por 1/√v). El rango ancho (3,5 décadas) cubre los óptimos de las tres arquitecturas sin lógica por modelo; los extremos divergen o no alcanzan umbral por diseño — los runs censurados pueblan el eje de eficiencia (VD1). El centro se recalibra tras el pilot si el óptimo de alguna celda cae descentrado.
+- **Hiperparámetros fijos (no se barren, para no añadir confusores).** `batch_size=128`, `weight_decay=0`, `momentum=0.9` (SGD) / betas por defecto (Adam), `probe_size=256`, `metric_every_steps=100`, `early_window_frac=0.10`, `windows=[0.05, 0.10, 0.25, 0.50, 1.0]`. Las métricas leen ∇L de la pérdida (no el paso preacondicionado), así que el weight decay no entra en su valor; se fija a 0 sólo para no introducir un eje de trayectoria extra.
+- **Presupuesto y umbral por dataset** (puntos de partida, se calibran en el pilot; sin data augmentation → por debajo del SOTA): MNIST 20 épocas / umbral acc 0,97; CIFAR-10 40 / 0,75; CIFAR-100 60 / 0,35; Tiny-ImageNet 80 / 0,25. FC sobre CIFAR-100 y Tiny-ImageNet apenas aprende: esas celdas quedan censuradas en VD1 y se sostienen sobre las VD secundarias (AUC de test-loss, best-loss).
+- **Métricas.** Se computa el conjunto completo de métricas implementadas en toda la rejilla (en ResNet-18, las per-sample van last-layer-only). La lista *reportada* se poda luego por colinealidad con prueba (ver [[2 - Decisiones]]).
 
 ### Baselines
 
@@ -80,6 +95,12 @@ flowchart LR
     F --> G["Análisis robustez\ncross arch × dataset × LR × optimizador"]
     G --> H["Resultados y conclusiones"]
 ```
+
+### Ejecución y reanudación
+
+`src/run_matrix.py` es la fuente única de verdad de la rejilla. `--init` genera los 24 YAML de celda en `experiments/` (presupuesto por dataset + knobs congelados; los ficheros existentes no se tocan, así sobreviven ediciones a mano tras el pilot). LR y seed no van en los YAML: son los ejes de barrido y se inyectan por run, de modo que el nombre del run queda determinado por (modelo, dataset, optimizador, lr, seed). Un run cuenta como *hecho* si existe `reports/<run_name>/summary.json` — `train.py` lo escribe en último lugar, así que su presencia marca un run completo. El lanzador es idempotente: relanzarlo ejecuta solo los pendientes (reanudación tras caídas del cluster sin contabilidad externa), y los flags `--dataset/--model/--optimizer` permiten trocear la rejilla entre nodos.
+
+Antes de la matriz va el pilot de calibración: `src/run_pilot.py` ejecuta un run por celda (LR centrado, seed 0, presupuesto doblado) escribiendo en `reports_pilot/` para no colisionar con la detección de reanudación de la matriz, y `--report` resume la evidencia para fijar presupuestos y umbrales definitivos. Protocolo y justificación en [[2 - Decisiones]].
 
 ## Protocolo de análisis
 
@@ -108,13 +129,13 @@ Extraído de `metrics.md`, `datasets.md` y `models.md`. Justifica el setup propu
 - CNNs no-ResNet (típicamente 3 capas conv con filtros 3×3): 8/15.
 
 **Métricas tempranas** (las dos familias de §Diseño experimental, confirmadas por la literatura):
-- **Alineación / coherencia direccional** (7 papers): NTK alignment (Shan & Bordelon), GWA (Hölzl), m-coherence (Chatterjee & Zielinski), stiffness (Fort et al.), gradient confusion η (Sankararaman et al.), gradient disparity $\|g_i - g_j\|_2$ (Forouzesh & Thiran), Coherent Gradients $f_t^p$ (Chatterjee).
+- **Alineación / coherencia direccional** (7 papers): NTK alignment (Shan & Bordelon; se menciona como marco, no se computa — ver [[2 - Decisiones]]), GWA (Hölzl), m-coherence (Chatterjee & Zielinski), stiffness (Fort et al.), gradient confusion η (Sankararaman et al.), gradient disparity $\|g_i - g_j\|_2$ (Forouzesh & Thiran), Coherent Gradients $f_t^p$ (Chatterjee).
 - **Variabilidad estocástica** (3 papers): normalized variance $\mathbb{V}[g]/\mathbb{E}[g]^2$ (Faghri et al.), GSNR $\tilde{g}^2/\rho^2$ (Liu et al.), gradient noise scale $B_{\text{simple}} = \operatorname{tr}(\Sigma)/\|G\|^2$ (McCandlish et al.).
 
 **Implicación para el TFG**:
-- Setup fijado: MNIST + CIFAR-10 + CIFAR-100 × {FC, CNN simple, ResNet} × ambas familias de métricas.
+- Setup fijado: MNIST + CIFAR-10 + CIFAR-100 + Tiny-ImageNet × {FC, CNN simple, ResNet-18} × ambas familias de métricas.
 - Coincide con el setup propuesto en este documento.
-- ImageNet, transformers y dominios non-vision (Atari, Dota, MNLI) quedan explícitamente fuera del scope.
+- ImageNet (completa), transformers y dominios non-vision (Atari, Dota, MNLI) quedan explícitamente fuera del scope.
 
 ## Riesgos abiertos
 

@@ -9,20 +9,20 @@
 - [x] GitHub repo
 - [x] EBRON: título, resumen, palabras clave
 - [x] Decidir modelos (FC, CNN simple, ResNet) y datasets (MNIST, CIFAR-10, CIFAR-100) finales
-- [x] Revisar papers e identificar familias de métricas (selección definitiva pendiente, ver "Pasos inmediatos")
-- [ ] Montar pipeline base: carga datos, modelos, bucle entrenamiento, logging (W&B/TensorBoard), semillas fijas
+- [x] Revisar papers e identificar familias de métricas
+- [x] Montar pipeline base: carga datos, modelos, bucle entrenamiento, logging (W&B/TensorBoard), semillas fijas
 - [x] Montar setup LaTex
-- [ ] **Entregable:** Repo entrena modelos×datasets con loss/accuracy logged
+- [x] **Entregable:** Repo entrena modelos×datasets con loss/accuracy logged
 
 ### Semanas 1-2 (4-17 mayo). Métricas de alineación
-- [ ] Implementar todas las métricas elegidas
-- [ ] Sanity checks sintéticos (gradientes paralelos → cosine ~1, random → ~0)
-- [ ] Granularidad: global por batch primero; por capa si hay tiempo
-- [ ] **Entregable:** Métricas integradas + tests sanity documentados
-- [ ] **Criterio éxito:** Valores coherentes, overhead <3-4x
+- [x] Implementar todas las métricas elegidas
+- [x] Sanity checks sintéticos (gradientes paralelos → cosine ~1, random → ~0)
+- [x] Granularidad: global por batch primero; por capa si hay tiempo
+- [x] **Entregable:** Métricas integradas + tests sanity documentados
+- [ ] **Criterio éxito:** Valores coherentes ✓ (tests sintéticos, 130 verdes); overhead <3-4x → se mide en el pilot run (ver "Pasos inmediatos")
 
 ### Semana 3 (18-24 mayo). Experimentos principales
-- [ ] Matriz: modelos × datasets × LRs × optimizadores (SGD, Adam). Subset representativo (~18-24 runs) si cómputo aprieta
+- [ ] Matriz: rejilla completa congelada 2026-06-09 — 24 celdas, ~960 runs (8 LR × 5 seeds/celda) sobre GPU/cluster. Spec en [[1 - Diseño]] §Matriz de runs. (El subset ~18-24 queda sin efecto: el cómputo ya no aprieta.)
 - [ ] Logging completo: alineación + loss/accuracy
 - [ ] Métricas eficiencia: steps hasta loss objetivo, accuracy final, AUC
 - [ ] **Entregable:** Dataset resultados (CSV/JSON) por configuración
@@ -54,29 +54,29 @@
 ### Plan B septiembre
 Si correlación + intervención + redacción no caben antes 22 junio: cortar en mejor punto, defender lo hecho en septiembre con experimentos extendidos.
 
-## Estado actual (2026-05-30)
+## Estado actual (2026-06-09)
 
-- **Setup:** decisiones cerradas (datasets, arquitecturas, optimizadores mínimos) — ver [[1 - Diseño]] §Diseño experimental.
-- **Repo:** iniciado, con funcionalidad de seeds para reproducibilidad. Pipeline base de entrenamiento/logging y las métricas de alineación **aún no implementados**.
+- **Setup:** decisiones cerradas (datasets, arquitecturas, optimizadores) — ver [[1 - Diseño]] §Diseño experimental. Rejilla completa congelada 2026-06-09: 24 celdas, ~960 runs.
+- **Repo:** pipeline single-run completo (config YAML, datos, modelos, bucle de entrenamiento, logging a parquet), métricas implementadas en `src/metrics/` con runner integrado, y launcher de matriz (`src/run_matrix.py`) con los 24 YAML de celdas en `experiments/`. 130 tests pasan.
 - **Lectura:** 6/16 papers (`status: read`). Cubierto el núcleo métrica/baseline; pendientes los teóricos (NTK, GSNR, Coherent Gradients) y los de optimizadores (Adam, RMSProp). Detalle abajo en "Cola de lectura".
-- **Calendario:** este documento sitúa esta semana en *análisis de correlación* (semana 4, 25-31 mayo), pero el pipeline y las métricas siguen pendientes → retraso real respecto al plan. Vigilar el Plan B de septiembre.
-- **Lista de métricas:** familias fijadas (alineación/coherencia + variabilidad estocástica); la selección definitiva sigue sin cerrar (bloqueante, ver "Pasos inmediatos").
+- **Calendario:** semanas 1-2 completadas (métricas + sanity checks). Las fechas de mayo quedaron obsoletas al fijar el timeline de septiembre con la rejilla completa (2026-06-09); la secuencia de semanas 3-7 sigue válida como orden de trabajo. Siguiente paso: pilot run, que además cierra el criterio de overhead pendiente.
+- **Lista de métricas:** cerrada con la implementación — variabilidad (normalized variance, GNS simple, GSNR) + alineación/coherencia (m-coherence, stiffness, gradient disparity, gradient confusion, GWA), más TSE como baseline obligatorio.
 
 ## Pasos inmediatos
 
-Orden de prioridad. Pasos 1 y 2 son bloqueantes: sin ellos, lanzar experimentos = desperdicio.
+Los bloqueantes previos (lista de métricas, budget de cómputo, grid de hiperparámetros) se cerraron el 2026-06-09 — registro en [[2 - Decisiones]]. Quedan dos antes de lanzar la rejilla completa:
 
-1. **Cerrar lista definitiva de métricas.** Antes de tocar código. Evita p-hacking. Candidatas ya identificadas en dos familias (alineación/coherencia y variabilidad estocástica); decidir cuáles entran y cuáles no.
-2. **Calcular budget de cómputo total.** runs × arquitectura × dataset × optimizador × LR × seeds, con n ≥ 30 por celda. Si no cuadra, recortar condiciones ahora, no después. Vinculado al riesgo #1 de [[1 - Diseño]].
-3. **Decidir grid de hiperparámetros.**
-   - Optimizadores: SGD + Adam (mínimo).
-   - LRs: barrido por condición.
-   - Presupuesto de épocas fijo por dataset.
-   - Umbral de accuracy primario por dataset (define VD1, "épocas hasta umbral").
-4. **Pilot run reducido.** MNIST × FC × SGD × 3 LRs × 5 seeds. Valida pipeline (logging de gradientes, cálculo de métricas, storage) antes de escalar. Detecta bugs baratos.
-5. **Priorizar métricas baratas primero.** cosine similarity batch-wise, normalized variance, GSNR, gradient noise scale. Diferir m-coherence y gradient confusion (riesgo #2: posible abandono si overhead inviable). Medir overhead real en el pilot.
-6. **Preregistrar análisis estadístico.** Spearman primaria + Benjamini-Hochberg/FDR. Documentar antes de ver resultados. Evita p-hacking ex-post.
-7. **Setup del repo experimental.** Configuración via YAML/Hydra, seeds fijas, storage de trayectorias por step, separación raw/processed.
+1. **Pilot de calibración.** Un run por celda (24), LR centrado, seed 0, presupuesto doblado. Sustituye al pilot reducido MNIST×FC×SGD: calibrar presupuestos y umbrales exige ver todas las celdas, y de paso valida el pipeline, el overhead real de las métricas (<3-4x) y las GPU-h por run que fijan el coste total. Protocolo y justificación en [[2 - Decisiones]]. Cómo ejecutarlo:
+
+   ```bash
+   uv run python src/run_pilot.py                         # lanza los 24 (reanudable: relanzar ejecuta solo pendientes)
+   uv run python src/run_pilot.py --dataset tiny_imagenet # opcional: trocear por nodo del cluster (--model/--optimizer igual)
+   uv run python src/run_pilot.py --status                # progreso hecho/pendiente
+   uv run python src/run_pilot.py --report                # al acabar: tabla de calibración por dataset
+   ```
+
+   Con el report en la mano: fijar presupuesto (meseta + margen, múltiplo de 20) y umbral (cruzado al 30–60% del presupuesto por CNN/ResNet) editando los 24 YAML de celda **y** `config.py::DATASET_BUDGET`, registrar los valores finales en [[2 - Decisiones]], y lanzar la rejilla con `run_matrix.py`.
+2. **Preregistrar análisis estadístico.** Spearman primaria + Benjamini-Hochberg/FDR. Documentar antes de ver resultados, evita p-hacking ex-post.
 
 
 ## Decisiones
