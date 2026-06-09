@@ -1,35 +1,29 @@
-"""Download common deep learning datasets to data/."""
+"""Download the auto-downloadable datasets used by the pipeline to data/.
 
-from pathlib import Path
+The torchvision dataset classes and the on-disk path convention come from
+``data.py`` (its ``_TV_CLASSES`` map), so this bootstrap script never re-lists
+which datasets exist. Tiny ImageNet is not auto-downloadable and must be placed
+under ``data/tiny-imagenet-200/`` by hand.
+"""
 
 import torchvision.datasets as datasets
 
-ROOT = Path(__file__).parent.parent
-DATA_PATH = ROOT / "data"
+from data import DATA_PATH, _TV_CLASSES
 
 if __name__ == "__main__":
     DATA_PATH.mkdir(exist_ok=True)
 
-    cifar10_train = datasets.CIFAR10(DATA_PATH / "cifar10", train=True, download=True)
-    cifar10_test = datasets.CIFAR10(DATA_PATH / "cifar10", train=False, download=True)
+    for name, cls in _TV_CLASSES.items():
+        train = cls(DATA_PATH / name, train=True, download=True)
+        test = cls(DATA_PATH / name, train=False, download=True)
+        print(f"{name}: {len(train)} train, {len(test)} test samples")
 
-    cifar100_train = datasets.CIFAR100(DATA_PATH / "cifar100", train=True, download=True)
-    cifar100_test = datasets.CIFAR100(DATA_PATH / "cifar100", train=False, download=True)
+    tiny = DATA_PATH / "tiny-imagenet-200"
+    if (tiny / "train").is_dir():
+        n_train = len(datasets.ImageFolder(tiny / "train"))
+        n_val = len(datasets.ImageFolder(tiny / "val"))
+        print(f"tiny_imagenet: {n_train} train, {n_val} val samples (manual download)")
+    else:
+        print(f"tiny_imagenet: not found at {tiny} -- download it manually.")
 
-    mnist_train = datasets.MNIST(DATA_PATH / "mnist", train=True, download=True)
-    mnist_test = datasets.MNIST(DATA_PATH / "mnist", train=False, download=True)
-
-    fashion_train = datasets.FashionMNIST(DATA_PATH / "fashion_mnist", train=True, download=True)
-    fashion_test = datasets.FashionMNIST(DATA_PATH / "fashion_mnist", train=False, download=True)
-
-    tiny_imagenet_path = DATA_PATH / "tiny-imagenet-200"
-    tiny_imagenet_train = datasets.ImageFolder(tiny_imagenet_path / "train")
-    tiny_imagenet_val = datasets.ImageFolder(tiny_imagenet_path / "val")
-    tiny_imagenet_test = datasets.ImageFolder(tiny_imagenet_path / "test")
-
-    print("Datasets downloaded to data/!")
-    print("CIFAR-10:", len(cifar10_train), "train samples,", len(cifar10_test), "test samples")
-    print("CIFAR-100:", len(cifar100_train), "train samples,", len(cifar100_test), "test samples")
-    print("MNIST:", len(mnist_train), "train samples,", len(mnist_test), "test samples")
-    print("Fashion-MNIST:", len(fashion_train), "train samples,", len(fashion_test), "test samples")
-    print("Tiny ImageNet:", len(tiny_imagenet_train), "train samples,", len(tiny_imagenet_val), "validation samples,", len(tiny_imagenet_test), "test samples")
+    print("Datasets ready under data/.")
