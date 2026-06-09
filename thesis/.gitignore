@@ -17,5 +17,9 @@
 # como en el repo curriculum.
 *.pdf
 
+# ...pero los logos de la portada (plantilla oficial) sí se versionan.
+!logo-upv.pdf
+!logo-etsinf.pdf
+
 # macOS
 .DS_Store
