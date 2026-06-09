@@ -114,6 +114,7 @@ dependencies = [
     { name = "pandas" },
     { name = "pyarrow" },
     { name = "pyyaml" },
+    { name = "torch" },
     { name = "torchvision" },
 ]
 
@@ -127,6 +128,7 @@ requires-dist = [
     { name = "pandas", specifier = ">=3.0.3" },
     { name = "pyarrow", specifier = ">=24.0.0" },
     { name = "pyyaml", specifier = ">=6.0.3" },
+    { name = "torch" },
     { name = "torchvision" },
 ]
 
