@@ -1,0 +1,48 @@
+%-------------------------
+% TFG — Trabajo de Fin de Grado
+% Esqueleto LaTeX (placeholder). Sustituye este preámbulo por la
+% plantilla oficial cuando la importes; la estructura modular de
+% abajo (\input de sections/) está pensada para reaprovecharse.
+%
+% Estructura:
+%   main.tex          -> preámbulo + cuerpo (hace \input de las secciones)
+%   sections/*.tex    -> un fichero por capítulo/sección
+%   references.bib    -> bibliografía (biblatex + biber)
+%   figures/          -> imágenes (\graphicspath)
+%
+% Compilar:  latexmk -pdf main.tex   (o pdflatex + biber + pdflatex x2)
+%-------------------------
+
+\documentclass[12pt,a4paper,oneside]{report}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish]{babel}
+\usepackage{graphicx}
+\usepackage{amsmath,amssymb}
+\usepackage{csquotes}
+\usepackage[hidelinks]{hyperref}
+
+\usepackage[backend=biber,style=numeric,sorting=none]{biblatex}
+\addbibresource{references.bib}
+
+\graphicspath{{figures/}}
+
+\title{Título del TFG}
+\author{Nombre Apellidos}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+
+%-------------------------
+% Capítulos / secciones
+%-------------------------
+\input{sections/introduccion}
+% \input{sections/...}
+
+\printbibliography
+
+\end{document}

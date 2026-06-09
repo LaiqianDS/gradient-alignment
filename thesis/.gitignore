@@ -1,0 +1,21 @@
+# LaTeX build artifacts
+*.aux
+*.log
+*.out
+*.toc
+*.lof
+*.lot
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+*.bbl
+*.blg
+*.bcf
+*.run.xml
+
+# PDF compilado (regenerable). Quita esta línea si quieres versionarlo,
+# como en el repo curriculum.
+*.pdf
+
+# macOS
+.DS_Store
