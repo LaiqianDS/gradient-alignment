@@ -41,7 +41,6 @@ class Config:
     probe_size: int = 256
     metric_every_steps: int = 100   # cadence inside the early window
     early_window_frac: float = 0.10  # densified region (fraction of total steps)
-    include_ntk: bool = False        # ntk_alignment discarded by default (2026-06-09)
 
     # --- efficiency target ----------------------------------------------
     threshold_acc: float | None = None  # test-acc level for "epochs-to-threshold"
@@ -53,7 +52,7 @@ class Config:
 
     # --- YAML-only knobs (not exposed as CLI flags) ---------------------
     windows: tuple[float, ...] = (0.05, 0.10, 0.25, 0.50, 1.0)
-    active_metrics: list[str] | None = None  # None -> all REGISTRY (minus ntk)
+    active_metrics: list[str] | None = None  # None -> all REGISTRY
 
     def __post_init__(self) -> None:
         self.windows = tuple(self.windows)
@@ -92,8 +91,6 @@ def parse_config(argv: list[str] | None = None) -> Config:
     p.add_argument("--run-name", dest="run_name", type=str, default=base.run_name)
     p.add_argument("--threshold-acc", dest="threshold_acc", type=float,
                    default=base.threshold_acc)
-    p.add_argument("--include-ntk", dest="include_ntk",
-                   action=argparse.BooleanOptionalAction, default=base.include_ntk)
     args = p.parse_args(argv)
 
     # 3) merge: start from base (keeps YAML-only knobs), apply CLI scalars.

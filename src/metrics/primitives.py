@@ -76,7 +76,7 @@ def split_batches(X, y, k):
 def named_last_linear(model) -> tuple[str, nn.Linear]:
     """Return ``(qualified_name, module)`` of the last ``nn.Linear`` — the head.
 
-    Useful for last-layer-only variants (gwa, ntk_alignment, stiffness on big
+    Useful for last-layer-only variants (gwa, stiffness on big
     nets). Param names follow as ``f"{name}.weight"`` / ``f"{name}.bias"``.
     """
     last = None

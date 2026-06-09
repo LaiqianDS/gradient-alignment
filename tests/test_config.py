@@ -11,7 +11,6 @@ def test_defaults_round_trip():
     assert cfg.dataset == "cifar10"
     assert cfg.model == "cnn"
     assert cfg.optimizer == "sgd"
-    assert cfg.include_ntk is False
 
 
 def test_cli_overrides_scalars():
@@ -35,11 +34,6 @@ def test_yaml_then_cli_precedence(tmp_path):
     assert cfg.epochs == 5             # from YAML
     assert cfg.lr == 0.9               # CLI wins over YAML
     assert cfg.model == "cnn"          # untouched default
-
-
-def test_boolean_optional_flag():
-    assert parse_config(["--include-ntk"]).include_ntk is True
-    assert parse_config(["--no-include-ntk"]).include_ntk is False
 
 
 def test_windows_coerced_to_tuple():

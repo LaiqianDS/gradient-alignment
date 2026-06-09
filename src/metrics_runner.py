@@ -1,7 +1,7 @@
 """Drive the metric registry against a frozen model on the fixed probe.
 
 The two metric groups have different call signatures (see ``metrics/__init__``):
-the nine gradient metrics take ``(model, X, y, loss_fn)``; the TSE baseline takes
+the eight gradient metrics take ``(model, X, y, loss_fn)``; the TSE baseline takes
 a loss history. This module wraps both so the training loop stays clean, and it
 isolates per-metric failures (e.g. an out-of-memory probe) so one bad metric
 does not abort the whole run.
@@ -17,13 +17,11 @@ from metrics import BASELINE, REGISTRY
 
 def select_metrics(
     active_metrics: list[str] | None = None,
-    include_ntk: bool = False,
 ) -> dict[str, object]:
     """Resolve which gradient metrics to run.
 
-    ``active_metrics=None`` selects every registry metric except the discarded
-    ``ntk_alignment`` (unless ``include_ntk``). An explicit list is taken as-is
-    (and may include ``ntk_alignment``).
+    ``active_metrics=None`` selects every registry metric. An explicit list is
+    taken as-is and validated against the registry.
     """
     if active_metrics is not None:
         missing = [n for n in active_metrics if n not in REGISTRY]
@@ -31,9 +29,7 @@ def select_metrics(
             raise ValueError(f"unknown metrics {missing}; available: {list(REGISTRY)}")
         names = list(active_metrics)
     else:
-        names = [n for n in REGISTRY if n != "ntk_alignment"]
-        if include_ntk:
-            names.append("ntk_alignment")
+        names = list(REGISTRY)
     return {n: REGISTRY[n] for n in names}
 
 

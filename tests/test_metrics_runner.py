@@ -7,15 +7,10 @@ from metrics_runner import measure, select_metrics
 from synthetic import synthetic_probe, tiny_mlp
 
 
-def test_default_selection_excludes_ntk():
-    metrics = select_metrics()
-    assert "ntk_alignment" not in metrics
-    assert "m_coherence" in metrics
+def test_default_selection_returns_all_registry():
+    from metrics import REGISTRY
 
-
-def test_include_ntk_adds_it():
-    metrics = select_metrics(include_ntk=True)
-    assert "ntk_alignment" in metrics
+    assert set(select_metrics()) == set(REGISTRY)
 
 
 def test_explicit_active_list_taken_as_is():

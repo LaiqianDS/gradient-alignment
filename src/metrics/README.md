@@ -27,7 +27,7 @@ row.update(BASELINE.compute(loss_history))             # baseline takes losses, 
 # row is now a flat {key: float} dict ready to log
 ```
 
-`REGISTRY` holds the nine gradient metrics; `BASELINE` holds TSE (see below).
+`REGISTRY` holds the eight gradient metrics; `BASELINE` holds TSE (see below).
 
 ## The metrics
 
@@ -83,12 +83,6 @@ lines up with the classifier's own weights, aggregated with a kurtosis correctio
 Proposed as a train-time proxy for generalization. Keys: `gwa/value`,
 `gwa/score_mean`, `gwa/kurt`. *(Hölzl, 2025)*
 
-**`ntk_alignment`** — how closely the network's neural-tangent-kernel matches the
-ideal "same-label examples should look similar" target. Higher = the learned
-representation is well-aligned with the labels. Keys: `ntk/alignment`,
-`ntk/frobenius`. *(Shan & Bordelon, 2021)* — the only metric computed on the output
-Jacobian (∇f), not the loss gradient, and last-layer-only.
-
 ### Baseline
 
 **`tse`** — *not* a gradient metric. It just sums (and EMA-weights) the early
@@ -117,7 +111,7 @@ Three rules keep the package modular and testable:
 
 ```
 src/metrics/
-  __init__.py        REGISTRY (9 metrics) + BASELINE (tse)
+  __init__.py        REGISTRY (8 metrics) + BASELINE (tse)
   base.py            the Metric contract (name + compute)
   primitives.py      shared gradient helpers
   <metric>.py        one file per metric: _core function + class + METRIC

@@ -146,7 +146,7 @@ def train(cfg: Config) -> dict:
     probe_X, probe_y = build_probe(train_loader.dataset, cfg.probe_size, cfg.seed, device)
     loss_fn = nn.CrossEntropyLoss()
     optimizer = build_optimizer(cfg, model)
-    metrics = select_metrics(cfg.active_metrics, cfg.include_ntk)
+    metrics = select_metrics(cfg.active_metrics)
 
     num_params = sum(p.numel() for p in model.parameters())
     warn_probe_memory(num_params, cfg.probe_size)

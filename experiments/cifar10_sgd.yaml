@@ -21,7 +21,6 @@ seed: 42
 probe_size: 256         # M: per-sample grad batch. Peak mem ~ M * num_params * 4B.
 metric_every_steps: 100 # densified cadence inside the early window
 early_window_frac: 0.10 # first 10% of steps get dense measurement
-include_ntk: false      # ntk_alignment is discarded by default
 
 # efficiency target (epochs-to-threshold); null disables it
 threshold_acc: 0.80
@@ -29,5 +28,5 @@ threshold_acc: 0.80
 # windows snapped post-hoc for the early-vs-late correlation analysis
 windows: [0.05, 0.10, 0.25, 0.50, 1.0]
 
-# active_metrics: null runs all registry metrics (minus ntk). Or pin a subset:
+# active_metrics: null runs all registry metrics. Or pin a subset:
 # active_metrics: [m_coherence, gwa, gsnr, normalized_variance]
