@@ -1,8 +1,145 @@
-% Bibliografía del TFG. Añade aquí las entradas BibTeX.
-% Ejemplo:
-% @article{clave2026,
-%   author  = {Apellido, Nombre},
-%   title   = {Título del artículo},
-%   journal = {Revista},
-%   year    = {2026},
-% }
+% Bibliografía del TFG (biblatex + biber).
+% Entradas generadas a partir de las notas en docs/research/Papers/.
+
+% ─── Alineamiento de gradientes y generalización ───
+
+@inproceedings{chatterjee2020coherent,
+  author     = {Chatterjee, Satrajit},
+  title      = {Coherent Gradients: An Approach to Understanding Generalization in Gradient Descent-based Optimization},
+  booktitle  = {International Conference on Learning Representations (ICLR)},
+  year       = {2020},
+  eprint     = {2002.10657},
+  eprinttype = {arxiv},
+}
+
+@misc{chatterjee2020making,
+  author     = {Chatterjee, Satrajit and Zielinski, Piotr},
+  title      = {Making Coherence Out of Nothing At All: Measuring the Evolution of Gradient Alignment},
+  year       = {2020},
+  eprint     = {2008.01217},
+  eprinttype = {arxiv},
+}
+
+@misc{fort2019stiffness,
+  author     = {Fort, Stanislav and Nowak, Paweł Krzysztof and Jastrzębski, Stanisław and Narayanan, Srini},
+  title      = {Stiffness: A New Perspective on Generalization in Neural Networks},
+  year       = {2019},
+  eprint     = {1901.09491},
+  eprinttype = {arxiv},
+}
+
+@inproceedings{sankararaman2020impact,
+  author     = {Sankararaman, Karthik Abinav and De, Soham and Xu, Zheng and Huang, W. Ronny and Goldstein, Tom},
+  title      = {The Impact of Neural Network Overparameterization on Gradient Confusion and Stochastic Gradient Descent},
+  booktitle  = {Proceedings of the 37th International Conference on Machine Learning (ICML)},
+  series     = {Proceedings of Machine Learning Research},
+  volume     = {119},
+  publisher  = {PMLR},
+  year       = {2020},
+}
+
+@inproceedings{liu2020understanding,
+  author     = {Liu, Jinlong and Bai, Yunzhi and Jiang, Guoqing and Chen, Ting and Wang, Huayan},
+  title      = {Understanding Why Neural Networks Generalize Well Through GSNR of Parameters},
+  booktitle  = {International Conference on Learning Representations (ICLR)},
+  year       = {2020},
+  eprint     = {2001.07384},
+  eprinttype = {arxiv},
+}
+
+@inproceedings{hoelzl2025gradient,
+  author     = {Hölzl, Florian A. and Rueckert, Daniel and Kaissis, Georgios},
+  title      = {Gradient-Weight Alignment as a Train-Time Proxy for Generalization in Classification Tasks},
+  booktitle  = {Advances in Neural Information Processing Systems},
+  volume     = {38},
+  year       = {2025},
+  eprint     = {2510.25480},
+  eprinttype = {arxiv},
+}
+
+@misc{shan2021theory,
+  author     = {Shan, Haozhe and Bordelon, Blake},
+  title      = {A Theory of Neural Tangent Kernel Alignment and Its Influence on Training},
+  year       = {2021},
+  eprint     = {2105.14301},
+  eprinttype = {arxiv},
+}
+
+% ─── Varianza del gradiente y tamaño de batch ───
+
+@misc{faghri2020study,
+  author     = {Faghri, Fartash and Duvenaud, David and Fleet, David J. and Ba, Jimmy},
+  title      = {A Study of Gradient Variance in Deep Learning},
+  year       = {2020},
+  eprint     = {2007.04532},
+  eprinttype = {arxiv},
+}
+
+@misc{mccandlish2018empirical,
+  author     = {McCandlish, Sam and Kaplan, Jared and Amodei, Dario and {OpenAI Dota Team}},
+  title      = {An Empirical Model of Large-Batch Training},
+  year       = {2018},
+  eprint     = {1812.06162},
+  eprinttype = {arxiv},
+}
+
+@inproceedings{johnson2013accelerating,
+  author     = {Johnson, Rie and Zhang, Tong},
+  title      = {Accelerating Stochastic Gradient Descent using Predictive Variance Reduction},
+  booktitle  = {Advances in Neural Information Processing Systems},
+  volume     = {26},
+  year       = {2013},
+}
+
+@inproceedings{defazio2019ineffectiveness,
+  author     = {Defazio, Aaron and Bottou, Léon},
+  title      = {On the Ineffectiveness of Variance Reduced Optimization for Deep Learning},
+  booktitle  = {Advances in Neural Information Processing Systems},
+  volume     = {32},
+  year       = {2019},
+}
+
+% ─── Señales de entrenamiento y estimación temprana ───
+
+@inproceedings{forouzesh2021disparity,
+  author     = {Forouzesh, Mahsa and Thiran, Patrick},
+  title      = {Disparity Between Batches as a Signal for Early Stopping},
+  booktitle  = {Machine Learning and Knowledge Discovery in Databases. Research Track (ECML PKDD 2021)},
+  publisher  = {Springer},
+  year       = {2021},
+  doi        = {10.1007/978-3-030-86520-7_14},
+}
+
+@inproceedings{ru2021speedy,
+  author     = {Ru, Robin and Lyle, Clare and Schut, Lisa and Fil, Miroslav and van der Wilk, Mark and Gal, Yarin},
+  title      = {Speedy Performance Estimation for Neural Architecture Search},
+  booktitle  = {Advances in Neural Information Processing Systems},
+  volume     = {34},
+  year       = {2021},
+}
+
+% ─── Optimizadores ───
+
+@inproceedings{kingma2015adam,
+  author     = {Kingma, Diederik P. and Ba, Jimmy},
+  title      = {Adam: A Method for Stochastic Optimization},
+  booktitle  = {3rd International Conference on Learning Representations (ICLR)},
+  year       = {2015},
+  eprint     = {1412.6980},
+  eprinttype = {arxiv},
+}
+
+@misc{tieleman2012rmsprop,
+  author       = {Tieleman, Tijmen and Hinton, Geoffrey},
+  title        = {Lecture 6.5---RMSProp: Divide the Gradient by a Running Average of Its Recent Magnitude},
+  howpublished = {COURSERA: Neural Networks for Machine Learning},
+  year         = {2012},
+}
+
+@misc{ruder2016overview,
+  author     = {Ruder, Sebastian},
+  title      = {An Overview of Gradient Descent Optimization Algorithms},
+  year       = {2016},
+  eprint     = {1609.04747},
+  eprinttype = {arxiv},
+}
