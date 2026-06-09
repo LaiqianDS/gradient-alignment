@@ -14,7 +14,7 @@ in ``out_dir/run_name/``::
 Run::
 
     python src/train.py --dataset mnist --model fc --optimizer adam --lr 1e-3
-    python src/train.py --config experiments/cifar10_sgd.yaml --seed 7
+    python src/train.py --config experiments/cifar10_cnn_sgd.yaml --seed 7
 """
 
 from __future__ import annotations
@@ -26,7 +26,8 @@ import torch.nn as nn
 from config import Config, config_to_dict, parse_config
 from data import build_dataloaders, build_probe
 from logger import RunLogger
-from metrics_runner import baseline_row, measure, select_metrics
+from metrics import REGISTRY
+from metrics_runner import baseline_row, measure
 from models import build_model
 from seed import set_seed
 
@@ -146,7 +147,7 @@ def train(cfg: Config) -> dict:
     probe_X, probe_y = build_probe(train_loader.dataset, cfg.probe_size, cfg.seed, device)
     loss_fn = nn.CrossEntropyLoss()
     optimizer = build_optimizer(cfg, model)
-    metrics = select_metrics(cfg.active_metrics)
+    metrics = dict(REGISTRY)  # always all of them; discard post-hoc, never up front
 
     num_params = sum(p.numel() for p in model.parameters())
     warn_probe_memory(num_params, cfg.probe_size)
@@ -172,7 +173,6 @@ def train(cfg: Config) -> dict:
             optimizer.step()
             loss_history.append(loss.item())
 
-            # Densified measurement inside the early window.
             if global_step < early_window_steps and global_step % cfg.metric_every_steps == 0:
                 row = {
                     **meta, "granularity": "step", "epoch": epoch,
@@ -185,7 +185,6 @@ def train(cfg: Config) -> dict:
                 logger.log(row)
             global_step += 1
 
-        # End-of-epoch: evaluate and always measure.
         test_loss, test_acc = evaluate(model, test_loader, loss_fn, device)
         row = {
             **meta, "granularity": "epoch", "epoch": epoch,

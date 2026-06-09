@@ -13,7 +13,7 @@ import torch
 import torch.nn as nn
 import torchvision
 
-MODELS = ("fc", "cnn", "resnet18")
+from config import MODELS  # single source of truth for the model-name axis
 
 
 def _build_fc(in_shape: tuple[int, int, int], num_classes: int) -> nn.Module:

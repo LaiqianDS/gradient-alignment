@@ -2,7 +2,16 @@
 
 import textwrap
 
-from config import Config, config_to_dict, parse_config
+from config import (
+    DATASET_BUDGET,
+    DATASETS,
+    FIXED_KNOBS,
+    LR_GRID,
+    OPTIMIZERS,
+    Config,
+    config_to_dict,
+    parse_config,
+)
 
 
 def test_defaults_round_trip():
@@ -46,3 +55,12 @@ def test_config_to_dict_is_yaml_safe():
     # Tuples become lists so yaml.safe_dump can persist the resolved config.
     d = config_to_dict(Config())
     assert isinstance(d["windows"], list)
+
+
+def test_matrix_constants_are_consistent():
+    # Every optimizer needs an LR grid and every dataset a budget, else the
+    # launcher KeyErrors when an axis is extended without its companion entry.
+    assert set(LR_GRID) == set(OPTIMIZERS)
+    assert set(DATASET_BUDGET) == set(DATASETS)
+    # The fixed knobs are a valid Config overlay (no stray keys).
+    Config(**FIXED_KNOBS)
