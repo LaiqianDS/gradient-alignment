@@ -56,7 +56,7 @@ Si correlación + intervención + redacción no caben antes 22 junio: cortar en 
 
 ## Estado actual (2026-05-30)
 
-- **Setup:** decisiones cerradas (datasets, arquitecturas, optimizadores mínimos) — ver `Estado TFG.md` §Diseño experimental.
+- **Setup:** decisiones cerradas (datasets, arquitecturas, optimizadores mínimos) — ver [[1 - Diseño]] §Diseño experimental.
 - **Repo:** iniciado, con funcionalidad de seeds para reproducibilidad. Pipeline base de entrenamiento/logging y las métricas de alineación **aún no implementados**.
 - **Lectura:** 6/16 papers (`status: read`). Cubierto el núcleo métrica/baseline; pendientes los teóricos (NTK, GSNR, Coherent Gradients) y los de optimizadores (Adam, RMSProp). Detalle abajo en "Cola de lectura".
 - **Calendario:** este documento sitúa esta semana en *análisis de correlación* (semana 4, 25-31 mayo), pero el pipeline y las métricas siguen pendientes → retraso real respecto al plan. Vigilar el Plan B de septiembre.
@@ -67,7 +67,7 @@ Si correlación + intervención + redacción no caben antes 22 junio: cortar en 
 Orden de prioridad. Pasos 1 y 2 son bloqueantes: sin ellos, lanzar experimentos = desperdicio.
 
 1. **Cerrar lista definitiva de métricas.** Antes de tocar código. Evita p-hacking. Candidatas ya identificadas en dos familias (alineación/coherencia y variabilidad estocástica); decidir cuáles entran y cuáles no.
-2. **Calcular budget de cómputo total.** runs × arquitectura × dataset × optimizador × LR × seeds, con n ≥ 30 por celda. Si no cuadra, recortar condiciones ahora, no después. Vinculado al riesgo #1 de `Estado TFG.md`.
+2. **Calcular budget de cómputo total.** runs × arquitectura × dataset × optimizador × LR × seeds, con n ≥ 30 por celda. Si no cuadra, recortar condiciones ahora, no después. Vinculado al riesgo #1 de [[1 - Diseño]].
 3. **Decidir grid de hiperparámetros.**
    - Optimizadores: SGD + Adam (mínimo).
    - LRs: barrido por condición.
@@ -79,9 +79,12 @@ Orden de prioridad. Pasos 1 y 2 son bloqueantes: sin ellos, lanzar experimentos 
 7. **Setup del repo experimental.** Configuración via YAML/Hydra, seeds fijas, storage de trayectorias por step, separación raw/processed.
 
 
-## Cola de lectura
+## Decisiones
 
-El estado lo deriva Dataview del frontmatter de cada nota, así que marcar un paper como `read` lo mueve automáticamente de la lista de no leídos a la de leídos.
+El registro de decisiones (pendientes + log de las tomadas) vive en [[2 - Decisiones]].
+
+
+## Cola de lectura
 
 ### No leídos
 
@@ -106,4 +109,3 @@ SORT file.name ASC
 - Revisar qué modelos plantean los papers (probablemente conjunto fijo recurrente)
 - SGD básico como baseline mínimo
 - Predicción de convergencia como salida secundaria del análisis
-- Respecto a [[A Study of Gradient Variance in Deep Learning]] → LR adaptativo basado en varianza normalizada

@@ -61,4 +61,4 @@ uv run python src/load_data.py   # download datasets to data/
 
 1. [`src/metrics/README.md`](src/metrics/README.md) — what each metric measures, in plain language.
 2. [`docs/research/metrics.md`](docs/research/metrics.md) — the full formulas, costs, and per-paper detail.
-3. [`docs/research/Estado TFG.md`](docs/research/Estado%20TFG.md) — the research question, hypothesis, and experimental design.
+3. [`docs/research/README.md`](docs/research/README.md) — the research vault index: design, decisions, and progress.
