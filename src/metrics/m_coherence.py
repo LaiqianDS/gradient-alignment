@@ -16,7 +16,7 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 
-from metrics.primitives import EPS, per_sample_grad_matrix
+from .primitives import EPS, per_sample_grad_matrix
 
 
 def _mcoh_core(G: torch.Tensor) -> dict[str, float]:

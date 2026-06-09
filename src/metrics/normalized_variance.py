@@ -18,7 +18,7 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 
-from metrics.primitives import EPS, batch_grad_vector, split_batches
+from .primitives import EPS, batch_grad_vector, split_batches
 
 
 def _ngv_core(batch_grads: torch.Tensor) -> dict[str, float]:
