@@ -12,6 +12,18 @@ Bloquean experimentos. La acción para resolverlas vive en [[3 - Progreso]] (Pas
 
 ## Tomadas (log)
 
+### 2026-06-10
+
+#### Timing por run: dos relojes, no uno
+
+Cada run cronometra por separado el entrenamiento y la instrumentación (`src/train.py`): `summary.json` gana `total_seconds`, `metric_seconds` (acumulado alrededor de cada bloque de medición, con `synchronize` en cuda/mps para que los kernels asíncronos se atribuyan al reloj correcto) y `train_seconds` = total − metric.
+
+- **Por qué dos relojes y no uno.** El overhead de la instrumentación (per-sample grads vía vmap sobre la matriz M×P) escala con el tamaño del modelo y con la densidad de probes: un único wall-clock sesgaría sistemáticamente las comparaciones de tiempo entre celdas a favor de los modelos pequeños. Evidencia local: en un run corto fc/MNIST el overhead fue ~43% del wall-clock total (incluye el warmup de compilación de vmap del primer probe).
+- **Timestamps por fila.** Toda fila de `trajectory.parquet` lleva `elapsed_seconds` y `metric_seconds` acumulados; eso habilita `seconds_to_threshold` junto a `epochs_to_threshold` — la velocidad en wall-clock, más honesta al comparar SGD↔Adam (coste por paso distinto). Es cruda (incluye instrumentación hasta ese punto); la corrección post-hoc es restar la columna acumulada, sin relanzar nada.
+- **Convenciones.** `evaluate()` cuenta como entrenamiento (práctica estándar de cualquier run); solo `measure` + baseline TSE van al reloj de overhead. El `synchronize` se hace solo alrededor de los probes (infrecuentes y ya caros), nunca por paso de optimización. El wall-clock es señal de presupuesto y anomalías, no métrica científica: en cluster compartido está confundido por contención de otros jobs — no correlacionarlo como si fuera limpio.
+- **Qué cierra.** El criterio "overhead <3-4x" ([[3 - Progreso]], semanas 1-2) y las "GPU-h reales por run" que el pilot debía validar (decisión del pilot, 2026-06-09) se leen ahora directamente de cada `summary.json`; `run_pilot.py --report` añade la columna `time` por celda para proyectar el coste de los ~960 runs.
+- **Verificación.** Tests en tres niveles: unitario determinista (`seconds_to_threshold` extrae el elapsed de la época correcta), invariantes sobre el run de humo (los relojes suman, columnas monótonas y coherentes con el summary) y atribución por inyección (`tests/test_timing.py`: un `sleep` dentro de `measure` debe aterrizar en `metric_seconds`, nunca en `train_seconds`).
+
 ### 2026-06-09
 
 #### Pilot de calibración: un run por celda, presupuesto doblado

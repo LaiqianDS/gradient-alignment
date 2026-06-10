@@ -20,6 +20,9 @@ Reading ``--report``, per dataset:
 * threshold_acc -- CNN/ResNet center-LR runs should cross it at ~30-60% of
   the budget: crossed in epoch 1 it cannot discriminate speed; crossed by
   almost nobody it censors half the matrix.
+* cost -- the ``time`` column (total_seconds per run) projects the GPU-hours
+  of the ~960-run matrix; the instrumentation-overhead question is answered
+  by metric_seconds vs train_seconds inside each summary.json.
 
 The report prints the evidence; the budget/threshold decision stays with the
 researcher (update the cell YAMLs *and* ``config.py::DATASET_BUDGET``).

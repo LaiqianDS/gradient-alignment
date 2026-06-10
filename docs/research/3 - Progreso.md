@@ -19,7 +19,7 @@
 - [x] Sanity checks sintéticos (gradientes paralelos → cosine ~1, random → ~0)
 - [x] Granularidad: global por batch primero; por capa si hay tiempo
 - [x] **Entregable:** Métricas integradas + tests sanity documentados
-- [ ] **Criterio éxito:** Valores coherentes ✓ (tests sintéticos, 130 verdes); overhead <3-4x → se mide en el pilot run (ver "Pasos inmediatos")
+- [ ] **Criterio éxito:** Valores coherentes ✓ (tests sintéticos, 130 verdes); overhead <3-4x → se mide en el pilot run (ver "Pasos inmediatos"; desde 2026-06-10 cada run separa `metric_seconds`/`train_seconds` en `summary.json`, así que el ratio se lee directo)
 
 ### Semana 3 (18-24 mayo). Experimentos principales
 - [ ] Matriz: rejilla completa congelada 2026-06-09 — 24 celdas, ~960 runs (8 LR × 5 seeds/celda) sobre GPU/cluster. Spec en [[1 - Diseño]] §Matriz de runs. (El subset ~18-24 queda sin efecto: el cómputo ya no aprieta.)
@@ -66,7 +66,7 @@ Si correlación + intervención + redacción no caben antes 22 junio: cortar en 
 
 Los bloqueantes previos (lista de métricas, budget de cómputo, grid de hiperparámetros) se cerraron el 2026-06-09 — registro en [[2 - Decisiones]]. Quedan dos antes de lanzar la rejilla completa:
 
-1. **Pilot de calibración.** Un run por celda (24), LR centrado, seed 0, presupuesto doblado. Sustituye al pilot reducido MNIST×FC×SGD: calibrar presupuestos y umbrales exige ver todas las celdas, y de paso valida el pipeline, el overhead real de las métricas (<3-4x) y las GPU-h por run que fijan el coste total. Protocolo y justificación en [[2 - Decisiones]]. Cómo ejecutarlo:
+1. **Pilot de calibración.** Un run por celda (24), LR centrado, seed 0, presupuesto doblado. Sustituye al pilot reducido MNIST×FC×SGD: calibrar presupuestos y umbrales exige ver todas las celdas, y de paso valida el pipeline, el overhead real de las métricas (<3-4x) y las GPU-h por run que fijan el coste total (ambos medibles desde 2026-06-10: cada run loguea `total/metric/train_seconds` y el `--report` muestra el tiempo por celda — decisión "Timing por run" en [[2 - Decisiones]]). Protocolo y justificación en [[2 - Decisiones]]. Cómo ejecutarlo:
 
    ```bash
    uv run python src/run_pilot.py                         # lanza los 24 (reanudable: relanzar ejecuta solo pendientes)

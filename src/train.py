@@ -7,9 +7,12 @@ and densely (every ``metric_every_steps``) inside the early window. Outputs land
 in ``out_dir/run_name/``::
 
     config.yaml              the resolved run knobs
-    trajectory.parquet       one row per measurement (step + epoch rows)
+    trajectory.parquet       one row per measurement (step + epoch rows), each
+                             with cumulative elapsed/metric wall-clock columns
     metrics_at_window.parquet  epoch rows snapped to 5/10/25/50/100% of budget
-    summary.json             efficiency indicators for the run
+    summary.json             efficiency indicators + run timing: total_seconds,
+                             metric_seconds (instrumentation overhead) and
+                             train_seconds (= total - metric)
 
 Run::
 
