@@ -19,6 +19,8 @@ Run::
 
 from __future__ import annotations
 
+import time
+
 import pandas as pd
 import torch
 import torch.nn as nn
@@ -46,6 +48,14 @@ def resolve_device(choice: str) -> torch.device:
     if torch.backends.mps.is_available():
         return torch.device("mps")
     return torch.device("cpu")
+
+
+def device_sync(device: torch.device) -> None:
+    """Drain pending GPU kernels so perf_counter brackets are honest; no-op on CPU."""
+    if device.type == "cuda":
+        torch.cuda.synchronize()
+    elif device.type == "mps":
+        torch.mps.synchronize()
 
 
 def build_optimizer(cfg: Config, model: nn.Module) -> torch.optim.Optimizer:
@@ -126,10 +136,14 @@ def efficiency_summary(df: pd.DataFrame, cfg: Config) -> dict:
     )
 
     epochs_to_threshold = None
+    seconds_to_threshold = None
     if cfg.threshold_acc is not None:
         hit = epoch_df[epoch_df["test_acc"] >= cfg.threshold_acc]
         if not hit.empty:
             epochs_to_threshold = int(hit["epoch"].iloc[0]) + 1  # 1-indexed epoch count
+            # Raw wall-clock incl. instrumentation; correct post-hoc via the
+            # cumulative metric_seconds column if needed.
+            seconds_to_threshold = float(hit["elapsed_seconds"].iloc[0])
 
     return {
         "final_test_acc": float(test_acc[-1]),
@@ -137,11 +151,13 @@ def efficiency_summary(df: pd.DataFrame, cfg: Config) -> dict:
         "best_test_loss": float(min(test_loss)),
         "test_loss_auc": float(auc),
         "epochs_to_threshold": epochs_to_threshold,
+        "seconds_to_threshold": seconds_to_threshold,
     }
 
 
 def train(cfg: Config) -> dict:
     """Run one training job end to end; return its efficiency summary."""
+    run_start = time.perf_counter()
     set_seed(cfg.seed)
     device = resolve_device(cfg.device)
     run_name = default_run_name(cfg)
@@ -169,6 +185,30 @@ def train(cfg: Config) -> dict:
     }
 
     loss_history: list[float] = []
+    metric_seconds = 0.0
+
+    def probe_metrics() -> dict:
+        """One instrumentation block (gradient metrics + TSE baseline), timed.
+
+        The sync brackets keep async GPU kernels honestly attributed: pending
+        training work drains before the clock starts, the probe's own kernels
+        finish before it stops.
+        """
+        nonlocal metric_seconds
+        device_sync(device)
+        t0 = time.perf_counter()
+        row = measure(model, probe_X, probe_y, loss_fn, metrics)
+        row.update(baseline_row(loss_history))
+        device_sync(device)
+        metric_seconds += time.perf_counter() - t0
+        return row
+
+    def stamp_and_log(row: dict) -> None:
+        """Attach cumulative timing (as of logging this row) and persist it."""
+        row["elapsed_seconds"] = time.perf_counter() - run_start
+        row["metric_seconds"] = metric_seconds
+        logger.log(row)
+
     global_step = 0
     model.train()
     for epoch in range(cfg.epochs):
@@ -187,9 +227,8 @@ def train(cfg: Config) -> dict:
                     "progress_frac": (global_step + 1) / total_steps,
                     "train_loss": loss.item(),
                 }
-                row.update(measure(model, probe_X, probe_y, loss_fn, metrics))
-                row.update(baseline_row(loss_history))
-                logger.log(row)
+                row.update(probe_metrics())
+                stamp_and_log(row)
             global_step += 1
 
         test_loss, test_acc = evaluate(model, test_loader, loss_fn, device)
@@ -200,16 +239,22 @@ def train(cfg: Config) -> dict:
             "train_loss": loss_history[-1],
             "test_loss": test_loss, "test_acc": test_acc,
         }
-        row.update(measure(model, probe_X, probe_y, loss_fn, metrics))
-        row.update(baseline_row(loss_history))
-        logger.log(row)
+        row.update(probe_metrics())
+        stamp_and_log(row)
         print(f"[train] epoch {epoch + 1}/{cfg.epochs}  "
               f"test_loss {test_loss:.4f}  test_acc {test_acc:.4f}")
 
     df = logger.dataframe()
     logger.save_table("trajectory", df)
     logger.save_table("metrics_at_window", snap_windows(df, cfg.windows))
-    summary = {**meta, "num_params": num_params, **efficiency_summary(df, cfg)}
+    total_seconds = time.perf_counter() - run_start
+    summary = {
+        **meta, "num_params": num_params,
+        "total_seconds": round(total_seconds, 3),
+        "metric_seconds": round(metric_seconds, 3),
+        "train_seconds": round(total_seconds - metric_seconds, 3),
+        **efficiency_summary(df, cfg),
+    }
     logger.save_json("summary", summary)
     print(f"[train] wrote outputs to {logger.dir}")
     return summary

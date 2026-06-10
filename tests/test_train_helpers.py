@@ -43,6 +43,7 @@ def _epoch_df():
     # Four epoch rows; progress_frac = (epoch+1)/4, plus a metric and test cols.
     return pd.DataFrame([
         {"granularity": "epoch", "epoch": e, "progress_frac": (e + 1) / 4,
+         "elapsed_seconds": 10.0 * (e + 1),
          "mcoh/global": float(e), "test_loss": loss, "test_acc": acc}
         for e, (loss, acc) in enumerate([(1.0, 0.3), (0.5, 0.6), (0.25, 0.8), (0.2, 0.85)])
     ])
@@ -63,8 +64,11 @@ def test_efficiency_summary_values():
     assert abs(summary["test_loss_auc"] - 1.35) < 1e-9
     # first epoch (0-indexed 1) reaching acc >= 0.5 -> 1-indexed count 2
     assert summary["epochs_to_threshold"] == 2
+    # elapsed_seconds of that same epoch row, not any other
+    assert summary["seconds_to_threshold"] == 20.0
 
 
 def test_efficiency_summary_threshold_never_reached():
     summary = efficiency_summary(_epoch_df(), Config(threshold_acc=0.99))
     assert summary["epochs_to_threshold"] is None
+    assert summary["seconds_to_threshold"] is None

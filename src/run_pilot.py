@@ -179,7 +179,7 @@ def print_report(runs: list[PilotRun]) -> None:
               f"threshold {budget['threshold_acc']} "
               f"(pilots ran {EPOCHS_FACTOR}x = {cell_runs[0].epochs})")
         print(f"  {'model':<9} {'opt':<5} {'best_acc':>8} {'best_loss':>9} "
-              f"{'plateau@':>8} {'threshold@':>10}")
+              f"{'plateau@':>8} {'threshold@':>10} {'time':>7}")
         for r in cell_runs:
             if not r.is_done():
                 print(f"  {r.model:<9} {r.optimizer:<5} pending")
@@ -188,9 +188,11 @@ def print_report(runs: list[PilotRun]) -> None:
             traj = pd.read_parquet(r.dir / "trajectory.parquet")
             epoch_df = traj[traj["granularity"] == "epoch"].sort_values("epoch")
             hit = summary["epochs_to_threshold"]
+            secs = summary.get("total_seconds")  # absent in pre-timing summaries
             print(f"  {r.model:<9} {r.optimizer:<5} "
                   f"{summary['best_test_acc']:>8.4f} {summary['best_test_loss']:>9.4f} "
-                  f"{plateau_epoch(epoch_df):>8} {hit if hit is not None else '--':>10}")
+                  f"{plateau_epoch(epoch_df):>8} {hit if hit is not None else '--':>10} "
+                  f"{f'{secs / 60:.1f}m' if secs is not None else '--':>7}")
 
 
 def main(argv: list[str] | None = None) -> None:

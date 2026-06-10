@@ -41,3 +41,14 @@ def test_pipeline_smoke(tmp_path):
     assert (run_dir / "summary.json").exists()
     assert "final_test_acc" in summary
     assert summary["num_params"] > 0
+
+    # Timing invariants: the two clocks add up, cumulative columns are coherent.
+    assert 0 < summary["metric_seconds"] < summary["total_seconds"]
+    assert abs(summary["total_seconds"]
+               - (summary["train_seconds"] + summary["metric_seconds"])) < 1e-2
+    assert traj["elapsed_seconds"].is_monotonic_increasing
+    assert (traj["metric_seconds"] <= traj["elapsed_seconds"]).all()
+    assert traj["elapsed_seconds"].iloc[-1] <= summary["total_seconds"]
+    # Last epoch row carries the final accumulator value (modulo rounding).
+    last_epoch = epoch_rows.iloc[-1]
+    assert abs(last_epoch["metric_seconds"] - summary["metric_seconds"]) < 1e-2
