@@ -29,7 +29,7 @@ def test_build_optimizer_unknown_raises():
 
 def test_resolve_device_explicit_and_auto():
     assert resolve_device("cpu") == torch.device("cpu")
-    # auto resolves to a concrete device (cpu when no CUDA on this host).
+    # auto resolves to a concrete device (CUDA → MPS → CPU, host-dependent).
     assert isinstance(resolve_device("auto"), torch.device)
 
 

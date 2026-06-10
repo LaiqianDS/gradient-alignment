@@ -33,12 +33,19 @@ from seed import set_seed
 
 
 def resolve_device(choice: str) -> torch.device:
-    """Map ``auto`` to CUDA-or-CPU. MPS is never auto-selected: ``torch.func``
-    ``vmap``/``functional_call`` (used by every per-sample metric) is unreliable
-    on Apple's Metal backend. Pass ``--device mps`` to override at your own risk."""
+    """Map ``auto`` to the best available backend: CUDA → MPS → CPU.
+
+    Every per-sample metric runs through ``torch.func`` ``vmap(grad(functional_call))``;
+    this path was unreliable on Apple's Metal backend in older PyTorch but is correct
+    as of torch 2.11 (verified against a CPU reference on fc/cnn/resnet18). An explicit
+    ``--device`` (cpu/cuda/mps) is always honoured verbatim."""
     if choice != "auto":
         return torch.device(choice)
-    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    if torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
 
 
 def build_optimizer(cfg: Config, model: nn.Module) -> torch.optim.Optimizer:
