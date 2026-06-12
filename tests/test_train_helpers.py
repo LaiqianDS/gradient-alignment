@@ -12,6 +12,7 @@ from train import (
     default_run_name,
     efficiency_summary,
     epoch_mean_losses,
+    median3,
     resolve_device,
     snap_windows,
 )
@@ -68,11 +69,11 @@ def test_epoch_mean_losses_feeds_tse_epoch_semantics():
 
 
 def _epoch_df():
-    # Four epoch rows; progress_frac = (epoch+1)/4, plus a metric and test cols.
+    # Four epoch rows; progress_frac = (epoch+1)/4, plus a metric and val cols.
     return pd.DataFrame([
         {"granularity": "epoch", "epoch": e, "progress_frac": (e + 1) / 4,
          "elapsed_seconds": 10.0 * (e + 1),
-         "mcoh/global": float(e), "test_loss": loss, "test_acc": acc}
+         "mcoh/global": float(e), "val_loss": loss, "val_acc": acc}
         for e, (loss, acc) in enumerate([(1.0, 0.3), (0.5, 0.6), (0.25, 0.8), (0.2, 0.85)])
     ])
 
@@ -84,13 +85,23 @@ def test_snap_windows_picks_nearest_progress():
     assert by_window[1.0] == 3.0   # epoch 3, progress 1.0
 
 
+def test_median3_centered_window_shrinks_at_edges():
+    smoothed = median3(pd.Series([1.0, 5.0, 2.0, 3.0])).tolist()
+    # Edges see 2 values (median = their mean); interior sees 3.
+    assert smoothed == [3.0, 2.0, 3.0, 2.5]
+
+
 def test_efficiency_summary_values():
     summary = efficiency_summary(_epoch_df(), Config(threshold_acc=0.5))
-    assert summary["final_test_acc"] == 0.85
-    assert summary["best_test_loss"] == 0.2
-    # trapezoid of [1.0, 0.5, 0.25, 0.2]: 0.75 + 0.375 + 0.225 = 1.35
-    assert abs(summary["test_loss_auc"] - 1.35) < 1e-9
-    # first epoch (0-indexed 1) reaching acc >= 0.5 -> 1-indexed count 2
+    # final is the raw last epoch; bests read the median-3 smoothed curves:
+    # acc [0.3,0.6,0.8,0.85] -> [0.45,0.6,0.8,0.825]
+    # loss [1.0,0.5,0.25,0.2] -> [0.75,0.5,0.25,0.225]
+    assert summary["final_val_acc"] == 0.85
+    assert summary["best_val_acc"] == 0.825
+    assert summary["best_val_loss"] == 0.225
+    # AUC integrates the RAW curve: trapezoid of [1.0, 0.5, 0.25, 0.2] = 1.35
+    assert abs(summary["val_loss_auc"] - 1.35) < 1e-9
+    # first epoch with SMOOTHED acc >= 0.5 is 0-indexed 1 -> 1-indexed count 2
     assert summary["epochs_to_threshold"] == 2
     # elapsed_seconds of that same epoch row, not any other
     assert summary["seconds_to_threshold"] == 20.0
@@ -100,3 +111,17 @@ def test_efficiency_summary_threshold_never_reached():
     summary = efficiency_summary(_epoch_df(), Config(threshold_acc=0.99))
     assert summary["epochs_to_threshold"] is None
     assert summary["seconds_to_threshold"] is None
+
+
+def test_efficiency_summary_threshold_ignores_one_epoch_spike():
+    # A single-epoch spike to 0.8 must not count as the crossing; the smoothed
+    # curve only reaches 0.75 at the sustained rise near the end.
+    accs = [0.2, 0.3, 0.8, 0.4, 0.5, 0.9, 0.95]
+    df = pd.DataFrame([
+        {"granularity": "epoch", "epoch": e, "elapsed_seconds": float(e),
+         "val_loss": 1.0, "val_acc": a}
+        for e, a in enumerate(accs)
+    ])
+    summary = efficiency_summary(df, Config(threshold_acc=0.75))
+    # smoothed: [0.25, 0.3, 0.4, 0.5, 0.5, 0.9, 0.925] -> first hit epoch 5 -> 6
+    assert summary["epochs_to_threshold"] == 6

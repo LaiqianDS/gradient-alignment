@@ -4,7 +4,7 @@ The frozen matrix fixes per-dataset epoch budgets and accuracy thresholds as
 *starting points* to be calibrated by a pilot (docs/research, decisions of
 2026-06-09). This launcher runs that pilot: ONE run per cell (24 total) at the
 center of the LR grid (SGD 1e-2, Adam 1e-3 -- the canonical defaults), seed 0,
-with a DOUBLED epoch budget, so the curves show where test loss actually
+with a DOUBLED epoch budget, so the curves show where val loss actually
 flattens. Cutting a generous curve afterwards is free; relaunching a too-short
 matrix is not (budgets define ``progress_frac``, windows and AUC).
 
@@ -15,7 +15,7 @@ run trained under the old budget.
 
 Reading ``--report``, per dataset:
 
-* epoch budget -- where the well-tuned test loss flattens. Budget = plateau
+* epoch budget -- where the well-tuned val loss flattens. Budget = plateau
   + margin, rounded to a multiple of 20 (keeps the ``windows`` snap exact).
 * threshold_acc -- CNN/ResNet center-LR runs should cross it at ~30-60% of
   the budget: crossed in epoch 1 it cannot discriminate speed; crossed by
@@ -160,13 +160,13 @@ def execute(runs: list[PilotRun], dry_run: bool = False) -> list[PilotRun]:
 
 
 def plateau_epoch(epoch_df: pd.DataFrame, tol: float = 0.02) -> int:
-    """First (1-indexed) epoch whose test loss is within ``tol`` of the run's best.
+    """First (1-indexed) epoch whose val loss is within ``tol`` of the run's best.
 
     Crude knee finder: past this epoch the remaining budget buys < tol
     relative improvement, so it marks where the budget stops paying.
     """
-    best = epoch_df["test_loss"].min()
-    ok = epoch_df[epoch_df["test_loss"] <= best * (1.0 + tol)]
+    best = epoch_df["val_loss"].min()
+    ok = epoch_df[epoch_df["val_loss"] <= best * (1.0 + tol)]
     return int(ok["epoch"].iloc[0]) + 1
 
 
@@ -193,7 +193,7 @@ def print_report(runs: list[PilotRun]) -> None:
             hit = summary["epochs_to_threshold"]
             secs = summary.get("total_seconds")  # absent in pre-timing summaries
             print(f"  {r.model:<9} {r.optimizer:<5} "
-                  f"{summary['best_test_acc']:>8.4f} {summary['best_test_loss']:>9.4f} "
+                  f"{summary['best_val_acc']:>8.4f} {summary['best_val_loss']:>9.4f} "
                   f"{plateau_epoch(epoch_df):>8} {hit if hit is not None else '--':>10} "
                   f"{f'{secs / 60:.1f}m' if secs is not None else '--':>7}")
 

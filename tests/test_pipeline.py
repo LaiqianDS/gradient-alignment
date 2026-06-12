@@ -33,13 +33,18 @@ def test_pipeline_smoke(tmp_path):
 
     epoch_rows = traj[traj["granularity"] == "epoch"]
     assert len(epoch_rows) == 1
-    assert epoch_rows["test_acc"].notna().all()
+    assert epoch_rows["val_acc"].notna().all()
+    assert "test_acc" not in traj.columns  # test is only evaluated at the end
 
     windows = pd.read_parquet(run_dir / "metrics_at_window.parquet")
     assert set(windows["window"]) == {0.5, 1.0}
 
     assert (run_dir / "summary.json").exists()
-    assert "final_test_acc" in summary
+    assert 0.0 < summary["final_test_acc"] <= 1.0
+    assert 0.0 < summary["final_test_f1_macro"] <= 1.0
+    # On balanced MNIST macro-F1 tracks accuracy.
+    assert abs(summary["final_test_f1_macro"] - summary["final_test_acc"]) < 0.1
+    assert "final_val_acc" in summary
     assert summary["num_params"] > 0
 
     # Timing invariants: the two clocks add up, cumulative columns are coherent.

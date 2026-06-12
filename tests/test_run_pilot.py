@@ -52,7 +52,7 @@ def test_is_done_tracks_summary_json_in_pilot_dir(tmp_path, monkeypatch):
 def test_plateau_epoch_finds_the_knee():
     df = pd.DataFrame({
         "epoch": range(6),
-        "test_loss": [2.0, 1.0, 0.6, 0.52, 0.51, 0.50],
+        "val_loss": [2.0, 1.0, 0.6, 0.52, 0.51, 0.50],
     })
     # First epoch within 2% of the best loss (0.50*1.02 = 0.51) is index 4 -> 1-indexed 5.
     assert run_pilot.plateau_epoch(df) == 5

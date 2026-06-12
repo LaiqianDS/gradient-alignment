@@ -8,9 +8,11 @@ in ``out_dir/run_name/``::
 
     config.yaml              the resolved run knobs
     trajectory.parquet       one row per measurement (step + epoch rows), each
-                             with cumulative elapsed/metric wall-clock columns
+                             with cumulative elapsed/metric wall-clock columns;
+                             epoch rows carry the val monitoring curve
     metrics_at_window.parquet  epoch rows snapped to 5/10/25/50/100% of budget
-    summary.json             efficiency indicators + run timing: total_seconds,
+    summary.json             efficiency indicators (val curve) + the single
+                             final test evaluation + run timing: total_seconds,
                              metric_seconds (instrumentation overhead) and
                              train_seconds (= total - metric)
 
@@ -115,7 +117,7 @@ def epoch_mean_losses(step_losses: list[float], steps_per_epoch: int) -> list[fl
 
 @torch.no_grad()
 def evaluate(model, loader, loss_fn, device) -> tuple[float, float]:
-    """Mean test loss and accuracy (size-weighted over batches)."""
+    """Mean loss and accuracy over a loader (size-weighted over batches)."""
     model.eval()
     total_loss, correct, n = 0.0, 0, 0
     for X, y in loader:
@@ -126,6 +128,28 @@ def evaluate(model, loader, loss_fn, device) -> tuple[float, float]:
         n += y.size(0)
     model.train()
     return total_loss / n, correct / n
+
+
+@torch.no_grad()
+def evaluate_test(model, loader, device, num_classes: int) -> dict:
+    """Single end-of-run test evaluation: accuracy + macro-F1."""
+    model.eval()
+    confusion = torch.zeros(num_classes, num_classes, dtype=torch.long)
+    for X, y in loader:
+        pred = model(X.to(device)).argmax(1).cpu()
+        flat = y * num_classes + pred
+        confusion += torch.bincount(flat, minlength=num_classes**2).reshape(
+            num_classes, num_classes
+        )
+    model.train()
+    tp = confusion.diagonal().to(torch.float64)
+    # Per-class F1 denominator: 2*tp + fp + fn = row sum + column sum.
+    denom = (confusion.sum(0) + confusion.sum(1)).to(torch.float64)
+    f1 = torch.where(denom > 0, 2.0 * tp / denom, torch.zeros_like(tp))
+    return {
+        "final_test_acc": float(tp.sum() / confusion.sum()),
+        "final_test_f1_macro": float(f1.mean()),
+    }
 
 
 def snap_windows(df: pd.DataFrame, windows) -> pd.DataFrame:
@@ -146,22 +170,33 @@ def snap_windows(df: pd.DataFrame, windows) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def efficiency_summary(df: pd.DataFrame, cfg: Config) -> dict:
-    """Training-efficiency indicators: epochs-to-threshold, test-loss AUC, bests."""
-    epoch_df = df[df["granularity"] == "epoch"].sort_values("epoch")
-    test_loss = epoch_df["test_loss"].tolist()
-    test_acc = epoch_df["test_acc"].tolist()
+def median3(series: pd.Series) -> pd.Series:
+    """Centered 3-epoch moving median; the window shrinks at the edges."""
+    return series.rolling(3, center=True, min_periods=1).median()
 
-    # Trapezoidal AUC of test loss over the epoch axis (lower = faster descent).
+
+def efficiency_summary(df: pd.DataFrame, cfg: Config) -> dict:
+    """Training-efficiency indicators from the val curve.
+
+    Threshold crossing and bests read the smoothed curve; the AUC the raw one.
+    """
+    epoch_df = df[df["granularity"] == "epoch"].sort_values("epoch")
+    val_loss = epoch_df["val_loss"]
+    val_acc = epoch_df["val_acc"]
+    smooth_loss = median3(val_loss)
+    smooth_acc = median3(val_acc)
+
+    # Trapezoidal AUC of raw val loss over the epoch axis (lower = faster descent).
+    raw_loss = val_loss.tolist()
     auc = (
-        sum((a + b) * 0.5 for a, b in zip(test_loss, test_loss[1:]))
-        if len(test_loss) > 1 else (test_loss[0] if test_loss else 0.0)
+        sum((a + b) * 0.5 for a, b in zip(raw_loss, raw_loss[1:]))
+        if len(raw_loss) > 1 else (raw_loss[0] if raw_loss else 0.0)
     )
 
     epochs_to_threshold = None
     seconds_to_threshold = None
     if cfg.threshold_acc is not None:
-        hit = epoch_df[epoch_df["test_acc"] >= cfg.threshold_acc]
+        hit = epoch_df[smooth_acc >= cfg.threshold_acc]
         if not hit.empty:
             epochs_to_threshold = int(hit["epoch"].iloc[0]) + 1  # 1-indexed epoch count
             # Raw wall-clock incl. instrumentation; correct post-hoc via the
@@ -169,10 +204,10 @@ def efficiency_summary(df: pd.DataFrame, cfg: Config) -> dict:
             seconds_to_threshold = float(hit["elapsed_seconds"].iloc[0])
 
     return {
-        "final_test_acc": float(test_acc[-1]),
-        "best_test_acc": float(max(test_acc)),
-        "best_test_loss": float(min(test_loss)),
-        "test_loss_auc": float(auc),
+        "final_val_acc": float(val_acc.iloc[-1]),
+        "best_val_acc": float(smooth_acc.max()),
+        "best_val_loss": float(smooth_loss.min()),
+        "val_loss_auc": float(auc),
         "epochs_to_threshold": epochs_to_threshold,
         "seconds_to_threshold": seconds_to_threshold,
     }
@@ -186,7 +221,7 @@ def train(cfg: Config) -> dict:
     run_name = default_run_name(cfg)
     print(f"[train] run '{run_name}' on {device}")
 
-    train_loader, test_loader, num_classes, in_shape = build_dataloaders(
+    train_loader, val_loader, test_loader, num_classes, in_shape = build_dataloaders(
         cfg.dataset, cfg.batch_size, cfg.seed
     )
     model = build_model(cfg.model, in_shape, num_classes).to(device)
@@ -255,18 +290,22 @@ def train(cfg: Config) -> dict:
                 stamp_and_log(row)
             global_step += 1
 
-        test_loss, test_acc = evaluate(model, test_loader, loss_fn, device)
+        val_loss, val_acc = evaluate(model, val_loader, loss_fn, device)
         row = {
             **meta, "granularity": "epoch", "epoch": epoch,
             "global_step": global_step,
             "progress_frac": (epoch + 1) / cfg.epochs,
             "train_loss": loss_history[-1],
-            "test_loss": test_loss, "test_acc": test_acc,
+            "val_loss": val_loss, "val_acc": val_acc,
         }
         row.update(probe_metrics())
         stamp_and_log(row)
         print(f"[train] epoch {epoch + 1}/{cfg.epochs}  "
-              f"test_loss {test_loss:.4f}  test_acc {test_acc:.4f}")
+              f"val_loss {val_loss:.4f}  val_acc {val_acc:.4f}")
+
+    final_test = evaluate_test(model, test_loader, device, num_classes)
+    print(f"[train] final test  acc {final_test['final_test_acc']:.4f}  "
+          f"f1_macro {final_test['final_test_f1_macro']:.4f}")
 
     df = logger.dataframe()
     logger.save_table("trajectory", df)
@@ -278,6 +317,7 @@ def train(cfg: Config) -> dict:
         "metric_seconds": round(metric_seconds, 3),
         "train_seconds": round(total_seconds - metric_seconds, 3),
         **efficiency_summary(df, cfg),
+        **final_test,
     }
     logger.save_json("summary", summary)
     print(f"[train] wrote outputs to {logger.dir}")

@@ -43,7 +43,7 @@ class Config:
     early_window_frac: float = 0.10  # densified region (fraction of total steps)
 
     # --- efficiency target ----------------------------------------------
-    threshold_acc: float | None = None  # test-acc level for "epochs-to-threshold"
+    threshold_acc: float | None = None  # val-acc level for "epochs-to-threshold"
 
     # --- io & device ----------------------------------------------------
     out_dir: str = "reports"
@@ -117,6 +117,10 @@ MODELS = ("fc", "cnn", "resnet18")
 OPTIMIZERS = ("sgd", "adam")
 SEEDS = (0, 1, 2, 3, 4)
 
+# Fixed train/val split seed (used by data.py): one shared partition for every
+# run, independent of the run seed.
+SPLIT_SEED = 42
+
 # Per-optimizer learning-rate grids: 8 half-decade points each. Adam's grid is
 # shifted ~10x below SGD's because its effective step is pre-scaled by 1/sqrt(v).
 LR_GRID = {
@@ -124,7 +128,7 @@ LR_GRID = {
     "adam": (3e-5, 1e-4, 3e-4, 1e-3, 3e-3, 1e-2, 3e-2, 1e-1),
 }
 
-# Per-dataset epoch budget + the test-accuracy level for epochs-to-threshold.
+# Per-dataset epoch budget + the val-accuracy level for epochs-to-threshold.
 DATASET_BUDGET = {
     "mnist": {"epochs": 20, "threshold_acc": 0.97},
     "cifar10": {"epochs": 40, "threshold_acc": 0.75},
