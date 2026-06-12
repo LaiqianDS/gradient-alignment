@@ -33,9 +33,12 @@ Formalización falsable de la hipótesis operativa en seis contrastes, cada uno 
 
 ### Variables dependientes (eficiencia del entrenamiento)
 
-1. Número de épocas hasta alcanzar un umbral de accuracy predefinido por dataset (primaria). Runs que no alcancen el umbral se tratan como censurados.
-2. Área bajo la curva de test loss dentro de un presupuesto fijo de épocas.
-3. Mejor test loss alcanzada dentro de ese presupuesto (secundaria).
+Protocolo de evaluación (confirmado por el tutor y registrado el 2026-06-12, ver [[2 - Decisiones]]): el train optimiza, **val monitoriza** (curva por época y todos los indicadores de eficiencia) y el **test certifica una única vez al final** del run. VD1 y VD3 se leen sobre la curva de val suavizada con mediana móvil centrada de 3 épocas — los extremos de una curva ruidosa están sesgados por su volatilidad, que depende del LR —; la curva cruda queda en `trajectory.parquet` como análisis de sensibilidad.
+
+1. **VD1 (primaria):** número de épocas hasta alcanzar un umbral de val-accuracy predefinido por dataset, leído sobre la curva suavizada. Runs que no alcancen el umbral se tratan como censurados.
+2. **VD2:** área bajo la curva (cruda) de val loss dentro de un presupuesto fijo de épocas.
+3. **VD3 (secundaria):** mejor val loss alcanzada dentro de ese presupuesto, sobre la curva suavizada.
+4. **VD4:** `final_test_acc`, la accuracy de test evaluada exactamente una vez al final del run (acompañada de `final_test_f1_macro` como verificación de robustez; en datasets balanceados F1-macro ≈ accuracy).
 
 ### Variables independientes (métricas tempranas)
 
@@ -57,6 +60,7 @@ Cómo se mide en la práctica (`src/train.py`): las métricas se registran al fi
 ### Setup de entrenamiento
 
 - Datasets: MNIST, CIFAR-10, CIFAR-100, Tiny-ImageNet. Núcleo decidido 2026-05-14; Tiny-ImageNet confirmado 2026-06-09 (ver [[2 - Decisiones]]).
+- Particiones train/val/test (decisión 2026-06-12): test oficial intacto; val del tamaño convencional de cada dataset, extraído del train con muestreo estratificado por clase y semilla fija independiente de la semilla del run (todos los runs ven la misma partición). MNIST 50k/10k/10k (convención clásica), CIFAR-10/100 45k/5k/10k (He et al. 2015), Tiny-ImageNet 90k/10k/10k (su `val/` público hace de test — las etiquetas del test oficial no son públicas — y el val de monitorización replica ese tamaño). La probe de métricas se muestrea del train recortado.
 - Normalización: media/desviación por canal del *training set* de cada dataset, sin augmentation (estudio sensible al determinismo). Constantes verificadas por recálculo desde cero (2026-06-09): MNIST/CIFAR-10/CIFAR-100 coinciden a <5e-5. **Caveat de reproducibilidad:** Tiny-ImageNet coincide solo a ~6e-4 (media exacta, std algo menor en los tres canales); el desfase es consistente con la decodificación JPEG (versión de libjpeg/Pillow), así que su normalización exacta depende del entorno — fijar versiones si se quiere reproducir bit a bit.
 - Arquitecturas: FC, CNN simple, ResNet-18. Familia decidida 2026-05-14; variante ResNet-18 fijada 2026-06-09.
 - Label noise: descartado en v1. Backlog si sobra tiempo (replicaría Forouzesh / Chatterjee&Zielinski).
@@ -70,7 +74,7 @@ Rejilla completa: cuatro datasets × tres arquitecturas × dos optimizadores = *
 - **Profundidad.** 8 LR × 5 seeds = 40 runs por celda → **~960 runs**, por encima del suelo n ≥ 30. La dispersión del predictor la dan los LR, no las seeds; de ahí que se priorice el nº de LR. Seeds compartidas {0,1,2,3,4} en todas las celdas para comparación pareada entre SGD y Adam (H5).
 - **Rejilla de LR (log-espaciada en medias décadas, por optimizador — no por modelo).** 8 puntos por optimizador, la misma rejilla para FC, CNN y ResNet-18 (decisión 2026-06-09 en [[2 - Decisiones]]). SGD (momentum 0,9): `{3e-4, 1e-3, 3e-3, 1e-2, 3e-2, 1e-1, 3e-1, 1.0}`. Adam: `{3e-5, 1e-4, 3e-4, 1e-3, 3e-3, 1e-2, 3e-2, 1e-1}` (misma forma, desplazada una década abajo porque su paso efectivo va preescalado por 1/√v). El rango ancho (3,5 décadas) cubre los óptimos de las tres arquitecturas sin lógica por modelo; los extremos divergen o no alcanzan umbral por diseño — los runs censurados pueblan el eje de eficiencia (VD1). El centro se recalibra tras el pilot si el óptimo de alguna celda cae descentrado.
 - **Hiperparámetros fijos (no se barren, para no añadir confusores).** `batch_size=128`, `weight_decay=0`, `momentum=0.9` (SGD) / betas por defecto (Adam), `probe_size=256`, `metric_every_steps=100`, `early_window_frac=0.10`, `windows=[0.05, 0.10, 0.25, 0.50, 1.0]`. Las métricas leen ∇L de la pérdida (no el paso preacondicionado), así que el weight decay no entra en su valor; se fija a 0 sólo para no introducir un eje de trayectoria extra.
-- **Presupuesto y umbral por dataset** (puntos de partida, se calibran en el pilot; sin data augmentation → por debajo del SOTA): MNIST 20 épocas / umbral acc 0,97; CIFAR-10 40 / 0,75; CIFAR-100 60 / 0,35; Tiny-ImageNet 80 / 0,25. FC sobre CIFAR-100 y Tiny-ImageNet apenas aprende: esas celdas quedan censuradas en VD1 y se sostienen sobre las VD secundarias (AUC de test-loss, best-loss).
+- **Presupuesto y umbral por dataset** (puntos de partida, se calibran en el pilot; sin data augmentation → por debajo del SOTA): MNIST 20 épocas / umbral acc 0,97; CIFAR-10 40 / 0,75; CIFAR-100 60 / 0,35; Tiny-ImageNet 80 / 0,25. FC sobre CIFAR-100 y Tiny-ImageNet apenas aprende: esas celdas quedan censuradas en VD1 y se sostienen sobre las VD secundarias (AUC de val-loss, mejor val-loss).
 - **Métricas.** Se computa el conjunto completo de métricas implementadas en toda la rejilla (en ResNet-18, las per-sample van last-layer-only). La lista *reportada* se poda luego por colinealidad con prueba (ver [[2 - Decisiones]]).
 
 ### Baselines

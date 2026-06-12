@@ -8,9 +8,25 @@ El *qué decidimos y por qué* vive aquí; el *estado resultante del diseño*, e
 
 Bloquean experimentos. La acción para resolverlas vive en [[3 - Progreso]] (Pasos inmediatos).
 
-- *Ninguna.* La última ("Lista definitiva de métricas") se cerró el 2026-06-09: la lista *medida* es el registro completo en todos los runs; la *reportada* en la memoria se decide a posteriori por poda con prueba, lo cual no bloquea experimentos.
+- **Gap de generalización como tercera variable objetivo.** Propuesta en `pending/` enviada al tutor el 2026-06-10; su respuesta del 2026-06-12 confirmó el protocolo de evaluación pero no menciona el gap → pedir confirmación expresa antes de implementarlo. Conviene cerrarlo antes del pilot definitivo (añade claves al `summary.json`), aunque su coste de cómputo es despreciable.
+- **Congelación del plan de análisis.** El borrador en `pending/` tiene la dependencia del tutor cerrada (2026-06-12); falta el pilot de calibración para fijar presupuestos/umbrales y congelarlo en `docs/`.
 
 ## Tomadas (log)
+
+### 2026-06-12
+
+#### Protocolo de evaluación: train optimiza, val monitoriza, test certifica
+
+Confirmado por el tutor (respuesta rápida del 2026-06-12: particiones típicas de cada dataset, sin validación cruzada, semillas múltiples sobre train, val para evaluar convergencia, test para el resultado final) e implementado el mismo día en `src/data.py` + `src/train.py`. Cierra la propuesta de `pending/` del 2026-06-10 (revisada el 2026-06-11; el texto completo, con el diagnóstico de los tres problemas y las alternativas A/B/D descartadas, queda en el histórico git de `pending/Protocolo de evaluación y plan de análisis.md`).
+
+- **Split.** Test oficial intacto; val extraído del train, estratificado por clase, con semilla de split fija e independiente de la semilla del run (`SPLIT_SEED` en `data.py`): todos los runs ven la misma partición, y la única aleatoriedad entre seeds sigue siendo inicialización y orden de batches — el objeto de estudio. Tamaños por convención de cada dataset, no regla uniforme (decisión sobre la respuesta del tutor, que pedía "las particiones típicas"): MNIST 50k/10k/10k (la convención clásica, la que el tutor recordaba), CIFAR-10/100 45k/5k/10k (He et al. 2015, ResNet), Tiny-ImageNet 90k/10k/10k (su `val/` público hace de test — las etiquetas del test oficial no son públicas — y el val de monitorización replica ese tamaño).
+- **Roles únicos, sin cruces.** El modelo entrena con el train recortado; la probe de métricas se muestrea de ese mismo train; la monitorización por época y todos los indicadores de eficiencia leen val; el test se evalúa exactamente una vez al final → `final_test_acc` + `final_test_f1_macro` (vía matriz de confusión en torch, sin dependencia nueva; en datasets balanceados F1 ≈ acc y se reporta como verificación de robustez, no como hallazgo).
+- **Lecturas robustas de la curva.** VD1 (épocas-hasta-umbral) y VD3 (mejor loss) se leen sobre la curva de val suavizada con mediana móvil centrada de 3 épocas (`median3` en `train.py`; la ventana encoge en los bordes). Motivo: los extremos de una serie ruidosa están sesgados en proporción a su volatilidad, la volatilidad depende del LR y las métricas de ruido de gradiente plausiblemente la predicen — un confound entre predictor y VD fabricado por el estimador. VD2 (AUC) integra la curva cruda: integrar ya es robusto. La curva cruda completa queda en `trajectory.parquet`, todo recomputable post-hoc.
+- **Por qué.** Tres problemas del setup de 2 vías: el sesgo de extremo (arriba), la circularidad de calibración (umbrales calibrados sobre curvas de test del pilot y `epochs_to_threshold` medido después sobre ese mismo test) y el flanco previsible en la defensa ("evaluasteis test cada época") — aunque ninguna decisión de entrenamiento mirase el test (presupuesto fijo, sin early stopping, rejilla preespecificada).
+- **Figura de sanidad preespecificada.** Scatter `final_val_acc` vs `final_test_acc` sobre los ~960 runs (ambos en `summary.json`): recupera el diagnóstico de concordancia que se pierde al dejar de evaluar test por época.
+- **Notas de honestidad para la memoria.** (1) El "test" de Tiny-ImageNet es su val público — práctica estándar, se declara. (2) F1-macro ≈ accuracy en balanceados: verificación, no hallazgo. (3) El split es fijo y compartido por todos los runs — deliberado: lo estudiado es la variación por seed/LR, no la varianza del estimador (Bouthillier et al. 2021 recomiendan aleatorizar splits cuando se comparan métodos; no es el caso), y se declara.
+- **Verificación.** Suite completa en verde (166 tests; nuevos: split estratificado determinista/disjunto/completo, mediana-3 con ventanas de borde, umbral insensible a un pico de una época, claves nuevas del summary en el smoke test) + run corto de MNIST por CLI: curva de val por época, test único final (acc 0.9728, F1 0.9726), `best_val_*` y `epochs_to_threshold` verificados a mano contra la curva suavizada.
+- **Qué queda.** Relanzar el pilot de calibración con el split nuevo: los `DATASET_BUDGET` (0.97/0.75/0.35/0.25) se calibraron pensando en test-acc y pasan a chequearse sobre la curva de val suavizada con un train menor. `run_pilot.py --report` ya lee las columnas nuevas (`best_val_acc`, `best_val_loss`, meseta sobre `val_loss`).
 
 ### 2026-06-10
 

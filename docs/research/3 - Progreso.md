@@ -27,8 +27,8 @@ Sustituye a las semanas 3-7 del plan original, obsoletas desde que la rejilla co
 
 ### Fase 0 — Confirmación del tutor (bloqueante externo)
 
-- [ ] Respuesta a los tres documentos de `pending/`: decide 2 vías vs 3 vías y, con ello, si existen VD4 (`final_test_acc` certificada) y la familia del gap
-- [ ] Si se demora: recordatorio; todo lo de la fase 1 avanza sin ella. Si no llega en un plazo razonable, adoptar el split de 3 vías y declararlo — es la opción de menor riesgo asimétrico según el propio análisis del [[Protocolo de evaluación y plan de análisis]]
+- [x] Protocolo de evaluación: confirmado por el tutor el 2026-06-12 (particiones típicas de cada dataset, sin validación cruzada, val para convergencia, test al final) → implementado el mismo día, ver fase 2 y [[2 - Decisiones]]
+- [ ] Gap de generalización: la respuesta rápida no lo menciona — pedir confirmación expresa. El plan de análisis ya no depende del tutor (su otra dependencia es el pilot)
 
 ### Fase 1 — Trabajo no bloqueado (en paralelo a la fase 0)
 
@@ -42,10 +42,10 @@ Sustituye a las semanas 3-7 del plan original, obsoletas desde que la rejilla co
 
 ### Fase 2 — Implementar el protocolo de evaluación (al cerrar la fase 0)
 
-- [ ] Split de 3 vías (`data.py`: 3 loaders, split estratificado con semilla fija) + lecturas suavizadas de VD1/VD3 (`train.py`) + gap de generalización (pasada `evaluate()` final sobre subset fijo de train) — un solo cambio conceptual: los tres tocan la evaluación
-- [ ] **Verificación:** tests existentes verdes + run corto de MNIST → `final_gap_loss` ≈ 0 al principio y crece con épocas extra; columnas nuevas presentes en `summary.json`
-- [ ] Registrar en [[2 - Decisiones]] y actualizar [[1 - Diseño]] (setup de entrenamiento + VD)
-- [ ] Si el tutor opta por 2 vías: registrar igualmente y podar el plan de análisis (VD1-VD3 sobre test, sin VD4 ni gap)
+- [x] Split de 3 vías (`data.py`: 3 loaders, split estratificado con semilla fija, tamaños convencionales por dataset) + lecturas suavizadas de VD1/VD3 y test único final con F1-macro (`train.py`) — implementado el 2026-06-12, ver [[2 - Decisiones]]
+- [x] **Verificación del protocolo:** 166 tests verdes (split determinista/estratificado, mediana-3, umbral insensible a picos) + run corto de MNIST con las columnas nuevas en `summary.json` y lecturas verificadas a mano
+- [x] Registrado en [[2 - Decisiones]] y actualizado [[1 - Diseño]] (setup de entrenamiento + VD)
+- [ ] Gap de generalización (pasada `evaluate()` final sobre subset fijo de train) — espera confirmación expresa del tutor (fase 0); verificación al implementarlo: `final_gap_loss` ≈ 0 al principio y crece con épocas extra
 
 ### Fase 3 — Pilot de calibración + congelación del plan
 
@@ -87,16 +87,16 @@ Sustituye a las semanas 3-7 del plan original, obsoletas desde que la rejilla co
 
 ## Estado actual (2026-06-12)
 
-- **Decisiones:** ninguna pendiente interna ([[2 - Decisiones]]). El único bloqueante es externo: las tres propuestas metodológicas en `pending/` (protocolo de evaluación, gap de generalización, plan de análisis), enviadas al tutor el 2026-06-10/11.
-- **Repo:** pipeline single-run completo (config YAML, datos, modelos, bucle de entrenamiento, logging a parquet), métricas en `src/metrics/` con runner integrado, launchers de matriz y pilot, timing de dos relojes. 130 tests pasan. Falta el código de análisis estadístico (fase 1.1) y los cambios del protocolo de evaluación (fase 2, tras el tutor).
-- **Pilot:** no lanzado — espera al protocolo de evaluación (el split entra *antes* de relanzar el pilot, no después; ver [[Protocolo de evaluación y plan de análisis]] §Implicaciones).
+- **Decisiones:** dos pendientes en [[2 - Decisiones]]: confirmación expresa del gap (externa) y congelación del plan de análisis (espera pilot). El protocolo de evaluación se confirmó e implementó el 2026-06-12.
+- **Repo:** pipeline single-run completo con el protocolo de evaluación dentro (split train/val/test estratificado fijo con tamaños convencionales, monitorización por val, test único final con F1-macro, lecturas suavizadas mediana-3), métricas en `src/metrics/` con runner integrado, launchers de matriz y pilot, timing de dos relojes. 166 tests pasan. Falta el código de análisis estadístico (fase 1.1) y el gap (tras confirmación expresa).
+- **Pilot:** desbloqueado — el split ya está dentro del pipeline; listo para relanzar la calibración (presupuestos/umbrales se chequean sobre la curva de val suavizada). Idealmente tras cerrar el gap, que también toca la evaluación final.
 - **Lectura:** 6/16 papers (`status: read`). Cubierto el núcleo métrica/baseline; 6 de los 10 pendientes son los de la tabla de signos (prioridad de la fase 1.2). Detalle abajo en "Cola de lectura".
 - **Memoria:** plantilla ETSINF compilando, sin contenido propio aún (fase 1.3).
 - **Lista de métricas:** cerrada con la implementación — variabilidad (normalized variance, GNS simple, GSNR) + alineación/coherencia (m-coherence, stiffness, gradient disparity, gradient confusion, GWA), más TSE como baseline obligatorio.
 
 ## Pasos inmediatos
 
-1. **Seguimiento al tutor** (fase 0) — su respuesta decide la forma final de VD1-VD4 y desbloquea fases 2-3.
+1. **Seguimiento al tutor** (fase 0) — queda solo la confirmación expresa del gap; VD1-VD4 ya están fijadas e implementadas.
 2. **Mientras tanto, fase 1 por apalancamiento:** el pipeline de análisis (1.1) y la lectura de la tabla de signos (1.2) son lo que más acerca la congelación del plan; redacción (1.3) y logística de cluster (1.4) rellenan el resto del paralelo. Nada de la fase 1 depende del tutor.
 3. **Pilot de calibración** (fase 3, en cuanto el protocolo esté dentro). Un run por celda (24), LR centrado, seed 0, presupuesto doblado. Sustituye al pilot reducido MNIST×FC×SGD: calibrar presupuestos y umbrales exige ver todas las celdas, y de paso valida el pipeline, el overhead real de las métricas (<3-4x) y las GPU-h por run que fijan el coste total (ambos medibles desde 2026-06-10: cada run loguea `total/metric/train_seconds` y el `--report` muestra el tiempo por celda — decisión "Timing por run" en [[2 - Decisiones]]). Protocolo y justificación en [[2 - Decisiones]]. Cómo ejecutarlo:
 
