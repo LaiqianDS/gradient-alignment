@@ -18,8 +18,8 @@
 *.pdf
 
 # ...pero los logos de la portada (plantilla oficial) sí se versionan.
-!logo-upv.pdf
-!logo-etsinf.pdf
+!img/logo-upv.pdf
+!img/logo-etsinf.pdf
 
 # macOS
 .DS_Store

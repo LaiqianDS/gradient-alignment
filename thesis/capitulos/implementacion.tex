@@ -1,0 +1,23 @@
+\chapter{Implementación}
+\label{ch:implementacion}
+% El desarrollo software; no volcar código entero. Fuente: src/ + README.
+
+\section{Arquitectura del pipeline}
+\label{sec:pipeline}
+% src/: config, data, models, metrics, metrics_runner, logger, train; logging a parquet.
+
+\section{Cálculo de las métricas}
+\label{sec:impl-metricas}
+% Interfaz común compute(model,X,y,loss_fn) sobre probe batch; REGISTRY+BASELINE; last-layer en ResNet.
+
+\section{Reproducibilidad}
+\label{sec:reproducibilidad}
+% seed.py; constantes de normalización por dataset; caveat Tiny-ImageNet (~6e-4, libjpeg/Pillow).
+
+\section{Ejecución y reanudación en cluster}
+\label{sec:ejecucion}
+% run_matrix.py idempotente (hecho = summary.json); troceable por dataset/model/optimizer.
+
+\section{Pilot de calibración}
+\label{sec:pilot}
+% run_pilot.py: 1 run/celda, presupuesto doblado, reports_pilot/; fija presupuestos y umbrales.

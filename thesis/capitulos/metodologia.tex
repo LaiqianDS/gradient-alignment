@@ -1,0 +1,41 @@
+\chapter{Metodología y diseño experimental}
+\label{ch:metodologia}
+% Núcleo pre-registrado (redactar antes de ver resultados). Fuente: 1 - Diseño.md + pending/.
+
+\section{Hipótesis}
+\label{sec:hipotesis}
+% H1-H6 con criterio falsable (|rho| >= 0,3; DeltaR^2 > 0; etc.).
+
+\section{Variables}
+\label{sec:variables}
+
+\subsection{Dependientes: eficiencia del entrenamiento}
+% Épocas-a-umbral (primaria, censurado), AUC test-loss, best test-loss.
+
+\subsection{Independientes: métricas tempranas}
+% Las dos familias; lista cerrada antes de ejecutar (anti p-hacking).
+
+\section{Ventana temporal}
+\label{sec:ventana}
+% Fracciones 5/10/25/50 %; el barrido es resultado reportable.
+
+\section{Setup de entrenamiento}
+\label{sec:setup}
+% Datasets, arquitecturas (FC/CNN/ResNet-18), SGD y Adam; normalización sin augmentation.
+
+\section{Matriz de experimentos}
+\label{sec:matriz}
+% 24 celdas x 8 LR x 5 seeds ~ 960 runs; rejilla de LR por optimizador; hiperparámetros fijos.
+
+\section{Protocolo de evaluación}
+\label{sec:protocolo-eval}
+% Split train/val/test (confirmado por tutor 2026-06-12).
+% [PROVISIONAL, pendiente OK tutor] gap de generalización como variable objetivo (ver pending/).
+
+\section{Protocolo de análisis}
+\label{sec:protocolo-analisis}
+% Spearman + Pearson; FDR (Benjamini-Hochberg); por condición y agregado; valor incremental; Pareto.
+
+\section{Amenazas a la validez}
+\label{sec:confusores}
+% Paradoja de Simpson al agregar; colinealidad entre predictores; censurado.
