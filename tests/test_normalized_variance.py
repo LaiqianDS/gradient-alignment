@@ -13,6 +13,7 @@ import torch
 import torch.nn as nn
 
 from metrics.normalized_variance import METRIC, _ngv_core
+from metrics.primitives import split_batches
 from synthetic import parallel_grads, synthetic_probe, tiny_mlp
 
 
@@ -90,6 +91,36 @@ def test_zero_mean_rows_large_ngv():
     G = torch.stack([v, -v, v, -v])
     out = _ngv_core(G)
     assert out["var/normalized"] > 1.0
+
+
+def test_plug_in_estimator_saturates_at_k():
+    # DESIGN NOTE (module docstring): the plug-in denominator ‖mean of K grads‖²
+    # is biased up by tr(Cov)/K, so for a zero-mean gradient population the
+    # estimated NGV reads ≈K rather than blowing up. K=10 rows of pure noise
+    # with P=512 concentrate tightly around 10.
+    G = torch.randn(10, 512, generator=torch.Generator().manual_seed(0))
+    out = _ngv_core(G)
+    assert 8.0 < out["var/normalized"] < 12.0
+
+
+def test_compute_matches_classic_backward_sweep():
+    # Independent oracle: replicate compute() with a plain loss.backward() loop
+    # over the same 10 disjoint sub-batches (no torch.func in the reference)
+    # and compare both scalars.
+    model = tiny_mlp().eval()
+    X, y = synthetic_probe(m=40)
+    lf = nn.CrossEntropyLoss()
+    out = METRIC.compute(model, X, y, lf)
+
+    grads = []
+    for bx, by in split_batches(X, y, 10):
+        model.zero_grad()
+        lf(model(bx), by).backward()
+        grads.append(torch.cat([p.grad.flatten() for p in model.parameters()]))
+    model.zero_grad(set_to_none=True)
+    ref = _ngv_core(torch.stack(grads))
+    assert out["var/avg"] == pytest.approx(ref["var/avg"], rel=1e-5)
+    assert out["var/normalized"] == pytest.approx(ref["var/normalized"], rel=1e-5)
 
 
 def test_compute_smoke_returns_finite_keys():

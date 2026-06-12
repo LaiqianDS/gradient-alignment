@@ -1,9 +1,11 @@
 """Gradient confusion (Sankararaman et al., 2020).
 
-The central quantity is the **gradient confusion** ``η ≥ -1``: the most negative
-pairwise cosine similarity between per-sample gradients, ``⟨∇f_i, ∇f_j⟩ ≥ -η`` for
-all ``i ≠ j``, estimated in its cosine form ``η̂ = -min_{i≠j} cos(∇f_i, ∇f_j)``.
-Large ``η`` means gradients disagree (confused); ``η ≈ -1`` means perfect agreement.
+The paper's **gradient confusion bound** is ``η ≥ 0`` on raw inner products:
+``⟨∇f_i, ∇f_j⟩ ≥ -η`` for all ``i ≠ j`` (Def. 2.1). Empirically it is estimated
+through the normalised (cosine) variant the paper introduces in §8,
+``η̂ = -min_{i≠j} cos(∇f_i, ∇f_j) ∈ [-1, 1]`` — a different object from the
+definitional ``η``. Large ``η̂`` means gradients disagree (confused);
+``η̂ ≈ -1`` means all pairs are positively aligned.
 
 Because ``min`` is a noisy extreme-value estimator, the full density of the
 off-diagonal cosines is logged alongside it (``median``, ``p05``, ``frac_neg``).

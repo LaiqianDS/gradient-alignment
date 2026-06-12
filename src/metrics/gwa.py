@@ -10,7 +10,8 @@ The per-epoch aggregate corrects for excess kurtosis,
 
     ``GWA_T = M1 / (M4/M2² - 3 + beta)``   with ``beta = 1.2``,
 
-where ``M1`` is the mean cosine and ``M2``/``M4`` are the 2nd/4th central moments.
+where ``M1`` is the mean cosine and ``M2``/``M4`` are the 2nd/4th central
+moments; ``gwa/kurt`` logs the excess kurtosis ``M4/M2² - 3`` (Gaussian ≈ 0).
 The canonical estimator is **last-layer-only**: the classifier weight matrix, bias
 excluded (``docs/research/metrics.md``, "Gradient-Weight Alignment").
 """
@@ -29,18 +30,28 @@ _BETA = 1.2
 def _gwa_aggregate(gammas: torch.Tensor) -> dict[str, float]:
     """Kurtosis-corrected GWA aggregate over per-sample cosines ``gammas`` [M].
 
-    Uses central moments about the mean: ``M1 = mean``, ``m2``/``m4`` the 2nd/4th
-    central moments, and excess kurtosis ``kurt = m4 / m2²``. The aggregate
-    ``value = M1 / (kurt - 3 + beta)`` guards its denominator with a
+    Moments are accumulated in float64 (float32 underflows ``m2²`` once the
+    cosine spread drops below ~1e-3): ``M1 = mean``, ``m2``/``m4`` the 2nd/4th
+    central moments. ``gwa/kurt`` is the **excess** kurtosis ``m4/m2² - 3``
+    (Gaussian ≈ 0), matching the paper's denominator. The aggregate
+    ``value = M1 / (kurt + beta)`` guards its denominator with a
     sign-preserving ``EPS`` so a near-zero denominator stays finite without
-    flipping the sign.
+    flipping the sign. Constant cosines (``m2 = 0``) leave the kurtosis
+    undefined: ``gwa/kurt`` and ``gwa/value`` are NaN, ``gwa/score_mean`` stays.
     """
-    M1 = gammas.mean()
-    m2 = ((gammas - M1) ** 2).mean()
-    m4 = ((gammas - M1) ** 4).mean()
-    kurt = m4 / (m2**2 + EPS)
+    g = gammas.double()
+    M1 = g.mean()
+    m2 = ((g - M1) ** 2).mean()
+    m4 = ((g - M1) ** 4).mean()
+    if float(m2) == 0.0:
+        return {
+            "gwa/score_mean": float(M1),
+            "gwa/kurt": float("nan"),
+            "gwa/value": float("nan"),
+        }
+    kurt = m4 / m2**2 - 3.0  # excess kurtosis
 
-    denom = kurt - 3.0 + _BETA
+    denom = kurt + _BETA
     # Sign-preserving guard: push the denominator away from zero in its own
     # direction (+EPS at exactly zero) so the ratio is finite and sign-stable.
     sign = torch.where(denom >= 0, torch.ones_like(denom), -torch.ones_like(denom))

@@ -8,9 +8,11 @@ They are collected here into two groups, because their call signatures differ:
   data probe and returns scalars:
   ``metric.compute(model, X, y, loss_fn) -> dict[str, float]``.
 * ``BASELINE`` — the mandatory TSE baseline predictor. It takes a sequence of
-  training losses instead of a model: ``BASELINE.compute(losses) -> dict``.
-  Every gradient metric must out-predict TSE-EMA to justify its cost, so it is
-  kept separate on purpose (see ``docs/research/metrics.md``).
+  **per-epoch mean** training losses instead of a model:
+  ``BASELINE.compute(losses) -> dict`` (aggregate per-step losses first, see
+  ``train.epoch_mean_losses``). Every gradient metric must out-predict TSE-EMA
+  to justify its cost, so it is kept separate on purpose (see
+  ``docs/research/metrics.md``).
 
 Example
 -------
@@ -18,7 +20,7 @@ Example
 >>> row = {}
 >>> for name, metric in REGISTRY.items():        # one probe -> many scalars
 ...     row.update(metric.compute(model, X, y, loss_fn))
->>> row.update(BASELINE.compute(loss_history))   # baseline, different input
+>>> row.update(BASELINE.compute(epoch_means))    # baseline takes per-epoch means
 """
 
 from . import base, primitives  # noqa: F401

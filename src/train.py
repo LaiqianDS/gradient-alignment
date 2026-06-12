@@ -93,6 +93,26 @@ def warn_probe_memory(num_params: int, probe_size: int) -> float:
     return gb
 
 
+def epoch_mean_losses(step_losses: list[float], steps_per_epoch: int) -> list[float]:
+    """Collapse per-step losses into per-epoch means ℓ̄_1..ℓ̄_t for the TSE baseline.
+
+    TSE is defined over *epochs* of mean batch losses (Ru et al. 2021, Eq. 1);
+    feeding raw per-step losses would turn TSE-E(E=1) into the TLmini baseline
+    the paper rejects and shrink the EMA half-life by a factor of
+    ``steps_per_epoch``. The trailing partial epoch contributes its running
+    mean so mid-epoch (early-window) probes are still defined.
+    """
+    full = len(step_losses) // steps_per_epoch
+    means = [
+        sum(step_losses[i * steps_per_epoch : (i + 1) * steps_per_epoch]) / steps_per_epoch
+        for i in range(full)
+    ]
+    tail = step_losses[full * steps_per_epoch :]
+    if tail:
+        means.append(sum(tail) / len(tail))
+    return means
+
+
 @torch.no_grad()
 def evaluate(model, loader, loss_fn, device) -> tuple[float, float]:
     """Mean test loss and accuracy (size-weighted over batches)."""
@@ -201,7 +221,8 @@ def train(cfg: Config) -> dict:
         device_sync(device)
         t0 = time.perf_counter()
         row = measure(model, probe_X, probe_y, loss_fn, metrics)
-        row.update(baseline_row(loss_history))
+        # TSE consumes per-epoch mean losses, never raw per-step losses.
+        row.update(baseline_row(epoch_mean_losses(loss_history, len(train_loader))))
         device_sync(device)
         metric_seconds += time.perf_counter() - t0
         return row

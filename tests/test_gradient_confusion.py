@@ -114,6 +114,30 @@ def test_zero_norm_row_is_eps_guarded():
     assert math.isclose(out["confusion/frac_neg"], 0.0, abs_tol=1e-12)
 
 
+def test_scale_invariance_per_row():
+    # Cosines ignore per-row gradient magnitudes: rescaling each row by a
+    # positive factor leaves every stat unchanged — the defining property of
+    # the cosine variant (paper §8) vs the raw inner-product bound of Def. 2.1.
+    g = torch.Generator().manual_seed(2)
+    G = torch.randn(6, 10, generator=g)
+    scales = torch.rand(6, 1, generator=g) * 5 + 0.1
+    base, scaled = _confusion_core(G), _confusion_core(G * scales)
+    for k in KEYS:
+        assert math.isclose(base[k], scaled[k], abs_tol=1e-5), k
+
+
+def test_zero_row_does_not_mask_negative_pair():
+    # {v, -v, 0}: the zero row contributes cosine-0 pairs but must not hide the
+    # antiparallel pair. Ordered off-diagonal multiset {-1, -1, 0, 0, 0, 0}:
+    # min = -1, eta = 1, frac_neg = 2/6.
+    v = torch.randn(12, generator=torch.Generator().manual_seed(3))
+    G = torch.stack([v, -v, torch.zeros(12)])
+    out = _confusion_core(G)
+    assert math.isclose(out["confusion/min_cos"], -1.0, abs_tol=1e-5)
+    assert math.isclose(out["confusion/eta"], 1.0, abs_tol=1e-5)
+    assert math.isclose(out["confusion/frac_neg"], 2.0 / 6.0, abs_tol=1e-6)
+
+
 def test_compute_smoke_returns_finite_keys():
     X, y = synthetic_probe()
     out = METRIC.compute(tiny_mlp().eval(), X, y, nn.CrossEntropyLoss())

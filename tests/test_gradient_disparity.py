@@ -60,7 +60,8 @@ def test_five_rows_exact_mean_of_ten_pairs():
 
 
 def test_matches_paper_ordered_pair_formula():
-    # Paper Eq. 7: D̄ = Σ_i Σ_{j≠i} D_{i,j} / (s(s-1)), an ordered-pair sum.
+    # Paper, Sect. 4 (unnumbered eq. in the ECML PKDD version; Eq. 7 in the
+    # extended arXiv version): D̄ = Σ_i Σ_{j≠i} D_{i,j} / (s(s-1)), ordered pairs.
     # Since D_{i,j}=D_{j,i}, this equals the mean over C(s,2) unordered pairs.
     # Pin _gd_core to that formula computed independently (cdist, not pdist).
     g = torch.randn(5, 7, generator=torch.Generator().manual_seed(1))
@@ -78,6 +79,28 @@ def test_scale_equivariance_not_invariance(c):
     base = _gd_core(batch_grads)["gd/scalar"]
     scaled = _gd_core(c * batch_grads)["gd/scalar"]
     assert math.isclose(scaled, abs(c) * base, rel_tol=1e-5)
+
+
+def test_compute_identical_batches_zero():
+    # End-to-end zero case: a probe built as one batch tiled 5x makes
+    # split_batches yield 5 identical batches, so every pairwise gradient
+    # distance is 0 through the full compute() path (frozen weights included).
+    Xb, yb = synthetic_probe(m=8)
+    out = METRIC.compute(
+        tiny_mlp().eval(), Xb.repeat(5, 1), yb.repeat(5), nn.CrossEntropyLoss()
+    )
+    assert math.isclose(out["gd/scalar"], 0.0, abs_tol=1e-6)
+
+
+def test_compute_forces_eval_mode():
+    # A model handed over in train() mode with Dropout must still be measured
+    # deterministically: compute() switches to eval(), so identical batches
+    # give exactly 0 (regression test for the model.eval() call).
+    m = nn.Sequential(nn.Linear(8, 16), nn.ReLU(), nn.Dropout(0.5), nn.Linear(16, 3))
+    m.train()
+    Xb, yb = synthetic_probe(m=8)
+    out = METRIC.compute(m, Xb.repeat(5, 1), yb.repeat(5), nn.CrossEntropyLoss())
+    assert math.isclose(out["gd/scalar"], 0.0, abs_tol=1e-6)
 
 
 def test_compute_smoke():

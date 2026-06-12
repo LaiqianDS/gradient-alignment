@@ -42,5 +42,9 @@ def measure(
 
 
 def baseline_row(losses) -> dict[str, float]:
-    """TSE baseline scalars from the running per-step training-loss history."""
+    """TSE baseline scalars from per-epoch mean training losses ℓ̄_1..ℓ̄_t.
+
+    Callers must pre-aggregate per-step losses into epoch means (see
+    ``train.epoch_mean_losses``); TSE is defined over epochs, not steps.
+    """
     return BASELINE.compute(losses)

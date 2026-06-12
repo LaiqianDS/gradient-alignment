@@ -1,12 +1,14 @@
 """m-coherence (Chatterjee & Zielinski, 2020).
 
-Per-sample gradient alignment $\\alpha_m \\in [1, m]$ (1 = orthogonal,
-$m$ = perfectly aligned). The identity $\\mathbb{E}[g_z\\cdot g] = \\|g\\|^2$
-yields the scalable estimator
+Per-sample gradient alignment $\\alpha_m \\in [0, m]$ (Theorem 1 of the paper:
+$0 \\le \\alpha \\le 1$): 1 is the *orthogonal limit*, $m$ means identical
+gradients, and values below 1 indicate anticorrelated gradients (observed in
+the paper near 100% train accuracy). The identity
+$\\mathbb{E}[g_z\\cdot g] = \\|g\\|^2$ yields the scalable estimator
 
     $\\alpha_m = \\|\\sum_i g_i\\|^2 / \\sum_i \\|g_i\\|^2$,
 
-already on the $[1, m]$ scale (no extra factor of $m$). The reciprocal
+already on the $[0, m]$ scale (no extra factor of $m$). The reciprocal
 $1/\\alpha$ is the gradient diversity of Yin et al. (2018). Per-sample grads
 are mandatory: Corollary 3.1 proves mini-batches inflate the coherence.
 """
@@ -22,7 +24,7 @@ from .primitives import EPS, per_sample_grad_matrix
 def _mcoh_core(G: torch.Tensor) -> dict[str, float]:
     """m-coherence from a ``[M, P]`` per-sample gradient matrix.
 
-    ``alpha = ‖Σ_i g_i‖² / Σ_i ‖g_i‖²`` lives in ``[1, M]``.
+    ``alpha = ‖Σ_i g_i‖² / Σ_i ‖g_i‖²`` lives in ``[0, M]`` (1 = orthogonal limit).
     """
     S = G.sum(0)
     num = S @ S

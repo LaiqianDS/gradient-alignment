@@ -115,6 +115,25 @@ def test_all_dead_columns_fall_back_to_keeping_all():
     assert out == {"gsnr/mean": 0.0, "gsnr/median": 0.0, "gsnr/p95": 0.0}
 
 
+def test_compute_matches_analytic_linear_model_grads():
+    # Independent oracle for the full compute() path: for ŷ = w·x + b with MSE
+    # loss, the per-sample gradient is g_i = [2 r_i x_i, 2 r_i] with residual
+    # r_i = w·x_i + b − y_i, known in closed form (no torch.func in the
+    # reference). compute() must equal _gsnr_core of those analytic gradients.
+    torch.manual_seed(0)
+    model = nn.Linear(3, 1)
+    X = torch.randn(12, 3)
+    y = torch.randn(12, 1)
+    out = METRIC.compute(model, X, y, nn.MSELoss())
+
+    with torch.no_grad():
+        resid = X @ model.weight.T + model.bias - y  # [12, 1]
+    G = torch.cat([2 * resid * X, 2 * resid], dim=1)  # columns [∂w(3), ∂b(1)]
+    ref = _gsnr_core(G)
+    for k in ref:
+        assert math.isclose(out[k], ref[k], rel_tol=1e-4), k
+
+
 def test_smoke_compute_returns_three_finite_floats():
     X, y = synthetic_probe()
     out = METRIC.compute(tiny_mlp().eval(), X, y, nn.CrossEntropyLoss())

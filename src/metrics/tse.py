@@ -1,10 +1,12 @@
 """Training Speed Estimator (TSE), the mandatory baseline (Ru et al., 2021).
 
 Unlike every gradient metric in the registry, this baseline consumes a
-*sequence of per-step (or per-epoch) mean training losses* ℓ_1..ℓ_T — never a
-model — so its ``compute`` signature intentionally differs from the
-``Metric`` protocol in ``metrics.base``. Cost is **zero**: the train loss is
-already produced by the forward pass.
+*sequence of per-epoch mean training losses* ℓ̄_1..ℓ̄_T — never a model — so its
+``compute`` signature intentionally differs from the ``Metric`` protocol in
+``metrics.base``. The paper defines t over **epochs** (Eq. 1: each term is the
+mean batch loss of one epoch); callers must aggregate per-step losses first
+(``train.epoch_mean_losses``). Cost is **zero**: the train loss is already
+produced by the forward pass.
 
 Variants (see ``docs/research/metrics.md``, tag ``metric_kind="baseline"``):
   * TSE      = Σ_t ℓ_t                       — ``tse/cumulative``
@@ -28,18 +30,19 @@ def compute_tse(
     e: int = 1,
     gammas: Sequence[float] = (0.9, 0.999),
 ) -> dict[str, float]:
-    """TSE baseline scalars from a 1-D sequence of mean training losses ℓ_1..ℓ_T.
+    """TSE baseline scalars from a 1-D sequence of per-epoch mean losses ℓ̄_1..ℓ̄_T.
 
-    ``losses`` is a list/tensor of per-step (or per-epoch) mean losses. Returns
-    the cumulative sum, the burn-in window sum over the last ``e`` losses, and
-    one EMA per γ in ``gammas`` keyed ``tse/ema_<g>`` (dot → underscore).
+    Returns the cumulative sum, the burn-in window sum over the last ``e``
+    losses (clamped to the available history when ``e > T``), and one EMA per
+    γ in ``gammas`` keyed ``tse/ema_<g>`` (dot → underscore). An empty history
+    returns all zeros.
     """
     L = torch.as_tensor(losses, dtype=torch.float64).flatten()
     T = L.shape[0]
 
     out: dict[str, float] = {
         "tse/cumulative": float(L.sum()),
-        "tse/e_window": float(L[T - e :].sum()),
+        "tse/e_window": float(L[max(T - e, 0) :].sum()),
     }
     for g in gammas:
         # weight γ^(T-t): exponents T-1, T-2, ..., 0 so the last loss weighs 1

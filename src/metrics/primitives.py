@@ -50,7 +50,13 @@ def per_sample_grad_matrix(model, X, y, loss_fn) -> torch.Tensor:
 
 
 def batch_grad(model, X, y, loss_fn) -> dict[str, torch.Tensor]:
-    """Aggregate ∇L of the mean loss over a batch: ``{name: grad}``."""
+    """Aggregate ∇L of the batch loss: ``{name: grad}``.
+
+    "Mean loss" assumes ``loss_fn`` reduces by mean (the pipeline's
+    ``nn.CrossEntropyLoss()`` default); a sum-reducing loss returns ``M×`` the
+    mean gradient, and a sample-weighted loss breaks the identity
+    ``mean(per-sample grads) == batch_grad``.
+    """
     params = {k: v.detach() for k, v in model.named_parameters()}
     buffers = {k: v.detach() for k, v in model.named_buffers()}
 
@@ -78,6 +84,9 @@ def named_last_linear(model) -> tuple[str, nn.Linear]:
 
     Useful for last-layer-only variants (gwa, stiffness on big
     nets). Param names follow as ``f"{name}.weight"`` / ``f"{name}.bias"``.
+    "Last" follows **registration order** (``named_modules``), not forward
+    order — correct for the fc/cnn/resnet18 models of this study, but not for
+    arbitrary models that define the head before other Linear layers.
     """
     last = None
     for name, mod in model.named_modules():

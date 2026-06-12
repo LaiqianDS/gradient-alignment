@@ -6,7 +6,7 @@ relevance: high
 url: "https://arxiv.org/pdf/2008.01217"
 tfg_role:
   - metric
-tfg_note: "Origen de `m_coherence`: formalización escalable y O(m) de la Coherent Gradients Hypothesis (coherencia per-sample normalizada, rango [1, m]). Núcleo de la familia alineación."
+tfg_note: "Origen de `m_coherence`: formalización escalable y O(m) de la Coherent Gradients Hypothesis (coherencia per-sample normalizada, rango [0, m]; 1 = límite ortogonal). Núcleo de la familia alineación."
 ---
 
 # Making Coherence Out of Nothing At All: Measuring the Evolution of Gradient Alignment
@@ -21,7 +21,7 @@ El trabajo se sitúa en la línea abierta por la *Coherent Gradients hypothesis*
 
 ### Aportación
 
-La contribución central es la introducción de la **m-coherence**, denotada $\alpha_m$, como métrica de alineamiento de gradientes por ejemplo con una interpretación intuitiva directa: sobre una muestra de tamaño $m$, m-coherence indica el número medio de ejemplos (incluyéndose a sí mismo) que se benefician de un pequeño paso a lo largo del gradiente de un ejemplo aleatorio. Frente a métricas previas como el producto interior por pares, la sign/cosine stiffness de Fort et al. (2019) o la gradient confusion de Sankararaman et al. (2019), $\alpha_m$ resulta más interpretable, matemáticamente más limpia, escala-invariante en el sentido apropiado y, sobre todo, computacionalmente eficiente: requiere $O(m)$ operaciones en lugar de $O(m^2)$, lo que permite utilizar muestras dos órdenes de magnitud mayores. Los autores también señalan que el recíproco de $\alpha_m$ coincide con la *gradient diversity* previamente usada en cotas teóricas (Yin et al. 2018, Jain et al. 2018), conectando la métrica con la literatura sobre convergencia de mini-batch SGD.
+La contribución central es la introducción de la **m-coherence**, denotada $\alpha_m$, como métrica de alineamiento de gradientes por ejemplo con una interpretación intuitiva directa: sobre una muestra de tamaño $m$, m-coherence indica el número medio de ejemplos (incluyéndose a sí mismo) que se benefician de un pequeño paso a lo largo del gradiente de un ejemplo aleatorio. Frente a métricas previas como el producto interior por pares, la sign/cosine stiffness de Fort et al. (2019) o la gradient confusion de Sankararaman et al. (2019), $\alpha_m$ resulta más interpretable, matemáticamente más limpia, escala-invariante en el sentido apropiado y, sobre todo, computacionalmente eficiente: requiere $O(m)$ operaciones en lugar de $O(m^2)$, lo que permite utilizar muestras dos órdenes de magnitud mayores. Los autores también señalan que el recíproco de $\alpha$ (literal del paper: *"the reciprocal of α appears in the theory literature as gradient diversity"*) aparece en cotas teóricas previas (Yin et al. 2018, Jain et al. 2018); con el factor $m$ explícito, la $\Delta_S(w) = \sum_i\|g_i\|^2/\|\sum_i g_i\|^2$ de Yin et al. es exactamente $1/\alpha_m$, conectando la métrica con la literatura sobre convergencia de mini-batch SGD.
 
 ### Metodología
 
@@ -65,7 +65,7 @@ equivalente al cociente entre el producto interior medio por pares (incluyendo e
 
 **Coste.** Requiere $m$ gradientes por ejemplo, calculables eficientemente con `torch.func.vmap` combinado con `grad` (functorch). Tamaño típico $m = 1024$. Memoria: $O(P)$ para $S$ y $O(1)$ extra para $Q$; sin coste cuadrático en $m$. Comparado con la matriz $(m, P)$ que necesitaría una formulación naïve, el ahorro es decisivo (≈47 GB para $m = 1024$ y ResNet-18 fp32 frente a $O(P)$ del estimador streaming).
 
-**Claves de logging.** Se registran `mcoh/global` para el escalar agregado y `mcoh/per_layer/{name}` para cada capa instrumentada (primera convolución, intermedia y FC final). De forma complementaria pueden registrarse las trazas frente a paso/época para visualizar el transitorio inicial y la trayectoria parabólica.
+**Claves de logging.** La v1 emite solo `mcoh/global`; `mcoh/per_layer/{name}` (primera convolución, intermedia y FC final, el protocolo per-layer del paper) queda reservada para v2. De forma complementaria pueden registrarse las trazas frente a paso/época para visualizar el transitorio inicial y la trayectoria parabólica.
 
 **Interpretación de la señal.** La convención es **↑ m-coherence = mejor durante la fase de fit**, alineada con el resto de métricas de alineamiento del TFG y con la *Coherent Gradients Hypothesis*: valores altos de $\alpha_m$ indican que los gradientes per-sample comparten dirección, lo que se traduce en que un paso de SGD reduce simultáneamente la pérdida sobre múltiples ejemplos y, por tanto, en señal generalizable. La lectura, sin embargo, no es monótona en el tiempo, sino **parabólica**: en `mcoh/global` se espera un ascenso rápido durante el aprendizaje de la estructura común (cuanto antes y más alto el pico, mejor *trainability*), un máximo que marca la transición desde fit hacia memorización, y un descenso posterior hacia $\alpha_m \approx 1$ —el régimen ortogonal— a medida que los gradientes residuales se vuelven mutuamente ortogonales sobre los ejemplos aún no ajustados; un descenso prematuro o un pico bajo son señales tempranas de pobre generalización. La traza por capa `mcoh/per_layer/{name}` enriquece la lectura: la heterogeneidad es informativa, porque permite localizar qué capas siguen extrayendo estructura coherente y cuáles ya han transitado a memorización, con la expectativa de que las convolucionales sostengan coherencia más alta que las fully-connected por el efecto amplificador del weight sharing (Corolario 3.1). Caveat crítico de interpretación: la regla ↑ mejor solo es válida si se mide sobre **gradientes per-sample**; una `mcoh/global` sospechosamente alta o que no decae en absoluto es síntoma probable de estar midiendo sobre gradientes per-batch, lo que infla artificialmente $\alpha_m$ por el mismo Corolario 3.1 y debe diagnosticarse antes de interpretar la curva.
 
@@ -84,7 +84,7 @@ for xb, yb in coherence_loader:     # muestra fija de m ejemplos
     Q += (g * g).sum().item()
     n += g.shape[0]
 alpha_m = (S.dot(S).item()) / Q     # = ||S||^2 / Q  (escala-invariante)
-m_coherence = alpha_m               # ya está en escala [1, m]
+m_coherence = alpha_m               # ya está en escala [0, m]; 1 = límite ortogonal
 ```
 
 Si se registra *on-the-fly* durante el entrenamiento, pueden reutilizarse los gradientes per-sample del propio paso siempre que se mantenga consistencia de batch y modo del modelo.
@@ -94,11 +94,11 @@ Si se registra *on-the-fly* durante el entrenamiento, pueden reutilizarse los gr
 ### Uso en el TFG
 
 - **Métrica que origina.** `m_coherence` (familia alineación), núcleo conceptual de toda la familia junto con la *Coherent Gradients Hypothesis*. Es la formalización escala-invariante y $O(m)$ de la coherencia per-sample.
-- **Fórmula clave.** $\alpha_m = \|\sum_i g_i\|^2 / \sum_i \|g_i\|^2 = m\cdot \mathbb{E}_{z,z'}[g_z\cdot g_{z'}]/\mathbb{E}_z[g_z\cdot g_z] \in [1, m]$ (donde $1$ corresponde a gradientes ortogonales y $m$ a gradientes idénticos), sobre el gradiente bruto $\nabla L$.
+- **Fórmula clave.** $\alpha_m = \|\sum_i g_i\|^2 / \sum_i \|g_i\|^2 = m\cdot \mathbb{E}_{z,z'}[g_z\cdot g_{z'}]/\mathbb{E}_z[g_z\cdot g_z] \in [0, m]$ — el Teorema 1 da $0 \le \alpha \le 1$, así que $1$ es el **límite ortogonal** (no una cota inferior), $m$ corresponde a gradientes idénticos y los valores $< 1$ indican gradientes anticorrelados, que el paper observa en la primera conv tras alcanzar el 100% de train accuracy —, sobre el gradiente bruto $\nabla L$.
 - **Cómo se usa.** Se mide $\alpha_m$ sobre un probe fijo de $m \in [512, 2048]$ en las ventanas tempranas (5/10/25/50% de épocas) y se correlaciona (Spearman/Pearson) con métricas de eficiencia (épocas-hasta-umbral, AUC de test loss) y generalización. No se optimiza. Comparte el barrido per-sample $\nabla L$ con `stiffness` y `gsnr`.
 - **Señal.** Mayor $\alpha_m$ es mejor: alta coherencia temprana se asocia con convergencia más rápida y mejor generalización. (Matiz del paper: con etiquetas aleatorias la coherencia crece a mitad de entrenamiento; en el TFG sin label noise se espera la trayectoria de etiquetas reales.)
-- **Cómputo $O(m)$ streaming.** Acumuladores $S = \sum_i g_i$ (vector $P$) y $Q = \sum_i \|g_i\|^2$ (escalar); $\alpha_m = \|S\|^2/Q$. No materializar la matriz $(m, P)$ (≈47 GB para $m = 1024$, ResNet-18 fp32).
-- **Pitfalls y decisiones.** Solo per-sample —los mini-batches inflan la coherencia (Cor 3.1), nunca medir per-batch—; forzar fp32 ($Q$ hace underflow en fp16); la diagonal $z = z'$ se mantiene en la definición; `model.eval()` y misma muestra fija en todas las épocas. El recíproco $1/\alpha_m$ es la *gradient diversity* de las cotas de mini-batch SGD (Yin et al. 2018), útil para conectar con el eje teórico.
+- **Cómputo $O(m)$ streaming.** Acumuladores $S = \sum_i g_i$ (vector $P$) y $Q = \sum_i \|g_i\|^2$ (escalar); $\alpha_m = \|S\|^2/Q$. Idealmente sin materializar la matriz $(m, P)$ (≈47 GB para $m = 1024$, ResNet-18 fp32); **la v1 real sí la materializa** (probe compartido $M=256$ vía `per_sample_grad_matrix`) y emite solo `mcoh/global` — el streaming y la versión per-layer quedan como optimización/v2.
+- **Pitfalls y decisiones.** Solo per-sample —los mini-batches inflan la coherencia (Cor 3.1), nunca medir per-batch—; forzar fp32 ($Q$ hace underflow en fp16); la diagonal $z = z'$ se mantiene en la definición; `model.eval()` y misma muestra fija en todas las épocas. Sobre la *gradient diversity*: el paper dice literalmente que $1/\alpha$ es la que aparece en la literatura teórica; la $\Delta_S$ de Yin et al. (2018) es $1/\alpha_m$ (difieren en un factor $m$) — útil para conectar con el eje teórico manteniendo el factor explícito.
 
 ## Papers relacionados
 

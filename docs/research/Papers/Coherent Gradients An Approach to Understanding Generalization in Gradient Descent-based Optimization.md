@@ -1,7 +1,7 @@
 ---
 authors:
   - Satrajit Chatterjee
-year: 2019 # año bibliográfico/workshop; el año de publicación en arXiv difiere (verificar contra la fuente)
+year: 2020 # ICLR 2020 (cabecera del PDF: "Published as a conference paper at ICLR 2020"); arXiv 2002.10657v1, 25-feb-2020
 status: to-read
 relevance: medium
 url: https://arxiv.org/abs/2002.10657
@@ -45,7 +45,7 @@ Se reportan training accuracy y validation/test accuracy a lo largo del entrenam
 
 $$i_t^p = \frac{1}{|p|} \sum_{t'=0}^{t} \langle g_{t'}, g_{t'}^p \rangle, \quad i_t^c = \frac{1}{|c|} \sum_{t'=0}^{t} \langle g_{t'}, g_{t'}^c \rangle,$$
 
-(normalización exacta a verificar contra el PDF)
+(normalización verificada exacta contra el PDF, p. 7: $|p|$, $|c|$ son el número de ejemplos pristine/corrupt)
 
 y un overfit ajustado definido como $\text{ta} - [\varepsilon \cdot (1/10) + (1 - \varepsilon) \cdot \text{va}]$ para corregir el hecho de que las etiquetas de test no están aleatorizadas.
 
@@ -55,7 +55,7 @@ Los experimentos respaldan cualitativamente la CGH. En primer lugar, al aumentar
 
 ## Medición y pipeline
 
-**Métrica concreta.** El paper introduce la coherencia de gradientes como concepto cualitativo y la operacionaliza, en los experimentos de label noise, mediante dos escalares que cuantifican la fracción de la reducción de pérdida atribuible a cada partición del minibatch:
+**Métrica concreta.** El paper introduce la coherencia de gradientes como concepto cualitativo y la operacionaliza, en los experimentos de label noise, mediante dos escalares que cuantifican la fracción de la reducción de pérdida atribuible a la partición pristine/corrupt del **conjunto de entrenamiento** — el paper las estima sobre una muestra fija de "400 per-example gradients for 600 weights (300 from each layer)" (p. 6), no por minibatch (la versión por minibatch es la adaptación que se describe abajo):
 
 $$f_t^p = \frac{\langle g_t, g_t^p \rangle}{\langle g_t, g_t \rangle}, \qquad f_t^c = \frac{\langle g_t, g_t^c \rangle}{\langle g_t, g_t \rangle}, \qquad f_t^p + f_t^c = 1.$$
 
@@ -109,7 +109,7 @@ logger.log_scalar("cgh/aligned_fraction", aligned_fraction.item(), step=t)
 
 ### Discrepancias detectadas
 
-- **URL de arXiv.** El frontmatter apunta a `arxiv.org/abs/2002.10657`, mientras que el título y autoría suelen citarse con año 2019 por la fecha del workshop original, de modo que el año de publicación en arXiv y el año bibliográfico podrían no coincidir. Conviene homogeneizar año y URL al criterio bibliográfico del TFG (mantener 2019 como año de referencia o ajustar según la convención fijada) (id arXiv y año a verificar contra la fuente).
+- **Año y URL de arXiv.** Verificado contra el PDF: la referencia correcta es **Chatterjee, ICLR 2020** (cabecera "Published as a conference paper at ICLR 2020"; arXiv `2002.10657` v1, 25-feb-2020). No existe versión workshop de 2019 — el año 2019 que circulaba en notas previas era un error.
 - **Operacionalización de coherencia.** Versiones previas del archivo introducían un estimador propio $\|\sum_i g_i\|^2 / (N \sum_i \|g_i\|^2)$ como "coherencia" supuestamente derivada de este paper. El paper no define ese ratio: las métricas explícitas son $f_t^p$ y $f_t^c$ (que requieren partición pristine/corrupt) y la descomposición heurística. El estimador escalable de tipo cociente normalizado es la **m-coherence** de Chatterjee & Zielinski (2020); atribuirlo a este paper inducía a confusión.
 
 ## Papers relacionados

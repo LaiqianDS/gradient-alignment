@@ -32,8 +32,10 @@ row.update(BASELINE.compute(loss_history))             # baseline takes losses, 
 ## The metrics
 
 They fall into two families, plus one baseline. "Per-example gradient" means the
-gradient computed from a *single* training example (not a whole batch) — these are
-extracted once and shared across metrics.
+gradient computed from a *single* training example (not a whole batch). The
+*implementation* of gradient extraction is shared (`primitives.py`), but each
+metric currently recomputes its own gradients per measurement — there is no
+shared cache of sweeps yet.
 
 ### Family 1 — Variability: how noisy are the gradients?
 
@@ -44,7 +46,7 @@ means a steady, reliable gradient; above 1 means noise dominates. Keys:
 
 **`gns_simple`** — the "gradient noise scale": roughly how large a batch you'd need
 before adding more examples stops cutting the noise. Bigger = noisier gradients =
-larger useful batch size. Keys: `noise_scale/simple`, `noise_scale/noise`.
+larger useful batch size. Keys: `noise_scale/simple`, `noise_scale/tr_sigma`.
 *(McCandlish et al., 2018)*
 
 **`gsnr`** — the per-parameter signal-to-noise ratio of the gradient, averaged
@@ -55,10 +57,11 @@ which the paper links to good generalization. Keys: `gsnr/mean`, `gsnr/median`,
 
 ### Family 2 — Alignment: do the gradients point the same way?
 
-**`m_coherence`** — how aligned the per-example gradients are, on a clean `1…M`
-scale (M = number of examples in the probe): **1** = all orthogonal (examples pull
-in unrelated directions), **M** = all identical (perfect agreement). Key:
-`mcoh/global`. *(Chatterjee & Zielinski, 2020)*
+**`m_coherence`** — how aligned the per-example gradients are, on a `0…M` scale
+(M = number of examples in the probe): **1** marks the *orthogonal limit*
+(examples pull in unrelated directions), **M** = all identical (perfect
+agreement), and values **below 1** mean examples actively pull against each
+other. Key: `mcoh/global`. *(Chatterjee & Zielinski, 2020)*
 
 **`stiffness`** — for pairs of examples, do their gradients point the same way
 (cosine, and just the sign)? Reported globally and split by **same-class** vs
@@ -128,8 +131,9 @@ dataset:
 
 - **Analytic sanity checks** on the pure core, using crafted gradient matrices
   whose answer is known by hand. For example: identical gradients give
-  `m_coherence = M`, orthogonal gradients give `m_coherence = 1`; identical batch
-  gradients give `gradient_disparity = 0`, two orthonormal ones give `√2`.
+  `m_coherence = M`, orthogonal ones give `m_coherence = 1` (anticorrelated ones
+  fall below 1); identical batch gradients give `gradient_disparity = 0`, two
+  orthonormal ones give `√2`.
 - **A smoke test** that runs the full `compute(...)` on a tiny MLP and checks the
   expected keys come back as finite numbers.
 

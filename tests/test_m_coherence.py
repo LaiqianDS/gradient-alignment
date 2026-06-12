@@ -37,13 +37,36 @@ def test_crafted_two_directions_hand_computed_alpha():
     assert abs(_mcoh_core(G)["mcoh/global"] - expected) < 1e-4
 
 
-def test_reciprocal_is_yin_gradient_diversity():
-    # 1/alpha == Yin et al. (2018) gradient diversity Σ‖g_i‖² / ‖Σg_i‖²,
-    # the identity the paper highlights in "Prior Work on Gradient Diversity".
-    G = torch.cat([parallel_grads(m=4, p=16, seed=5), orthogonal_grads(m=4, p=16, seed=6)])
+def test_matches_naive_pairwise_definition():
+    # Eq. (3) of the paper: alpha = E_{z,z'}[g_z·g_z'] / E_z[g_z·g_z], with z,z'
+    # i.i.d. WITH replacement (diagonal included), and m-coherence = m·alpha.
+    # The streaming form ‖S‖²/Q must equal the naive m² pairwise average.
+    G = torch.randn(7, 13, dtype=torch.float64, generator=torch.Generator().manual_seed(0))
+    m = G.shape[0]
+    naive = m * (G @ G.T).mean() / (G * G).sum(1).mean()
+    assert abs(_mcoh_core(G)["mcoh/global"] - float(naive)) < 1e-10
+
+
+def test_anticorrelated_grads_alpha_zero():
+    # {v, -v}: S = 0 so alpha = 0 (Theorem 1: alpha = 0 iff the mean gradient
+    # vanishes). The true range is [0, m] — 1 is the orthogonal *limit*, not a
+    # lower bound (the paper observes values below 1 near 100% train accuracy).
+    v = torch.randn(16, generator=torch.Generator().manual_seed(0))
+    G = torch.stack([v, -v])
+    assert abs(_mcoh_core(G)["mcoh/global"]) < 1e-6
+
+
+def test_partially_anticorrelated_below_orthogonal_limit():
+    # Two nearly opposed vectors land strictly between 0 and 1, below the
+    # orthogonal limit.
+    G = torch.stack([torch.tensor([1.0, 0.0]), torch.tensor([-0.9, 0.1])])
     alpha = _mcoh_core(G)["mcoh/global"]
-    diversity = float((G * G).sum() / (G.sum(0) @ G.sum(0)))
-    assert abs(1.0 / alpha - diversity) < 1e-5
+    assert 0.0 < alpha < 1.0
+
+
+def test_zero_gradients_sentinel():
+    # All-zero G: Q = 0; the EPS guard returns 0.0 rather than NaN.
+    assert _mcoh_core(torch.zeros(4, 6))["mcoh/global"] == 0.0
 
 
 def test_scale_invariance():
@@ -71,4 +94,4 @@ def test_compute_smoke_finite_in_range():
     alpha = out["mcoh/global"]
     assert isinstance(alpha, float)
     assert torch.isfinite(torch.tensor(alpha))
-    assert 1.0 <= alpha <= X.shape[0]  # [1, M]
+    assert 0.0 <= alpha <= X.shape[0]  # [0, M]; 1 is the orthogonal limit

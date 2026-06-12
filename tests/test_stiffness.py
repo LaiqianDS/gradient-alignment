@@ -4,6 +4,8 @@ Analytic sanity checks on the pure ``_stiffness_core`` with crafted gradient
 matrices of known geometry, plus a smoke test of the full ``compute`` path.
 """
 
+import math
+
 import pytest
 import torch
 import torch.nn as nn
@@ -121,6 +123,56 @@ def test_sign_between_mixed_fraction():
     y = torch.tensor([0, 1, 1, 1])
     out = _stiffness_core(G, y)
     assert out["stiffness/sign_between"] == pytest.approx(1.0 / 3.0, abs=1e-6)
+
+
+def test_zero_gradient_row_is_finite_zero():
+    # A perfectly-classified sample has a ~zero gradient; the norm clamp maps
+    # it to the zero vector so its pairs contribute cos 0 and sign 0
+    # (consistent with the paper's "stiffness 0 for ΔL₂ = 0" convention, p.2),
+    # never NaN. Pairs: (0,1) cos 1; (0,2),(1,2) cos 0 → global = 1/3.
+    p = 8
+    a = torch.zeros(p)
+    a[0] = 1.0
+    G = torch.stack([a, a, torch.zeros(p)])
+    y = torch.tensor([0, 0, 0])
+    out = _stiffness_core(G, y)
+    assert out["stiffness/cos_global"] == pytest.approx(1.0 / 3.0, abs=1e-6)
+    assert out["stiffness/sign_global"] == pytest.approx(1.0 / 3.0, abs=1e-6)
+    assert all(math.isfinite(v) for v in out.values())
+
+
+def test_singleton_class_contributes_no_within_pairs():
+    # y = [0, 1, 1]: the singleton class 0 has no within pair, so cos_within
+    # comes only from the class-1 pair (cos 0.6 by construction).
+    p = 8
+    a = torch.zeros(p)
+    a[0] = 1.0
+    c = torch.zeros(p)
+    c[0], c[1] = 3.0, 4.0  # ‖c‖ = 5, a·c = 3 → cos = 0.6
+    G = torch.stack([a, a, c])
+    y = torch.tensor([0, 1, 1])
+    out = _stiffness_core(G, y)
+    assert out["stiffness/cos_within"] == pytest.approx(0.6, abs=1e-6)
+
+
+def test_within_aggregation_is_pooled_micro_not_macro():
+    # DESIGN NOTE: the paper's Eq. (7) summarises within/between as a *macro*
+    # mean over class-stiffness-matrix cells; this implementation pools over
+    # pairs (micro). Class sizes {3, 2} with within-cosines {1.0, 0.5} expose
+    # the difference: micro = (3·1 + 1·0.5)/4 = 0.875 vs macro = 0.75. Pinned
+    # here as the documented, deliberate adaptation (docs/research/metrics.md);
+    # with a balanced probe the two estimands nearly coincide.
+    p = 8
+    a = torch.zeros(p)
+    a[0] = 1.0
+    u = torch.zeros(p)
+    u[1] = 1.0
+    w = torch.zeros(p)
+    w[1], w[2] = 0.5, math.sqrt(3) / 2  # cos(u, w) = 0.5
+    G = torch.stack([a, a, a, u, w])
+    y = torch.tensor([0, 0, 0, 1, 1])
+    out = _stiffness_core(G, y)
+    assert out["stiffness/cos_within"] == pytest.approx(0.875, abs=1e-6)
 
 
 def test_empty_subset_emits_zero():

@@ -1,7 +1,9 @@
 """Tests for the TSE baseline predictor (Ru et al., 2021).
 
-The baseline consumes a sequence of per-step mean losses, not a model, so
+The baseline consumes a sequence of per-epoch mean losses, not a model, so
 these exercise ``compute_tse`` analytically plus a smoke test on ``METRIC``.
+(The per-step → per-epoch aggregation lives in ``train.epoch_mean_losses``
+and is tested in ``test_train_helpers``.)
 """
 
 import torch
@@ -92,11 +94,24 @@ def test_ema_gamma_0_9_short_sequence_hand_computed():
     assert abs(out["tse/ema_0_9"] - 5.61) < 1e-9
 
 
-def test_e_window_e_greater_than_length():
-    # e larger than T: T-e is negative, so the slice L[T-e:] is a Python negative
-    # slice (it does NOT clamp to the full sequence). For T=3, e=5: L[-2:] = [2,3].
+def test_e_window_e_greater_than_length_clamps():
+    # e larger than T clamps to the full history (paper burn-in semantics:
+    # the window starts at max(1, T-E+1)). For T=3, e=5: sum of all 3 losses.
     out = compute_tse([1.0, 2.0, 3.0], e=5)
-    assert abs(out["tse/e_window"] - 5.0) < 1e-9
+    assert abs(out["tse/e_window"] - 6.0) < 1e-9
+
+
+def test_empty_history_returns_zeros():
+    # Documented edge case: no closed losses yet -> all four scalars are 0.0.
+    out = compute_tse([])
+    assert set(out) == {"tse/cumulative", "tse/e_window", "tse/ema_0_9", "tse/ema_0_999"}
+    assert all(v == 0.0 for v in out.values())
+
+
+def test_single_epoch_all_variants_equal_first_loss():
+    # T=1: cumulative, e_window and every EMA reduce to the single loss.
+    out = compute_tse([2.5])
+    assert all(abs(v - 2.5) < 1e-9 for v in out.values())
 
 
 def test_metric_compute_smoke_returns_four_finite_keys():
