@@ -1,4 +1,4 @@
-## Plan actualizado (27 abril → 22 junio 2026)
+## Plan original (27 abril → 22 junio 2026) — retrospectiva de lo completado
 ### Semana 20-24 abril (retrospectiva)
 - [x] Búsqueda inversa de papers — ver más recientes para mapear qué está hecho y qué no
 - [x] GitHub repo
@@ -21,52 +21,84 @@
 - [x] **Entregable:** Métricas integradas + tests sanity documentados
 - [ ] **Criterio éxito:** Valores coherentes ✓ (tests sintéticos, 130 verdes); overhead <3-4x → se mide en el pilot run (ver "Pasos inmediatos"; desde 2026-06-10 cada run separa `metric_seconds`/`train_seconds` en `summary.json`, así que el ratio se lee directo)
 
-### Semana 3 (18-24 mayo). Experimentos principales
-- [ ] Matriz: rejilla completa congelada 2026-06-09 — 24 celdas, ~960 runs (8 LR × 5 seeds/celda) sobre GPU/cluster. Spec en [[1 - Diseño]] §Matriz de runs. (El subset ~18-24 queda sin efecto: el cómputo ya no aprieta.)
-- [ ] Logging completo: alineación + loss/accuracy
-- [ ] Métricas eficiencia: steps hasta loss objetivo, accuracy final, AUC
-- [ ] **Entregable:** Dataset resultados (CSV/JSON) por configuración
-- [ ] **Criterio éxito:** Datos limpios, reproducibles, sin runs corruptos
+## Plan por fases (actualizado 2026-06-12)
 
-### Semana 4 (25-31 mayo). Análisis correlación + intervención
-- [ ] Spearman/Pearson entre métricas tempranas (épocas 1, 3, 5, 10) y eficiencia final
-- [ ] Robustez across LRs y optimizadores
-- [ ] Visualizaciones: scatter, heatmaps correlación, curvas métrica vs época
-- [ ] Si hay señal: intervención simple (LR adaptativo según alineación) vs baseline
-- [ ] Si no hay señal: documentar resultado negativo honestamente
-- [ ] **Entregable:** Tablas correlación + figuras + resultados intervención (o análisis de ausencia de señal)
+Sustituye a las semanas 3-7 del plan original, obsoletas desde que la rejilla completa fijó el horizonte de septiembre (2026-06-09; el antiguo "Plan B septiembre" pasa a ser el plan). Las fases van en orden de dependencia, no de fechas: la 1 corre en paralelo a la 0, y dentro de la 1 los cuatro frentes son independientes entre sí.
 
-### Semanas 5-6 (1-14 junio). Redacción memoria
-- [ ] Estructura: Introducción, Estado del arte, Metodología, Experimentos y resultados, Conclusiones, Anexos
-- [ ] Estado del arte: adaptar (no copiar) doc GradientInstability
-- [ ] Target 50-80 páginas, claridad > extensión
-- [ ] **Entregable:** Borrador completo
+### Fase 0 — Confirmación del tutor (bloqueante externo)
 
-### Semana 7 (15-21 junio). Revisión + entrega
-- [ ] Borrador a tutor → incorporar feedback
-- [ ] Turnitin + verificar similitud
-- [ ] Formato UPV/ETSINF
-- [ ] Reflexión ODS anexo (1-2 páginas)
-- [ ] Subir memoria EBRON antes 22 junio 14:00
+- [ ] Respuesta a los tres documentos de `pending/`: decide 2 vías vs 3 vías y, con ello, si existen VD4 (`final_test_acc` certificada) y la familia del gap
+- [ ] Si se demora: recordatorio; todo lo de la fase 1 avanza sin ella. Si no llega en un plazo razonable, adoptar el split de 3 vías y declararlo — es la opción de menor riesgo asimétrico según el propio análisis del [[Protocolo de evaluación y plan de análisis]]
+
+### Fase 1 — Trabajo no bloqueado (en paralelo a la fase 0)
+
+1. **Pipeline de análisis** (`src/analysis/` o equivalente): implementar el plan estadístico en código antes de congelarlo — carga de `reports/`, Spearman por celda con censura por rangos, Wilcoxon cross-celda (etapa 2), familias BH + cota BY, parciales de H2, no-inferioridad de H4, binomial de H5, figuras preespecificadas.
+	- **Verificación (dry-run del preregistro):** datos sintéticos con efecto plantado (ρ conocido) → el pipeline lo recupera; con ρ = 0 → falsos positivos ≈ nominal tras BH. Si algo del plan no es computable tal como está escrito, se descubre aquí, antes de congelar — no sobre los datos reales.
+2. **Cola de lectura, priorizada por lo que bloquea la congelación.** Primero los 6 to-read de la tabla de signos: GSNR (Liu), Coherent Gradients + Making Coherence (m-coherence), GWA (Hölzl), GNS (McCandlish), TSE (Ru) — la tabla del [[Plan de análisis congelado]] exige revisar signos contra los papers al congelar. Después, las citas "de memoria" de los pending docs sin nota propia (Jiang 2020, Bouthillier 2021, Holmes & Friston, Lakens, Zou). Los de optimizadores (Adam, RMSProp) y NTK pueden esperar al estado del arte.
+	- **Entregable:** tabla de signos verificada contra los papers + citas de los pending docs comprobadas.
+3. **Redacción de lo que no depende de resultados:** estructura real en `thesis/main.tex` (hoy es la plantilla de ejemplo), introducción, estado del arte (desde las notas de `Papers/`), metodología (desde [[1 - Diseño]] y [[2 - Decisiones]] — el contenido ya está escrito, es pasarlo a memoria). Target 50-80 páginas, claridad > extensión.
+4. **Logística de cluster:** entorno reproducible en nodo (uv), datasets descargados, scripts de lanzamiento (job arrays / troceado por dataset), smoke test de 1 run real en GPU.
+	- **Criterio de éxito:** un run de la matriz corre en el cluster de principio a fin sin intervención manual.
+
+### Fase 2 — Implementar el protocolo de evaluación (al cerrar la fase 0)
+
+- [ ] Split de 3 vías (`data.py`: 3 loaders, split estratificado con semilla fija) + lecturas suavizadas de VD1/VD3 (`train.py`) + gap de generalización (pasada `evaluate()` final sobre subset fijo de train) — un solo cambio conceptual: los tres tocan la evaluación
+- [ ] **Verificación:** tests existentes verdes + run corto de MNIST → `final_gap_loss` ≈ 0 al principio y crece con épocas extra; columnas nuevas presentes en `summary.json`
+- [ ] Registrar en [[2 - Decisiones]] y actualizar [[1 - Diseño]] (setup de entrenamiento + VD)
+- [ ] Si el tutor opta por 2 vías: registrar igualmente y podar el plan de análisis (VD1-VD3 sobre test, sin VD4 ni gap)
+
+### Fase 3 — Pilot de calibración + congelación del plan
+
+- [ ] Lanzar los 24 runs (con el protocolo de la fase 2 ya dentro) y leer el report:
+	```bash
+	uv run python src/run_pilot.py            # reanudable; --dataset para trocear por nodo
+	uv run python src/run_pilot.py --status
+	uv run python src/run_pilot.py --report   # tabla de calibración por dataset
+	```
+- [ ] Calibrar con los criterios preescritos (decisión 2026-06-09): presupuesto = meseta + margen, múltiplo de 20; umbral cruzado al 30-60% del presupuesto por CNN/ResNet → editar los 24 YAML **y** `config.py::DATASET_BUDGET`, registrar valores y evidencia en [[2 - Decisiones]]
+- [ ] Chequeos adicionales que el pilot cierra: overhead <3-4x (`metric_seconds`/`train_seconds`), ninguna métrica falla sistemáticamente, redundancia GNS ≈ B·NGV, centrado de la rejilla de LR, GPU-h proyectadas para ~960 runs, suelo de ajuste del gap (distribución de `final_train_eval_acc`)
+- [ ] **Congelar el plan de análisis:** valores del pilot + tabla de signos verificada → mover [[Plan de análisis congelado]] a `docs/research/`, registrar la congelación con fecha
+- [ ] **Criterio de éxito:** presupuestos/umbrales registrados con su evidencia; plan congelado y fechado. A partir de aquí no se mira ningún resultado de matriz sin plan congelado
+
+### Fase 4 — Matriz completa (~960 runs)
+
+- [ ] Lanzar por tandas (troceado por dataset/nodo), monitorizar con `--status`, relanzar pendientes (el launcher reanuda)
+- [ ] QA continuo, descriptivo y sin mirar hipótesis: recuento de divergencias y censura por celda, missingness por métrica (>5% en una celda → marcarla, según el plan), runs sin `summary.json` → relanzar
+- [ ] Backup incremental de `reports/` fuera del cluster
+- [ ] **Criterio de éxito:** 24/24 celdas completas, dataset íntegro y copiado
+
+### Fase 5 — Análisis
+
+- [ ] Ejecutar el pipeline (validado en fase 1) sobre los datos reales: mapa descriptivo por celda + contrastes confirmatorios H1-H6 + figuras preespecificadas (val↔test, ρ vs ventana, heatmaps por familia)
+- [ ] Todo lo no preespecificado se reporta etiquetado como exploratorio
+- [ ] Poda de métricas redundantes con prueba (GNS≈B·NGV, clúster del Gram) para la lista *reportada*
+- [ ] Si hay señal fuerte y sobra tiempo: intervención simple (LR adaptativo por alineación) vs baseline; opción de cierre: confirmar la métrica destacada en seeds no miradas
+- [ ] Si no hay señal: resultado negativo documentado con su nota de potencia — resultado válido del diseño
+- [ ] **Entregable:** tablas y figuras finales + texto de resultados con etiquetas confirmatorio/exploratorio
+
+### Fase 6 — Redacción final y cierre
+
+- [ ] Resultados + discusión (las limitaciones ya están redactadas en los docs metodológicos) + conclusiones
+- [ ] Notas de honestidad de los pending docs a la memoria (Tiny-ImageNet val-como-test, F1 ≈ acc, split fijo compartido)
+- [ ] Formato UPV/ETSINF, anexo ODS (1-2 páginas), Turnitin
+- [ ] Borrador al tutor → incorporar feedback → entrega EBRON
 - [ ] Slides defensa (10-15, ~15 min)
-- [ ] **Entregable:** Memoria entregada + presentación lista
+- [ ] **Entregable:** memoria entregada + presentación lista
 
-### Plan B septiembre
-Si correlación + intervención + redacción no caben antes 22 junio: cortar en mejor punto, defender lo hecho en septiembre con experimentos extendidos.
+## Estado actual (2026-06-12)
 
-## Estado actual (2026-06-09)
-
-- **Setup:** decisiones cerradas (datasets, arquitecturas, optimizadores) — ver [[1 - Diseño]] §Diseño experimental. Rejilla completa congelada 2026-06-09: 24 celdas, ~960 runs.
-- **Repo:** pipeline single-run completo (config YAML, datos, modelos, bucle de entrenamiento, logging a parquet), métricas implementadas en `src/metrics/` con runner integrado, y launcher de matriz (`src/run_matrix.py`) con los 24 YAML de celdas en `experiments/`. 130 tests pasan.
-- **Lectura:** 6/16 papers (`status: read`). Cubierto el núcleo métrica/baseline; pendientes los teóricos (NTK, GSNR, Coherent Gradients) y los de optimizadores (Adam, RMSProp). Detalle abajo en "Cola de lectura".
-- **Calendario:** semanas 1-2 completadas (métricas + sanity checks). Las fechas de mayo quedaron obsoletas al fijar el timeline de septiembre con la rejilla completa (2026-06-09); la secuencia de semanas 3-7 sigue válida como orden de trabajo. Siguiente paso: pilot run, que además cierra el criterio de overhead pendiente.
+- **Decisiones:** ninguna pendiente interna ([[2 - Decisiones]]). El único bloqueante es externo: las tres propuestas metodológicas en `pending/` (protocolo de evaluación, gap de generalización, plan de análisis), enviadas al tutor el 2026-06-10/11.
+- **Repo:** pipeline single-run completo (config YAML, datos, modelos, bucle de entrenamiento, logging a parquet), métricas en `src/metrics/` con runner integrado, launchers de matriz y pilot, timing de dos relojes. 130 tests pasan. Falta el código de análisis estadístico (fase 1.1) y los cambios del protocolo de evaluación (fase 2, tras el tutor).
+- **Pilot:** no lanzado — espera al protocolo de evaluación (el split entra *antes* de relanzar el pilot, no después; ver [[Protocolo de evaluación y plan de análisis]] §Implicaciones).
+- **Lectura:** 6/16 papers (`status: read`). Cubierto el núcleo métrica/baseline; 6 de los 10 pendientes son los de la tabla de signos (prioridad de la fase 1.2). Detalle abajo en "Cola de lectura".
+- **Memoria:** plantilla ETSINF compilando, sin contenido propio aún (fase 1.3).
 - **Lista de métricas:** cerrada con la implementación — variabilidad (normalized variance, GNS simple, GSNR) + alineación/coherencia (m-coherence, stiffness, gradient disparity, gradient confusion, GWA), más TSE como baseline obligatorio.
 
 ## Pasos inmediatos
 
-Los bloqueantes previos (lista de métricas, budget de cómputo, grid de hiperparámetros) se cerraron el 2026-06-09 — registro en [[2 - Decisiones]]. Quedan dos antes de lanzar la rejilla completa:
-
-1. **Pilot de calibración.** Un run por celda (24), LR centrado, seed 0, presupuesto doblado. Sustituye al pilot reducido MNIST×FC×SGD: calibrar presupuestos y umbrales exige ver todas las celdas, y de paso valida el pipeline, el overhead real de las métricas (<3-4x) y las GPU-h por run que fijan el coste total (ambos medibles desde 2026-06-10: cada run loguea `total/metric/train_seconds` y el `--report` muestra el tiempo por celda — decisión "Timing por run" en [[2 - Decisiones]]). Protocolo y justificación en [[2 - Decisiones]]. Cómo ejecutarlo:
+1. **Seguimiento al tutor** (fase 0) — su respuesta decide la forma final de VD1-VD4 y desbloquea fases 2-3.
+2. **Mientras tanto, fase 1 por apalancamiento:** el pipeline de análisis (1.1) y la lectura de la tabla de signos (1.2) son lo que más acerca la congelación del plan; redacción (1.3) y logística de cluster (1.4) rellenan el resto del paralelo. Nada de la fase 1 depende del tutor.
+3. **Pilot de calibración** (fase 3, en cuanto el protocolo esté dentro). Un run por celda (24), LR centrado, seed 0, presupuesto doblado. Sustituye al pilot reducido MNIST×FC×SGD: calibrar presupuestos y umbrales exige ver todas las celdas, y de paso valida el pipeline, el overhead real de las métricas (<3-4x) y las GPU-h por run que fijan el coste total (ambos medibles desde 2026-06-10: cada run loguea `total/metric/train_seconds` y el `--report` muestra el tiempo por celda — decisión "Timing por run" en [[2 - Decisiones]]). Protocolo y justificación en [[2 - Decisiones]]. Cómo ejecutarlo:
 
    ```bash
    uv run python src/run_pilot.py                         # lanza los 24 (reanudable: relanzar ejecuta solo pendientes)
@@ -76,7 +108,6 @@ Los bloqueantes previos (lista de métricas, budget de cómputo, grid de hiperpa
    ```
 
    Con el report en la mano: fijar presupuesto (meseta + margen, múltiplo de 20) y umbral (cruzado al 30–60% del presupuesto por CNN/ResNet) editando los 24 YAML de celda **y** `config.py::DATASET_BUDGET`, registrar los valores finales en [[2 - Decisiones]], y lanzar la rejilla con `run_matrix.py`.
-2. **Preregistrar análisis estadístico.** Spearman primaria + Benjamini-Hochberg/FDR. Documentar antes de ver resultados, evita p-hacking ex-post.
 
 
 ## Decisiones
