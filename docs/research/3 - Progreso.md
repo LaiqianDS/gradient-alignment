@@ -97,43 +97,35 @@ Sustituye a las semanas 3-7 del plan original, obsoletas desde que la rejilla co
 ## Pasos inmediatos
 
 1. **Seguimiento al tutor** (fase 0) — queda solo la confirmación expresa del gap; VD1-VD4 ya están fijadas e implementadas.
-2. **Mientras tanto, fase 1 por apalancamiento:** el pipeline de análisis (1.1) y la lectura de la tabla de signos (1.2) son lo que más acerca la congelación del plan; redacción (1.3) y logística de cluster (1.4) rellenan el resto del paralelo. Nada de la fase 1 depende del tutor.
-3. **Pilot de calibración** (fase 3, en cuanto el protocolo esté dentro). Un run por celda (24), LR centrado, seed 0, presupuesto doblado. Sustituye al pilot reducido MNIST×FC×SGD: calibrar presupuestos y umbrales exige ver todas las celdas, y de paso valida el pipeline, el overhead real de las métricas (<3-4x) y las GPU-h por run que fijan el coste total (ambos medibles desde 2026-06-10: cada run loguea `total/metric/train_seconds` y el `--report` muestra el tiempo por celda — decisión "Timing por run" en [[2 - Decisiones]]). Protocolo y justificación en [[2 - Decisiones]]. Cómo ejecutarlo:
-
-   ```bash
-   uv run python src/run_pilot.py                         # lanza los 24 (reanudable: relanzar ejecuta solo pendientes)
-   uv run python src/run_pilot.py --dataset tiny_imagenet # opcional: trocear por nodo del cluster (--model/--optimizer igual)
-   uv run python src/run_pilot.py --status                # progreso hecho/pendiente
-   uv run python src/run_pilot.py --report                # al acabar: tabla de calibración por dataset
-   ```
-
-   Con el report en la mano: fijar presupuesto (meseta + margen, múltiplo de 20) y umbral (cruzado al 30–60% del presupuesto por CNN/ResNet) editando los 24 YAML de celda **y** `config.py::DATASET_BUDGET`, registrar los valores finales en [[2 - Decisiones]], y lanzar la rejilla con `run_matrix.py`.
-
-
-## Decisiones
-
-El registro de decisiones (pendientes + log de las tomadas) vive en [[2 - Decisiones]].
+2. **Mientras tanto, fase 1 por orden de impacto:** el pipeline de análisis (1.1) y la lectura de la tabla de signos (1.2) son lo que más acerca la congelación del plan; redacción (1.3) y logística de cluster (1.4) rellenan el resto del paralelo. Nada de la fase 1 depende del tutor.
+3. **Pilot de calibración** (fase 3, ya desbloqueado): un run por celda (24), LR centrado, seed 0, presupuesto doblado. Sustituye al pilot reducido MNIST×FC×SGD: calibrar presupuestos y umbrales exige ver todas las celdas. De paso valida el pipeline, el overhead real de las métricas (<3-4x) y las GPU-h por run que fijan el coste total (cada run separa `total/metric/train_seconds` desde 2026-06-10). Comandos, criterios de calibración y justificación: en la fase 3 de arriba y en [[2 - Decisiones]].
 
 
 ## Cola de lectura
 
-### No leídos
+El `status` de cada paper vive en su frontmatter (`Papers/`); esta es su foto estática, ordenada por prioridad. 6/16 leídos.
 
-```dataview
-TABLE relevance AS "Prio", tfg_note AS "Por qué"
-FROM "docs/research/Papers"
-WHERE status = "to-read"
-SORT file.name ASC
-```
+### No leídos (10)
 
-### Leídos
+- **[[Gradient-Weight Alignment as a Train-Time Proxy for Generalization in Classification Tasks|Hölzl 2025]]** (high) — Origen de `gwa` (coseno entre el gradiente per-sample y los pesos del clasificador final; casi gratis, last-layer; Pearson 0.99 con test accuracy). Competidor más reciente (2025), uno de los 3 papers más comparables.
+- **[[Making Coherence Out of Nothing At All - Measuring the Evolution of Gradient Alignment|Chatterjee & Zielinski 2020]]** (high) — Origen de `m_coherence`: formalización escalable y O(m) de la Coherent Gradients Hypothesis (coherencia per-sample normalizada, rango [0, m]; 1 = límite ortogonal). Núcleo de la familia alineación.
+- **[[On the Ineffectiveness of Variance Reduced Optimization for Deep Learning|Defazio & Bottou 2019]]** (high) — Muestra empíricamente que SVRG no reduce la varianza en redes modernas (la ratio de varianza SVRG/SGD supera 1). Cierra el triángulo del eje varianza con SVRG y Faghri: la varianza es señal diagnóstica, no un objetivo a minimizar.
+- **[[Speedy Performance Estimation for Neural Architecture Search|Ru 2021]]** (high) — Origen del baseline `tse_ema` (suma exponencialmente ponderada de la train loss, coste cero). Miembro del nivel 0 junto a val-acc@f y val-loss@f. Uno de los 3 papers más comparables.
+- **[[Understanding Why Neural Networks Generalize Well Through GSNR of Parameters|Liu 2020]]** (high) — Origen de `gsnr` (gradient signal-to-noise ratio por parámetro; GSNR alto → menor gap de generalización), con marco teórico OSGR. Eje varianza; es el inverso conceptual de la varianza normalizada de Faghri.
+- **[[A Theory of Neural Tangent Kernel Alignment and Its Influence on Training|Shan & Bordelon 2021]]** (medium) — Origen de `ntk_alignment` (kernel-target alignment) y soporte teórico del eje alineación: el NTK se alinea con la tarea durante el entrenamiento y eso acelera el aprendizaje, tanto más cuanto más profunda es la red.
+- **[[An Empirical Model of Large-Batch Training|McCandlish 2018]]** (medium) — Origen de `gns_simple` (gradient noise scale: ruido del gradiente relativo a su norma) que predice a priori el batch size crítico. Eje varianza; caso canónico de métrica de ruido → elección de hiperparámetro.
+- **[[Coherent Gradients An Approach to Understanding Generalization in Gradient Descent-based Optimization|Chatterjee 2020]]** (medium) — Coherent Gradients Hypothesis: ejemplos similares producen gradientes similares, y las direcciones que muchos ejemplos refuerzan son las que generalizan. Marco conceptual de la familia alineación (su estimador operativo es m-coherence).
+- **[[Adam - A Method for Stochastic Optimization|Kingma & Ba 2015]]** (low) — Optimizador del sweep (SGD vs Adam), no métrica. Normaliza el gradiente por una estimación de su segundo momento —un SNR por parámetro—, intuición que motiva el eje varianza del TFG.
+- **[[RMSProp - Divide the gradient by a running average of its recent magnitude|Tieleman & Hinton 2012]]** (low) — Optimizador adaptativo: divide el gradiente por la raíz de un EMA de su magnitud cuadrática. Related-work, no métrica ni parte del sweep; ese divisor (SNR por parámetro) es el antecedente conceptual del eje varianza.
 
-```dataview
-TABLE relevance AS "Prio", tfg_note AS "Por qué"
-FROM "docs/research/Papers"
-WHERE status = "read"
-SORT file.name ASC
-```
+### Leídos (6)
+
+- **[[A Study of Gradient Variance in Deep Learning|Faghri 2020]]** (high) — Origen de `normalized_variance` (NGV: varianza del gradiente relativa a su media, inverso del SNR). Eje varianza; hallazgo contraintuitivo clave: la NGV crece durante el entrenamiento en CIFAR/ImageNet en vez de decrecer.
+- **[[Disparity Between Batches as a Signal for Early Stopping|Forouzesh & Thiran 2021]]** (high) — Origen de `gradient_disparity` (distancia L2 media entre gradientes de batches independientes; Pearson 0.957 entre la GD train-train y la GD train-val, lo que justifica la versión train-train como proxy). Uno de los 3 papers más comparables.
+- **[[Stiffness - A New Perspective on Generalization in Neural Networks|Fort 2019]]** (high) — Origen de `stiffness` (coseno/signo entre gradientes per-sample de dos ejemplos: alto si actualizar con uno mejora el otro), desagregado within/between clase. Operador base de la familia alineación; decae al empezar el overfitting.
+- **[[The Impact of Neural Network Overparameterization on Gradient Confusion and Stochastic Gradient Descent|Sankararaman 2020]]** (high) — Origen de `gradient_confusion` (mínimo coseno entre gradientes de pares de ejemplos; más confusión = SGD más lento). Caso worst-case de la familia alineación; la sobreparametrización por anchura la reduce.
+- **[[An overview of gradient descent optimization algorithms|Ruder 2017]]** (medium) — Survey didáctico de variantes de SGD (momentum, Adagrad, RMSProp, Adam). Background: respalda acotar el sweep a SGD+Adam y medir sobre el gradiente bruto. No aporta métrica.
+- **[[Accelerating Stochastic Gradient Descent using Predictive Variance Reduction|Johnson & Zhang 2013]]** (low) — Stochastic Variance Reduced Gradient: reduce la varianza del gradiente con un control variate para acelerar SGD. Related-work del eje varianza; su supuesto de varianza decreciente falla en deep learning real → motiva medir la varianza en vez de reducirla.
 
 ## Backlog / ideas sueltas
 - Toy problem para visualización pedagógica de métricas
