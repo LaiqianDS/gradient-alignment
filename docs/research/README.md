@@ -35,7 +35,6 @@
 ## Pendiente de cerrar (carpeta `pending/` en la raíz del repo)
 
 - **[[Plan de análisis congelado]]** — borrador del preregistro estadístico; se congela y se mueve a `docs/` tras el pilot de calibración.
-- **[[Gap de generalización como variable objetivo]]** — propuesta enviada al tutor; espera su confirmación expresa.
 
 ## Código (raíz del repo)
 

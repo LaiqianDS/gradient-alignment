@@ -94,11 +94,24 @@ Sustituye a las semanas 3-7 del plan original, obsoletas desde que la rejilla co
 - **Memoria:** plantilla ETSINF compilando, sin contenido propio aún (fase 1.3).
 - **Lista de métricas:** cerrada con la implementación — variabilidad (normalized variance, GNS simple, GSNR) + alineación/coherencia (m-coherence, stiffness, gradient disparity, gradient confusion, GWA), más TSE como baseline obligatorio.
 
-## Pasos inmediatos
+## Pasos inmediatos (rev. 2026-06-14)
 
-1. **Seguimiento al tutor** (fase 0) — queda solo la confirmación expresa del gap; VD1-VD4 ya están fijadas e implementadas.
-2. **Mientras tanto, fase 1 por orden de impacto:** el pipeline de análisis (1.1) y la lectura de la tabla de signos (1.2) son lo que más acerca la congelación del plan; redacción (1.3) y logística de cluster (1.4) rellenan el resto del paralelo. Nada de la fase 1 depende del tutor.
-3. **Pilot de calibración** (fase 3, ya desbloqueado): un run por celda (24), LR centrado, seed 0, presupuesto doblado. Sustituye al pilot reducido MNIST×FC×SGD: calibrar presupuestos y umbrales exige ver todas las celdas. De paso valida el pipeline, el overhead real de las métricas (<3-4x) y las GPU-h por run que fijan el coste total (cada run separa `total/metric/train_seconds` desde 2026-06-10). Comandos, criterios de calibración y justificación: en la fase 3 de arriba y en [[2 - Decisiones]].
+**Marcapasos del calendario:** la cadena pilot → matriz → análisis, con la matriz (~960 runs) como palo largo de septiembre. El "ahora" ataca lo que gatea el pilot, en dos carriles que no se esperan entre sí.
+
+**Carril externo (solo tú):**
+
+- [ ] **Seguimiento al tutor por el gap** (fase 0) — único bloqueante externo y *marcapasos del pilot*: el gap toca la evaluación final y el pilot calibra su suelo de ajuste (`final_train_eval_acc` por celda); lanzar el pilot antes de cerrarlo obliga a relanzar las 24 celdas o a perder esa calibración. Urgente, no rutina. Hedge si el tutor se demora: implementar el gap igualmente (~1h, solo añade una pasada de `evaluate()` + 4 claves al summary) para que el pilot salga completo pase lo que pase — va contra la decisión "no implementar sin sí expreso", queda como tu llamada.
+- [ ] **Asegurar acceso a cluster/GPU** (fase 1.4) — smoke test de 1 run real; el pilot lo necesita para correr de verdad.
+
+**Carril paralelo (sin dependencia del tutor), fase 1 por impacto:**
+
+- [ ] **Pipeline de análisis** (1.1) — `src/analysis/` + dry-run sintético (ρ plantado → se recupera; ρ=0 → falsos positivos nominales tras BH). Máxima palanca: el dry-run descongela el riesgo de la congelación (un contraste del preregistro no computable aparece aquí, no sobre los datos reales). Se reusa en fase 5.
+- [ ] **Verificar tabla de signos** (1.2) — los 6 PDFs high-priority contra los signos de H6; otra dependencia de la congelación, independiente del tutor.
+- [ ] **Redacción no dependiente de resultados** (1.3) + **scripts de cluster** (1.4) — rellenan el resto del paralelo.
+
+**A continuación (orden de dependencia):** cerrado el gap → (si va) implementarlo → lanzar el pilot una vez, completo → calibrar presupuestos/umbrales desde `--report` (criterios 2026-06-09) + tabla de signos verificada → **congelar el plan** (mover [[Plan de análisis congelado]] a `docs/research/`, fechar en [[2 - Decisiones]]) → matriz por tandas → análisis (pipeline ya hecho) + resultados.
+
+**Detalle del pilot** (fase 3, ya desbloqueado): un run por celda (24), LR centrado, seed 0, presupuesto doblado. Sustituye al pilot reducido MNIST×FC×SGD: calibrar presupuestos y umbrales exige ver todas las celdas. De paso valida el pipeline, el overhead real de las métricas (<3-4x) y las GPU-h por run que fijan el coste total (cada run separa `total/metric/train_seconds` desde 2026-06-10). Comandos, criterios de calibración y justificación: en la fase 3 de arriba y en [[2 - Decisiones]].
 
 
 ## Cola de lectura

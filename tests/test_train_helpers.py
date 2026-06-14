@@ -49,7 +49,7 @@ def test_epoch_mean_losses_full_epochs():
 
 def test_epoch_mean_losses_partial_epoch_running_mean():
     # 1 full epoch + 2 of 3 steps: the in-progress epoch contributes its
-    # running mean so mid-epoch (early-window) probes are defined.
+    # running mean, so the helper is defined for any loss-history length.
     assert epoch_mean_losses([1.0, 2.0, 3.0, 4.0, 5.0], 3) == [2.0, 4.5]
 
 
@@ -71,7 +71,7 @@ def test_epoch_mean_losses_feeds_tse_epoch_semantics():
 def _epoch_df():
     # Four epoch rows; progress_frac = (epoch+1)/4, plus a metric and val cols.
     return pd.DataFrame([
-        {"granularity": "epoch", "epoch": e, "progress_frac": (e + 1) / 4,
+        {"epoch": e, "progress_frac": (e + 1) / 4,
          "elapsed_seconds": 10.0 * (e + 1),
          "mcoh/global": float(e), "val_loss": loss, "val_acc": acc}
         for e, (loss, acc) in enumerate([(1.0, 0.3), (0.5, 0.6), (0.25, 0.8), (0.2, 0.85)])
@@ -118,7 +118,7 @@ def test_efficiency_summary_threshold_ignores_one_epoch_spike():
     # curve only reaches 0.75 at the sustained rise near the end.
     accs = [0.2, 0.3, 0.8, 0.4, 0.5, 0.9, 0.95]
     df = pd.DataFrame([
-        {"granularity": "epoch", "epoch": e, "elapsed_seconds": float(e),
+        {"epoch": e, "elapsed_seconds": float(e),
          "val_loss": 1.0, "val_acc": a}
         for e, a in enumerate(accs)
     ])

@@ -39,8 +39,6 @@ class Config:
     # [M, P] per-sample matrix is ~ M * num_params * 4 bytes — keep small on
     # big models (see train.py's memory warning).
     probe_size: int = 256
-    metric_every_steps: int = 100   # cadence inside the early window
-    early_window_frac: float = 0.10  # densified region (fraction of total steps)
 
     # --- efficiency target ----------------------------------------------
     threshold_acc: float | None = None  # val-acc level for "epochs-to-threshold"
@@ -61,8 +59,7 @@ _SCALAR_FLAGS = [
     ("dataset", str), ("model", str), ("optimizer", str),
     ("lr", float), ("batch_size", int), ("epochs", int),
     ("momentum", float), ("weight_decay", float), ("seed", int),
-    ("probe_size", int), ("metric_every_steps", int),
-    ("early_window_frac", float), ("out_dir", str), ("device", str),
+    ("probe_size", int), ("out_dir", str), ("device", str),
 ]
 
 
@@ -144,7 +141,5 @@ FIXED_KNOBS = {
     "momentum": 0.9,
     "weight_decay": 0.0,
     "probe_size": 256,
-    "metric_every_steps": 100,
-    "early_window_frac": 0.10,
     "windows": [0.05, 0.10, 0.25, 0.50, 1.0],
 }

@@ -62,7 +62,7 @@ RMSProp se presenta como una receta práctica para entrenamiento por mini-batche
 
 **Logging.** Por capa se registran tres escalares: norma de $\text{MeanSquare}$ (`rmsprop/ms_norm_layer/{name}`), *learning rate* efectivo $\eta/\sqrt{\text{MeanSquare}+\epsilon}$ promediado o en sus percentiles (`rmsprop/lr_eff_layer/{name}`) y razón $g/\sqrt{\text{MeanSquare}+\epsilon}$ como SNR local. A nivel global se reporta un histograma sobre todos los parámetros del modelo para detectar colas largas (parámetros con $\text{MeanSquare}$ minúscula y por tanto pasos efectivos enormes) y desbalances inter-capa.
 
-**Granularidad temporal.** Por *step* en la fase inicial del entrenamiento (primeras 5–10 épocas), donde la EMA aún no se ha estabilizado y la dinámica del divisor es informativa; por época en régimen estacionario. Por capa siempre, dado que la heterogeneidad inter-capa es uno de los motivos originales de RMSProp.
+**Granularidad temporal.** Por época. Por capa siempre, dado que la heterogeneidad inter-capa es uno de los motivos originales de RMSProp.
 
 **Coste.** Cero forward/backward adicionales: todo el diagnóstico se obtiene leyendo `optimizer.state[p]['square_avg']` después de `step()`, con coste $O(|W|)$ en operaciones vectoriales y memoria ya reservada por el propio optimizador.
 

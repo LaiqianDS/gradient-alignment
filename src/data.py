@@ -186,6 +186,19 @@ def build_probe(
     return X.to(device), y.to(device)
 
 
+def build_train_eval_loader(train_set: Subset, batch_size: int, size: int) -> DataLoader:
+    """Fixed class-stratified train subset (test-sized, SPLIT_SEED so it is identical across runs) for the gap's train term."""
+    targets = torch.as_tensor(train_set.dataset.targets)[train_set.indices]
+    _, eval_idx = stratified_split_indices(targets, size, SPLIT_SEED)
+    return DataLoader(
+        Subset(train_set, eval_idx),
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=0,
+        drop_last=False,
+    )
+
+
 if __name__ == "__main__":
     tr, va, te, ncls, shape = build_dataloaders("mnist", batch_size=32, seed=0)
     xb, yb = next(iter(tr))

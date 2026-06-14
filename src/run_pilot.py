@@ -189,7 +189,7 @@ def print_report(runs: list[PilotRun]) -> None:
                 continue
             summary = json.loads((r.dir / "summary.json").read_text())
             traj = pd.read_parquet(r.dir / "trajectory.parquet")
-            epoch_df = traj[traj["granularity"] == "epoch"].sort_values("epoch")
+            epoch_df = traj.sort_values("epoch")
             hit = summary["epochs_to_threshold"]
             secs = summary.get("total_seconds")  # absent in pre-timing summaries
             print(f"  {r.model:<9} {r.optimizer:<5} "

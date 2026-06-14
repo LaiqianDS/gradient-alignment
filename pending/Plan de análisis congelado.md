@@ -10,7 +10,7 @@ Este documento fija, antes de mirar ningún resultado, cómo se analizan los ~96
 
 **Congela:** estadístico primario y su nivel de inferencia, VD primaria, ventana primaria, reglas de censura y exclusión, familias de corrección múltiple, contraste por hipótesis y nivel de agregación.
 
-**No congela:** los valores numéricos de presupuesto y umbral por dataset (los fija el pilot de calibración; el plan los referencia paramétricamente) ni la lista de métricas *reportada* en la memoria (poda con prueba a posteriori, decisión "Se mide todo, siempre"; la poda no altera qué se contrasta, solo qué se destaca).
+**No congela:** los valores numéricos de presupuesto y umbral por dataset (los fija el pilot de calibración; el plan los referencia paramétricamente) ni la lista de métricas *reportada* en la memoria (poda con prueba a posteriori, decisión "Poda de métricas redundantes, con prueba"; la poda no altera qué se contrasta, solo qué se destaca).
 
 **Por qué el pilot no contamina este plan** (tres salvaguardas):
 
@@ -38,9 +38,12 @@ La curva de monitorización es la de **val**. VD1 y VD3 se leen sobre la curva *
 | **VD2** | AUC de la val loss dentro del presupuesto | cruda | caveat de sobreconfianza (abajo) |
 | **VD3** | mejor val loss dentro del presupuesto | suavizada | caveat de sobreconfianza (abajo) |
 | **VD4** | `final_test_acc`, evaluada una única vez al final del run | — | la variable objetivo certificada |
+| **VD5 (gap, primaria de generalización)** | `final_gap_loss = final_test_loss − final_train_eval_loss` (positivo = sobreajuste) | — | subconjunto fijo del train (test-sized, `SPLIT_SEED`); familia propia (suelo + parcial) |
+| **VD6** | `final_gap_acc = final_train_eval_acc − final_test_acc` | — | robustez del gap, mismo sentido |
 
 - **Excluida del análisis confirmatorio: `seconds_to_threshold`.** El wall-clock en cluster compartido está confundido por contención (decisión "Timing por run"); solo exploratorio, restando la columna acumulada `metric_seconds`, y nunca para afirmaciones cross-celda.
 - **Caveat sobre VD2/VD3:** la val loss puede subir por sobreconfianza mientras la val accuracy sigue mejorando (Ru et al., arXiv:2006.04492, Ap. C.1–C.2), sobre todo en la cola del presupuesto; eso sesga el AUC y la best loss como proxies de eficiencia. VD1 (basada en accuracy) es primaria también por esto; VD2/VD3 se interpretan con este sesgo declarado.
+- **VD5/VD6 (generalización, decisión 2026-06-14, [[2 - Decisiones]]):** escalares al final del run sobre un subconjunto fijo y estratificado del train (tamaño del test, `SPLIT_SEED`, idéntico en todos los runs). La loss es primaria (escala en que están formuladas las garantías de GSNR/disparity); la accuracy acompaña como robustez. Forman **familia FDR propia** con dos controles pre-registrados: suelo de ajuste (los contrastes del gap excluyen runs con `final_train_eval_acc` por debajo de un mínimo calibrado en el pilot; esos runs siguen en las demás familias) y correlación parcial por `final_train_eval_loss` (¿predice la métrica el gap más allá del ajuste alcanzado?).
 
 ### Predictores
 
@@ -68,7 +71,7 @@ El nivel 0 debe ser *el mejor predictor obtenible sin instrumentar el gradiente*
 
 ### Ventanas
 
-- **Primaria: f = 0,10.** Coincide con `early_window_frac` y es la apuesta de H4 (la señal satura pronto).
+- **Primaria: f = 0,10.** Es la apuesta de H4 (la señal satura pronto).
 - **Secundarias (barrido H4):** f ∈ {0,05, 0,25, 0,50}.
 - **f = 1,0:** solo referencia de saturación; no es "temprana" y no entra en ninguna afirmación predictiva.
 
@@ -93,6 +96,7 @@ Complementos:
 - **Celda degenerada (VD1):** celda con >80% de runs censurados, o con menos de 2 valores distintos de VD1, sale de los análisis de VD1 para *todas* las métricas — su ρ̂ no es informativo y solo mete ruido en la etapa 2; se sostiene en VD2/VD3 y se reporta cuáles son. [[1 - Diseño]] ya anticipa FC sobre CIFAR-100 y Tiny-ImageNet. La etapa 2 opera sobre las celdas elegibles restantes.
 - **Exclusión total (solo fallo técnico):** runs sin `summary.json` no existen para el launcher (se relanzan, no se analizan). No hay más causas de exclusión total preespecificadas.
 - **Missingness por métrica:** si una métrica falla en runtime (`measure` aísla fallos), ese run sale de los tests de *esa* métrica únicamente. Se reporta el recuento; >5% de fallos de una métrica en una celda se señala como descarte silencioso de facto y la celda se marca para esa métrica.
+- **Suelo de ajuste (solo familia del gap, VD5/VD6):** los contrastes del gap excluyen runs cuyo `final_train_eval_acc` no alcance un mínimo calibrado en el pilot y fijado antes de lanzar la rejilla (análogo al descarte de modelos no convergidos de Jiang et al.). Esos runs **siguen contando** para velocidad y rendimiento final. A presupuesto fijo el gap crudo confunde sobreajuste con cuánto se ajustó el train; el suelo (exclusión) más la parcial por `final_train_eval_loss` (§Estadístico) son la respuesta analítica al confound, más débil que el control experimental y declarada como limitación.
 
 ## Corrección por comparaciones múltiples
 
@@ -137,6 +141,7 @@ Se reportan q-valores (BH y, como cota, BY) junto a los p crudos. Lo que solo so
 | **H4** — suficiencia temprana | no-inferioridad: Wilcoxon unilateral sobre dᵢ − δ | "satura pronto" si se rechaza H₀: mediana(d) ≥ δ, con δ = 0,1; solo métricas que pasaron H2; puede salir "inconcluso" y se reporta como tal |
 | **H5** — invariancia cross-optimizador | binomial exacto contra 0,5 sobre los 12 pares de celdas SGD↔Adam (seeds compartidas) | concordancia de signo de ρ por par; se reporta siempre junto a la mediana de \|ρ\| (el signo de un ρ ≈ 0 es una moneda al aire) |
 | **H6** — mecanismo, con signo | concordancia con la tabla de signos (congelada abajo, antes de ver datos) | mediana de ρ cross-celda y fracción de celdas con el signo predicho |
+| **Gap — doble disociación** (generalización) | Wilcoxon cross-celda sobre las parciales (controladas por `final_train_eval_loss`), familia FDR propia del gap; suelo de ajuste por `final_train_eval_acc` (§Censura) | las métricas que reclaman generalización (GSNR, GWA, gradient disparity, stiffness, m-coherence) se asocian más al gap que al AUC de velocidad, y las de velocidad al revés; la doble disociación sobre parciales es más fuerte que cualquier ρ individual. H1/H2/H6 corren también contra VD5/VD6 |
 
 Detalle de H4: dᵢ = \|ρᵢ@0,50\| − \|ρᵢ@0,10\| por celda elegible; margen preespecificado **δ = 0,1** (mínima diferencia de \|ρ\| con relevancia práctica, del orden de la precisión de la propia mediana cross-celda). Marco TOST/no-inferioridad (Lakens 2017): falsable en ambas direcciones. Descriptivo de apoyo por celda: IC de la diferencia de correlaciones dependientes — bootstrap BCa (10 000 remuestras de runs) o, como alternativa cerrada, los ICs de Zou (2007).
 
@@ -157,6 +162,8 @@ Detalle de H4: dᵢ = \|ρᵢ@0,50\| − \|ρᵢ@0,10\| por celda elegible; marg
 
 GSNR y GWA llevan su predicción *fuerte* sobre VD4 (`final_test_acc`, signo +); su columna VD1 es extrapolación y se evalúa aparte. Revisar signos contra los papers al congelar (varios están en cola de lectura).
 
+**Signos esperados vs el gap** (`final_gap_loss`, positivo = más sobreajuste; decisión 2026-06-14). Aquí las métricas que reclaman generalización llevan su predicción *fuerte* (vs VD1 era extrapolada): GSNR **−**, GWA **−**, stiffness intra-clase **−**, m-coherence **−** (más alto → mejor generalización → gap menor); gradient disparity **+** (señal de sobreajuste de su paper → gap mayor). Cuidado con el cruce: GSNR y GWA son **+** vs VD4 (`final_test_acc`, más alto = mejor) pero **−** vs el gap (más alto = peor), porque VD4 y el gap apuntan a sentidos opuestos de "bueno". Las métricas de velocidad (gradient confusion, NGV, GNS) no tienen predicción direccional propia sobre el gap; su asociación se reporta, pero la predicción fuerte es la doble disociación (menor con el gap que con la velocidad).
+
 ## Agregación entre celdas
 
 - **Por celda primero, agregado después** — guardia contra Simpson: la dificultad del dataset no debe fabricar la correlación.
@@ -164,6 +171,7 @@ GSNR y GWA llevan su predicción *fuerte* sobre VD4 (`final_test_acc`, signo +);
 - **Independencia entre celdas, aproximada:** las celdas no comparten runs, pero sí datasets, arquitecturas y seeds (misma inicialización para misma arquitectura + seed). Se declara como limitación; la dependencia residual esperable es débil y positiva, y la cota BY cubre el caso de que no lo sea.
 - **Agregado pooled (secundario):** correlación sobre los ~960 runs con rangos calculados *dentro* de cada celda (equivale a estandarizar por condición). Modelos de efectos mixtos quedan como exploratorio si el resumen anterior se queda corto.
 - **Figura de sanidad val↔test (descriptiva):** scatter `final_val_acc` vs `final_test_acc` sobre los ~960 runs, preespecificada en la decisión del protocolo de evaluación ([[2 - Decisiones]]); recupera el diagnóstico de concordancia que se pierde al no evaluar test por época. No alimenta ningún contraste.
+- **Reporte por celda para todas las familias (Dziugaite et al. 2020):** además del resumen cross-celda, para cada métrica se reporta la distribución de asociaciones por celda (mediana y peor caso), no solo el estadístico agregado — promediar la calidad predictiva entre entornos no es resumen suficiente ("a satisfying theory cannot simply predict well on average").
 
 ## Nota de potencia
 
@@ -184,7 +192,7 @@ GSNR y GWA llevan su predicción *fuerte* sobre VD4 (`final_test_acc`, signo +);
 1. ~~**Confirmación del tutor** al protocolo train/val/test~~ — **cerrada el 2026-06-12**: la monitorización de VD1–VD3 lee val (suavizada para VD1/VD3) y VD4 existe; protocolo implementado ([[2 - Decisiones]]).
 2. **Pilot de calibración:** fija los valores definitivos de presupuesto y umbral por dataset que parametrizan VD1/VD2, aplicando los criterios preespecificados en §Qué congela. La estructura del plan no depende de ellos.
 
-Si el gap de generalización se confirma ([[Gap de generalización como variable objetivo]]), se añaden aquí antes de congelar: su familia de contrastes con suelo de ajuste, la parcial por `final_train_eval_loss`, la predicción direccional por familias (sobre asociaciones parciales) y el reporte por celda (mediana + peor caso) para todas las familias.
+El gap de generalización quedó **confirmado e integrado el 2026-06-14** (decisión en [[2 - Decisiones]]; propuesta original en el histórico git de `pending/Gap de generalización como variable objetivo.md`): su familia de contrastes (suelo de ajuste, parcial por `final_train_eval_loss`, doble disociación sobre parciales) y el reporte por celda para todas las familias ya están en el cuerpo del plan. Lo único que el gap añade a la calibración del pilot es el **suelo de ajuste** (distribución de `final_train_eval_acc` por celda), con los mismos criterios pre-escritos antes de lanzar la rejilla.
 
 Al cerrarse todo: mover este documento a `docs/research/`, registrar la congelación en [[2 - Decisiones]] con fecha, y solo entonces mirar resultados de la matriz.
 
@@ -193,6 +201,7 @@ Al cerrarse todo: mover este documento a `docs/research/`, registrar la congelac
 - **2026-06-10** — primera redacción, antes de ejecutar pilot y matriz.
 - **2026-06-11** — pasada crítica con cuatro correcciones. (1) Pseudo-replicación intra-celda reconocida (el LR clusteriza los 40 runs) → respuesta central: **inferencia en dos etapas**, el ρ por celda baja a descriptivo y la confirmación sube al nivel cross-celda. (2) Criterio de H1 retirado: exigía significancia por celda en ≥13/24, pero la propia nota de potencia estima que un ρ = 0,3 real solo sale significativo en ~11/24 celdas sin corregir — exigía de facto ρ ≳ 0,45 y desalineaba el plan con la barra de falsación de [[1 - Diseño]]. (3) Criterio de H4 retirado: "el IC de la diferencia contiene 0" afirmaba la nula y, con ICs anchos por n = 40 y correlaciones dependientes, se "confirmaba" casi gratis → sustituido por no-inferioridad. (4) Huecos en las reglas de pilot y celdas degeneradas completados; corrección sobre `--report`: imprime evidencia y la decisión es del investigador (la redacción anterior afirmaba que implementaba una regla mecánica). La misma fecha revisa la composición del nivel 0 tras revisión bibliográfica de TSE con fuentes verificadas: `val-acc@f` pasa a titular, TSE-EMA se mantiene sin titularidad.
 - **2026-06-12** — dependencia del tutor cerrada: VD1–VD3 leen val y VD4 existe; lecturas suavizadas de VD1/VD3 incorporadas a §Variables; figura de sanidad val↔test añadida a §Agregación.
+- **2026-06-14** — gap de generalización confirmado por el tutor e integrado: VD5/VD6 en §Variables, familia de contrastes y doble disociación en §Contrastes, signos vs el gap en la tabla, suelo de ajuste en §Censura, reporte por celda en §Agregación. Deja de ser bloque condicional; el pilot calibra además el suelo de ajuste.
 
 ## Referencias generales del plan
 

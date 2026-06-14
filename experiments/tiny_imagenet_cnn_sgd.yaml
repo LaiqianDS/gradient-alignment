@@ -11,8 +11,6 @@ batch_size: 128
 momentum: 0.9
 weight_decay: 0.0
 probe_size: 256
-metric_every_steps: 100
-early_window_frac: 0.1
 windows:
 - 0.05
 - 0.1

@@ -66,7 +66,7 @@ Adam combina las virtudes de AdaGrad sobre gradientes dispersos y RMSProp sobre 
 
 **Magnitudes a loguear.** Por capa se registran tres familias de variables de control. Primero, el SNR por parámetro $\text{SNR} = |\hat{m}_t| / (\sqrt{\hat{v}_t} + \varepsilon)$ con bias correction $\hat{m}_t = m_t / (1 - \beta_1^t)$ y $\hat{v}_t = v_t / (1 - \beta_2^t)$, que materializa la cantidad que el paper interpreta como signal-to-noise ratio y motiva conceptualmente las métricas `gsnr` y `normalized_variance`. Segundo, las normas $\|m_t\|_2$ y $\|v_t\|_2$ por capa, útiles para diagnosticar saturación o explosión del preacondicionador. Tercero, el learning rate efectivo bias-corrected $\alpha \cdot \sqrt{1 - \beta_2^t}/(1 - \beta_1^t)$ y la norma del update efectivo $\|\Delta\theta_t\| = \|\alpha \cdot \hat{m}_t/(\sqrt{\hat{v}_t}+\varepsilon)\|$.
 
-**Granularidad temporal.** Por step durante la fase inicial del entrenamiento (cuando bias correction es relevante y los momentos aún están lejos del régimen estacionario) y por época en régimen estable. **Granularidad estructural.** Agregados por capa para las normas y el SNR medio, más un histograma global del SNR por parámetro para visualizar la distribución y detectar colas pesadas.
+**Granularidad temporal.** Por época. **Granularidad estructural.** Agregados por capa para las normas y el SNR medio, más un histograma global del SNR por parámetro para visualizar la distribución y detectar colas pesadas.
 
 **Claves de logging sugeridas:** `adam/snr_layer/{name}`, `adam/m_norm/{name}`, `adam/v_norm/{name}`, `adam/lr_eff`, `adam/update_norm/{name}` y el histograma global `adam/snr_hist`.
 

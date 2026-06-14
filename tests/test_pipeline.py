@@ -18,7 +18,7 @@ def test_pipeline_smoke(tmp_path):
     cfg = Config(
         dataset="mnist", model="fc", optimizer="sgd", lr=0.01,
         batch_size=128, epochs=1, seed=0,
-        probe_size=32, metric_every_steps=500, early_window_frac=1.0,
+        probe_size=32,
         out_dir=str(tmp_path), run_name="smoke", windows=(0.5, 1.0),
     )
     summary = train(cfg)
@@ -31,7 +31,7 @@ def test_pipeline_smoke(tmp_path):
     assert "mcoh/global" in traj.columns        # a gradient metric ran
     assert "tse/cumulative" in traj.columns      # the baseline ran
 
-    epoch_rows = traj[traj["granularity"] == "epoch"]
+    epoch_rows = traj
     assert len(epoch_rows) == 1
     assert epoch_rows["val_acc"].notna().all()
     assert "test_acc" not in traj.columns  # test is only evaluated at the end
@@ -57,3 +57,13 @@ def test_pipeline_smoke(tmp_path):
     # Last epoch row carries the final accumulator value (modulo rounding).
     last_epoch = epoch_rows.iloc[-1]
     assert abs(last_epoch["metric_seconds"] - summary["metric_seconds"]) < 1e-2
+
+    for k in ("final_test_loss", "final_train_eval_loss", "final_train_eval_acc",
+              "final_gap_loss", "final_gap_acc"):
+        assert k in summary
+    assert summary["final_test_loss"] > 0
+    assert 0.0 < summary["final_train_eval_acc"] <= 1.0
+    assert summary["final_gap_loss"] == (
+        summary["final_test_loss"] - summary["final_train_eval_loss"])
+    assert summary["final_gap_acc"] == (
+        summary["final_train_eval_acc"] - summary["final_test_acc"])

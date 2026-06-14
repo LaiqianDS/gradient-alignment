@@ -6,13 +6,14 @@ real MNIST). The probe is tested against a synthetic TensorDataset.
 
 import pytest
 import torch
-from torch.utils.data import TensorDataset
+from torch.utils.data import Dataset, Subset, TensorDataset
 
 from config import SPLIT_SEED
 from data import (
     DATASET_SPECS,
     build_dataloaders,
     build_probe,
+    build_train_eval_loader,
     stratified_split_indices,
 )
 
@@ -93,3 +94,26 @@ def test_probe_seed_changes_sample():
 def test_probe_larger_than_dataset_raises():
     with pytest.raises(ValueError):
         build_probe(_fake_dataset(n=20), probe_size=21, seed=0, device="cpu")
+
+
+class _LabeledDataset(Dataset):
+    def __init__(self, targets):
+        self.x = torch.randn(len(targets), 3)
+        self.targets = list(targets)
+
+    def __len__(self):
+        return len(self.targets)
+
+    def __getitem__(self, i):
+        return self.x[i], self.targets[i]
+
+
+def test_train_eval_loader_is_stratified_fixed_and_test_sized():
+    targets = [0] * 20 + [1] * 20 + [2] * 20
+    train_set = Subset(_LabeledDataset(targets), list(range(60)))
+    a = build_train_eval_loader(train_set, batch_size=8, size=30)
+    b = build_train_eval_loader(train_set, batch_size=8, size=30)
+    assert a.dataset.indices == b.dataset.indices       # identical across runs (SPLIT_SEED)
+    assert len(a.dataset.indices) == 30
+    labels = [targets[i] for i in a.dataset.indices]
+    assert all(labels.count(c) == 10 for c in (0, 1, 2))

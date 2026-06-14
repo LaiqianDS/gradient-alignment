@@ -2,19 +2,20 @@
 
 Entrypoint. One invocation = one :class:`Config` = one run. Reads knobs from
 CLI/YAML (``config.py``), seeds globally (``seed.py``), trains to a fixed epoch
-budget, and logs gradient + baseline metrics on a *fixed probe* -- every epoch,
-and densely (every ``metric_every_steps``) inside the early window. Outputs land
-in ``out_dir/run_name/``::
+budget, and logs gradient + baseline metrics on a *fixed probe* at the end of
+every epoch. Outputs land in ``out_dir/run_name/``::
 
     config.yaml              the resolved run knobs
-    trajectory.parquet       one row per measurement (step + epoch rows), each
-                             with cumulative elapsed/metric wall-clock columns;
-                             epoch rows carry the val monitoring curve
+    trajectory.parquet       one row per epoch measurement, each with cumulative
+                             elapsed/metric wall-clock columns and the val
+                             monitoring curve
     metrics_at_window.parquet  epoch rows snapped to 5/10/25/50/100% of budget
     summary.json             efficiency indicators (val curve) + the single
-                             final test evaluation + run timing: total_seconds,
-                             metric_seconds (instrumentation overhead) and
-                             train_seconds (= total - metric)
+                             final test evaluation + the generalization gap
+                             (extra eval pass on a fixed train subset) + run
+                             timing: total_seconds, metric_seconds
+                             (instrumentation overhead) and train_seconds
+                             (= total - metric)
 
 Run::
 
@@ -31,7 +32,7 @@ import torch
 import torch.nn as nn
 
 from config import Config, config_to_dict, parse_config
-from data import build_dataloaders, build_probe
+from data import build_dataloaders, build_probe, build_train_eval_loader
 from logger import RunLogger
 from metrics import REGISTRY
 from metrics_runner import baseline_row, measure
@@ -102,7 +103,7 @@ def epoch_mean_losses(step_losses: list[float], steps_per_epoch: int) -> list[fl
     feeding raw per-step losses would turn TSE-E(E=1) into the TLmini baseline
     the paper rejects and shrink the EMA half-life by a factor of
     ``steps_per_epoch``. The trailing partial epoch contributes its running
-    mean so mid-epoch (early-window) probes are still defined.
+    mean, keeping the helper defined for any loss-history length.
     """
     full = len(step_losses) // steps_per_epoch
     means = [
@@ -131,13 +132,17 @@ def evaluate(model, loader, loss_fn, device) -> tuple[float, float]:
 
 
 @torch.no_grad()
-def evaluate_test(model, loader, device, num_classes: int) -> dict:
-    """Single end-of-run test evaluation: accuracy + macro-F1."""
+def evaluate_test(model, loader, loss_fn, device, num_classes: int) -> dict:
+    """Single end-of-run test evaluation: accuracy, macro-F1, mean loss."""
     model.eval()
     confusion = torch.zeros(num_classes, num_classes, dtype=torch.long)
+    total_loss, n = 0.0, 0
     for X, y in loader:
-        pred = model(X.to(device)).argmax(1).cpu()
-        flat = y * num_classes + pred
+        X, y = X.to(device), y.to(device)
+        out = model(X)
+        total_loss += loss_fn(out, y).item() * y.size(0)
+        n += y.size(0)
+        flat = y.cpu() * num_classes + out.argmax(1).cpu()
         confusion += torch.bincount(flat, minlength=num_classes**2).reshape(
             num_classes, num_classes
         )
@@ -149,6 +154,7 @@ def evaluate_test(model, loader, device, num_classes: int) -> dict:
     return {
         "final_test_acc": float(tp.sum() / confusion.sum()),
         "final_test_f1_macro": float(f1.mean()),
+        "final_test_loss": total_loss / n,
     }
 
 
@@ -158,7 +164,7 @@ def snap_windows(df: pd.DataFrame, windows) -> pd.DataFrame:
     Implements the 5/10/25/50/100% snapshots used for the early-vs-late
     correlation analysis -- chosen post-hoc from the full logged trajectory.
     """
-    epoch_df = df[df["granularity"] == "epoch"]
+    epoch_df = df
     if epoch_df.empty:
         return pd.DataFrame()
     rows = []
@@ -180,7 +186,7 @@ def efficiency_summary(df: pd.DataFrame, cfg: Config) -> dict:
 
     Threshold crossing and bests read the smoothed curve; the AUC the raw one.
     """
-    epoch_df = df[df["granularity"] == "epoch"].sort_values("epoch")
+    epoch_df = df.sort_values("epoch")
     val_loss = epoch_df["val_loss"]
     val_acc = epoch_df["val_acc"]
     smooth_loss = median3(val_loss)
@@ -224,6 +230,9 @@ def train(cfg: Config) -> dict:
     train_loader, val_loader, test_loader, num_classes, in_shape = build_dataloaders(
         cfg.dataset, cfg.batch_size, cfg.seed
     )
+    train_eval_loader = build_train_eval_loader(
+        train_loader.dataset, cfg.batch_size, len(test_loader.dataset)
+    )
     model = build_model(cfg.model, in_shape, num_classes).to(device)
     probe_X, probe_y = build_probe(train_loader.dataset, cfg.probe_size, cfg.seed, device)
     loss_fn = nn.CrossEntropyLoss()
@@ -235,8 +244,6 @@ def train(cfg: Config) -> dict:
 
     logger = RunLogger(cfg.out_dir, run_name, config_to_dict(cfg))
 
-    total_steps = len(train_loader) * cfg.epochs
-    early_window_steps = int(cfg.early_window_frac * total_steps)
     meta = {
         "run_name": run_name, "dataset": cfg.dataset, "model": cfg.model,
         "optimizer": cfg.optimizer, "lr": cfg.lr, "seed": cfg.seed,
@@ -278,21 +285,11 @@ def train(cfg: Config) -> dict:
             loss.backward()
             optimizer.step()
             loss_history.append(loss.item())
-
-            if global_step < early_window_steps and global_step % cfg.metric_every_steps == 0:
-                row = {
-                    **meta, "granularity": "step", "epoch": epoch,
-                    "global_step": global_step,
-                    "progress_frac": (global_step + 1) / total_steps,
-                    "train_loss": loss.item(),
-                }
-                row.update(probe_metrics())
-                stamp_and_log(row)
             global_step += 1
 
         val_loss, val_acc = evaluate(model, val_loader, loss_fn, device)
         row = {
-            **meta, "granularity": "epoch", "epoch": epoch,
+            **meta, "epoch": epoch,
             "global_step": global_step,
             "progress_frac": (epoch + 1) / cfg.epochs,
             "train_loss": loss_history[-1],
@@ -303,9 +300,17 @@ def train(cfg: Config) -> dict:
         print(f"[train] epoch {epoch + 1}/{cfg.epochs}  "
               f"val_loss {val_loss:.4f}  val_acc {val_acc:.4f}")
 
-    final_test = evaluate_test(model, test_loader, device, num_classes)
+    final_test = evaluate_test(model, test_loader, loss_fn, device, num_classes)
+    train_eval_loss, train_eval_acc = evaluate(model, train_eval_loader, loss_fn, device)
+    gap = {
+        "final_train_eval_loss": train_eval_loss,
+        "final_train_eval_acc": train_eval_acc,
+        "final_gap_loss": final_test["final_test_loss"] - train_eval_loss,
+        "final_gap_acc": train_eval_acc - final_test["final_test_acc"],
+    }
     print(f"[train] final test  acc {final_test['final_test_acc']:.4f}  "
-          f"f1_macro {final_test['final_test_f1_macro']:.4f}")
+          f"f1_macro {final_test['final_test_f1_macro']:.4f}  "
+          f"gap_loss {gap['final_gap_loss']:.4f}")
 
     df = logger.dataframe()
     logger.save_table("trajectory", df)
@@ -318,6 +323,7 @@ def train(cfg: Config) -> dict:
         "train_seconds": round(total_seconds - metric_seconds, 3),
         **efficiency_summary(df, cfg),
         **final_test,
+        **gap,
     }
     logger.save_json("summary", summary)
     print(f"[train] wrote outputs to {logger.dir}")

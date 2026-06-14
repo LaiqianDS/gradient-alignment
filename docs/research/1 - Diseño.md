@@ -39,6 +39,7 @@ Protocolo de evaluación (confirmado por el tutor y registrado el 2026-06-12, ve
 2. **VD2:** área bajo la curva (cruda) de val loss dentro de un presupuesto fijo de épocas.
 3. **VD3 (secundaria):** mejor val loss alcanzada dentro de ese presupuesto, sobre la curva suavizada.
 4. **VD4:** `final_test_acc`, la accuracy de test evaluada exactamente una vez al final del run (acompañada de `final_test_f1_macro` como verificación de robustez; en datasets balanceados F1-macro ≈ accuracy).
+5. **VD5 (generalización):** `final_gap_loss = final_test_loss − final_train_eval_loss` (primaria; positivo = sobreajuste), con `final_gap_acc = final_train_eval_acc − final_test_acc` como robustez (mismo sentido). El término de train se mide al final del run, en modo eval y con los mismos pesos, sobre un subconjunto fijo y estratificado del train (tamaño igual al test, `SPLIT_SEED`). Es el tercer constructo de eficiencia, junto a velocidad (VD1-VD3) y rendimiento final (VD4): mide cuánto sobreajusta el modelo (decisión 2026-06-14, [[2 - Decisiones]]). Sus contrastes llevan dos controles pre-registrados (suelo de ajuste por `final_train_eval_acc` y parcial por `final_train_eval_loss`) y la predicción direccional es la doble disociación (las métricas que reclaman generalización se asocian más al gap que a la velocidad, y al revés). Cubre un hueco que el diseño ya tenía: H6 compromete una afirmación de generalización (GWA/GSNR) que hasta ahora no tenía diana contra la que contrastarse.
 
 ### Variables independientes (métricas tempranas)
 
@@ -49,13 +50,11 @@ El conjunto *computado* está implementado y fijado en código (`src/metrics/`, 
 
 Dos candidatas tempranas no aparecen como métricas separadas: la *cosine similarity entre gradientes de batches* ya está contenida en otras métricas (stiffness y gradient confusion se construyen sobre los cosenos por pares de gradientes per-ejemplo), y el *NTK alignment* se menciona como marco teórico pero no se computa (decisión 2026-06-09 en [[2 - Decisiones]]).
 
-La lista se cierra antes de ejecutar los experimentos. No se añaden métricas a posteriori.
-
 ### Ventana temporal
 
 Fracciones fijas del presupuesto total de entrenamiento. Barrido en 5%, 10%, 25%, 50%. El barrido en sí mismo es un resultado reportable (cuán temprano basta para predecir).
 
-Cómo se mide en la práctica (`src/train.py`): las métricas se registran al final de *cada* época durante todo el entrenamiento, y además de forma densa (cada `metric_every_steps=100` pasos) dentro de la ventana temprana (`early_window_frac=10%` de los pasos totales). Los snapshots de 5/10/25/50/100% no se miden en el instante exacto: se eligen *a posteriori* sobre la trayectoria completa, tomando para cada fracción la época cuyo progreso quede más cerca (`metrics_at_window.parquet`). Con los presupuestos congelados (20/40/60/80 épocas, todos múltiplos de 20) la selección es exacta: cada fracción de `windows` cae justo en una frontera de época (0,05×20=1, 0,25×60=15, etc.), así que no hay desfase entre la fracción nominal y la época elegida. Las filas densas de la ventana temprana no alimentan estos snapshots, pero quedan en `trajectory.parquet`: si el análisis pidiera ventanas por debajo del 5% (1–2%), bastaría extender la selección a posteriori sin relanzar ningún run.
+Cómo se mide en la práctica (`src/train.py`): las métricas se registran al final de *cada* época durante todo el entrenamiento. Los snapshots de 5/10/25/50/100% no se miden en el instante exacto: se eligen *a posteriori* sobre la trayectoria completa, tomando para cada fracción la época cuyo progreso quede más cerca (`metrics_at_window.parquet`). Con los presupuestos congelados (20/40/60/80 épocas, todos múltiplos de 20) la selección es exacta: cada fracción de `windows` cae justo en una frontera de época (0,05×20=1, 0,25×60=15, etc.), así que no hay desfase entre la fracción nominal y la época elegida.
 
 ### Setup de entrenamiento
 
@@ -73,7 +72,7 @@ Rejilla completa: cuatro datasets × tres arquitecturas × dos optimizadores = *
 
 - **Profundidad.** 8 LR × 5 seeds = 40 runs por celda → **~960 runs**, por encima del suelo n ≥ 30. La dispersión del predictor la dan los LR, no las seeds; de ahí que se priorice el nº de LR. Seeds compartidas {0,1,2,3,4} en todas las celdas para comparación pareada entre SGD y Adam (H5).
 - **Rejilla de LR (log-espaciada en medias décadas, por optimizador — no por modelo).** 8 puntos por optimizador, la misma rejilla para FC, CNN y ResNet-18 (decisión 2026-06-09 en [[2 - Decisiones]]). SGD (momentum 0,9): `{3e-4, 1e-3, 3e-3, 1e-2, 3e-2, 1e-1, 3e-1, 1.0}`. Adam: `{3e-5, 1e-4, 3e-4, 1e-3, 3e-3, 1e-2, 3e-2, 1e-1}` — misma forma, una década más abajo porque su paso efectivo va preescalado por 1/√v. El rango ancho (3,5 décadas) cubre los óptimos de las tres arquitecturas; los extremos divergen o no alcanzan el umbral por diseño, y esos runs censurados aportan rango al eje de eficiencia (VD1). El centro se recalibra tras el pilot si el óptimo de alguna celda queda descentrado.
-- **Hiperparámetros fijos (no se barren, para no añadir confusores).** `batch_size=128`, `weight_decay=0`, `momentum=0.9` (SGD) / betas por defecto (Adam), `probe_size=256`, `metric_every_steps=100`, `early_window_frac=0.10`, `windows=[0.05, 0.10, 0.25, 0.50, 1.0]`. Las métricas leen ∇L de la pérdida (no el paso preacondicionado), así que el weight decay no entra en su valor; se fija a 0 solo para no introducir un eje de trayectoria extra. La justificación de cada valor, uno a uno, está en [[2 - Decisiones]].
+- **Hiperparámetros fijos (no se barren, para no añadir confusores).** `batch_size=128`, `weight_decay=0`, `momentum=0.9` (SGD) / betas por defecto (Adam), `probe_size=256`, `windows=[0.05, 0.10, 0.25, 0.50, 1.0]`. Las métricas leen ∇L de la pérdida (no el paso preacondicionado), así que el weight decay no entra en su valor; se fija a 0 solo para no introducir un eje de trayectoria extra. La justificación de cada valor, uno a uno, está en [[2 - Decisiones]].
 - **Presupuesto y umbral por dataset** (puntos de partida, se calibran en el pilot; sin data augmentation → por debajo del SOTA): MNIST 20 épocas / umbral acc 0,97; CIFAR-10 40 / 0,75; CIFAR-100 60 / 0,35; Tiny-ImageNet 80 / 0,25. FC sobre CIFAR-100 y Tiny-ImageNet apenas aprende: esas celdas quedan censuradas en VD1 y se analizan con las VD secundarias (AUC de val-loss, mejor val-loss).
 - **Métricas.** Se computa el conjunto completo de métricas implementadas en toda la rejilla (en ResNet-18, las per-sample van last-layer-only). La lista *reportada* se poda luego por colinealidad con prueba (ver [[2 - Decisiones]]).
 
@@ -91,8 +90,8 @@ El resultado más valioso no es "quién predice mejor" sino "quién predice mejo
 
 ```mermaid
 flowchart LR
-    A["Preparar datos\nMNIST / CIFAR-10 / CIFAR-100"] --> B["Entrenar modelos\nFC, CNN simple, ResNet"]
-    B --> C["Logging métricas alineación + variabilidad\npor batch/época"]
+    A["Preparar datos\nMNIST / CIFAR-10 / CIFAR-100 / Tiny-ImageNet"] --> B["Entrenar modelos\nFC, CNN simple, ResNet"]
+    B --> C["Logging métricas alineación + variabilidad\npor época"]
     C --> D["Registrar eficiencia\n(épocas-a-umbral, AUC, best loss)"]
     D --> E["Barrido ventana temprana\n5% / 10% / 25% / 50%"]
     E --> F["Correlación Spearman + Pearson\ncon corrección FDR"]

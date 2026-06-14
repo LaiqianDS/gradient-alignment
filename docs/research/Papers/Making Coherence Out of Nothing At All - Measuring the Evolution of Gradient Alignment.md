@@ -61,7 +61,7 @@ equivalente al cociente entre el producto interior medio por pares (incluyendo e
 
 **Cálculo eficiente $O(m)$.** El estimador escalable se reescribe como $\alpha_m = m\,\|S\|^2 / (m\cdot Q) = \|S\|^2 / Q$ tras la cancelación, lo que evidencia que el cómputo es lineal en $m$ y en $P$ y trivialmente paralelizable. La equivalencia $\mathbb{E}[g_z\cdot g] = \|g\|^2$ debe validarse al integrar la métrica (ver avisos más abajo): es la identidad que justifica todo el ahorro.
 
-**Granularidad temporal.** Se registra $\alpha_m$ una vez por época durante el grueso del entrenamiento; en la ventana inicial (primeras 5-10 épocas), cada $K$ pasos para muestrear con resolución el transitorio de unos 25 pasos que el paper documenta, donde $\alpha_m$ cae bruscamente desde valores cercanos a $m$ hasta menos de $10$. El coste reducido permite logging frecuente sin penalización apreciable.
+**Granularidad temporal.** Se registra $\alpha_m$ una vez por época durante todo el entrenamiento. El paper documenta un transitorio inicial de unos 25 pasos en el que $\alpha_m$ cae bruscamente desde valores cercanos a $m$ hasta menos de $10$.
 
 **Granularidad estructural.** Se reporta $\alpha_m$ global y por capa, siguiendo el protocolo del paper sobre tres capas representativas: primera convolución, capa intermedia y fully-connected final. La señal por capa es más rica y revela efectos como el weight sharing convolucional (consistente con el Corolario 3.1) que el escalar global agrega.
 

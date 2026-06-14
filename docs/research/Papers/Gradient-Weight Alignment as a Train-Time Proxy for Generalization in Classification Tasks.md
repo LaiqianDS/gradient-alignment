@@ -66,7 +66,7 @@ El autor concluye que GWA proporciona una métrica fiable de tiempo de entrenami
 
 **Pipeline.** A partir de los gradientes per-sample $\mathbf{g}_T(x_i)$ y los pesos $\mathbf{w}_T$ se calcula $\text{score}_i = \cos(\mathbf{g}_T(x_i), \mathbf{w}_T)$ por cada ejemplo del probe set. El agregado escalar de época es entonces $\text{GWA}_T = \mathbb{E}[\text{score}] / (\text{Kurt}[\text{score}] + \beta)$, con $\beta = 1.2$. La curtosis se calcula como exceso, $\text{Kurt} = M^{(4)}/(M^{(2)})^2 - 3$, sobre la distribución empírica de los scores.
 
-**Granularidad temporal.** Para la integración del TFG se distinguen dos cadencias. Una medición por época durante toda la corrida del entrenamiento, suficiente para reproducir la trayectoria $\max_T \mathbb{E}[\mathcal{A}_T]$ del paper. Y mediciones cada $K$ pasos durante la ventana temprana (los primeros 5%, 10%, 25% y 50% de las épocas totales), que es donde se evalúa la capacidad predictiva sobre eficiencia y generalización.
+**Granularidad temporal.** Una medición por época durante toda la corrida del entrenamiento, suficiente para reproducir la trayectoria $\max_T \mathbb{E}[\mathcal{A}_T]$ del paper. La capacidad predictiva sobre eficiencia y generalización se evalúa en la ventana temprana (los hitos 5%, 10%, 25% y 50% de las épocas totales).
 
 **Granularidad estructural.** Por defecto el cálculo se restringe a la última capa lineal, siguiendo la justificación de Hölzl: es donde el gradiente admite forma cerrada y donde la señal direccional es más informativa de la tarea aprendida. Opcionalmente puede computarse por capa para arquitecturas donde interese contrastar dinámicas locales, pero la versión last-layer-only es la canónica.
 

@@ -70,7 +70,7 @@ Los autores reconocen como limitaciones que algunas contribuciones son empírica
 
 **Rangos típicos e interpretación.** La Average Variance, al ser absoluta, no es comparable entre escalas: $\sim 10^{-4}$ en CIFAR-10, $< 10^{-6}$ en ImageNet, $\sim 10^{-8}$ en MNIST tardío. La NGV sí es comparable: valores por debajo de 1 indican que la señal del gradiente medio domina sobre el ruido, valores por encima de 1 que el ruido domina y un paso individual de SGD es esencialmente direccional-ruido. Atención: este umbral 1 solo es coherente con la forma adaptada del TFG ($\text{tr}(\text{Cov})/\|\mathbb{E}[g]\|^2$); bajo la fórmula literal del paper ($V/E[g^2]$, acotada ≈1) el valor poblacional nunca lo supera de forma significativa. Una NGV próxima a 1 es la frontera donde el SNR cae a la unidad y donde, esperablemente, aumentar el batch size deja de compensar (es la región conectada con el *gradient noise scale* de McCandlish et al.).
 
-**Granularidad temporal.** Por época durante toda la corrida, o cada $N$ pasos en regímenes largos (típicamente $N = 500$–$2000$ en CIFAR/ImageNet). Conviene **no** computar la métrica en cada iteración: cada medición congela $w_t$ y consume $K$ pasadas backward adicionales sin actualizar pesos.
+**Granularidad temporal.** Por época durante toda la corrida. Conviene **no** computar la métrica en cada iteración: cada medición congela $w_t$ y consume $K$ pasadas backward adicionales sin actualizar pesos.
 
 **Granularidad estructural.** Loguear NGV global (un escalar por época) y NGV por capa (un escalar por capa y época). En la práctica las primeras capas convolucionales y las capas finales (fully-connected del clasificador) suelen presentar regímenes muy distintos: agregar todo en un único escalar puede ocultar inversiones de tendencia.
 
@@ -134,7 +134,7 @@ def measure_ngv(model, loss_fn, sampler, K=30, eps=1e-12):
     return avg_var, ngv, ngv_per_layer
 ```
 
-El bucle se invoca una vez por época (o cada $N$ pasos) sobre un *snapshot* de los pesos, sin invocar `optimizer.step()`. Para acumular con Welford en lugar de $Q$, se sustituyen los dos acumuladores por la actualización incremental clásica de media y varianza online.
+El bucle se invoca una vez por época sobre un *snapshot* de los pesos, sin invocar `optimizer.step()`. Para acumular con Welford en lugar de $Q$, se sustituyen los dos acumuladores por la actualización incremental clásica de media y varianza online.
 
 **Consideraciones finales.** La NGV está estrechamente emparentada con el *gradient noise scale* de McCandlish et al., que reescala una cantidad análoga para predecir el batch size crítico, y por construcción debe verificar $\mathcal{B}_{\text{simple}} \approx B \cdot \text{NGV}$. Conviene loguear NGV global y por capa simultáneamente: en CIFAR-10/ImageNet la NGV global crece, pero el comportamiento por capa puede ser heterogéneo y revela qué bloques dominan la covarianza.
 
