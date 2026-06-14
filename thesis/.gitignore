@@ -1,25 +1,5 @@
-# LaTeX build artifacts
-*.aux
-*.log
-*.out
-*.toc
-*.lof
-*.lot
-*.synctex.gz
-*.fls
-*.fdb_latexmk
-*.bbl
-*.blg
-*.bcf
-*.run.xml
-
-# PDF compilado (regenerable). Quita esta línea si quieres versionarlo,
-# como en el repo curriculum.
-*.pdf
-
-# ...pero los logos de la portada (plantilla oficial) sí se versionan.
-!img/logo-upv.pdf
-!img/logo-etsinf.pdf
+# Todo el resultado de compilación vive en render/ (ver .latexmkrc) y es desechable.
+/render/
 
 # macOS
 .DS_Store

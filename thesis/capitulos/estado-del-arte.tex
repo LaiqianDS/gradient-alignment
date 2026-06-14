@@ -2,22 +2,273 @@
 \label{ch:estado-del-arte}
 % Síntesis crítica de la literatura (qué se hizo y qué se encontró); las fórmulas van en Fundamentos.
 
+Este capítulo revisa la literatura que sostiene el trabajo. No pretende ser exhaustivo, sino
+selectivo y crítico: de cada propuesta interesa la idea central, lo que sus autores
+encontraron y, sobre todo, qué deja sin resolver. Las definiciones formales de cada métrica se
+posponen al Capítulo~\ref{ch:fundamentos}; aquí se manejan en su versión conceptual para no
+romper el hilo argumental. La Sección~\ref{sec:eda-prediccion} sitúa el problema general de
+predecir el resultado de un entrenamiento desde sus primeras épocas, un problema que la
+búsqueda de arquitecturas neuronales lleva años abordando. La Sección~\ref{sec:sota-alineacion}
+revisa la familia de métricas de alineación o coherencia direccional, y la
+Sección~\ref{sec:sota-variabilidad} la de variabilidad estocástica. La
+Sección~\ref{sec:sota-baselines} introduce los predictores que sirven de referencia y que
+cualquier métrica de gradiente debe superar para justificar su coste. La
+Sección~\ref{sec:sota-hueco} cierra el capítulo situando la aportación de este trabajo frente
+a lo revisado.
+
 \section{Predicción temprana de la eficiencia del entrenamiento}
 \label{sec:eda-prediccion}
-% NAS y performance estimation (ru2021speedy); TSE; valor de decidir antes.
 
-\section{Familia de alineación / coherencia direccional}
+La idea de anticipar el resultado de un entrenamiento sin llegar a completarlo no es nueva. El
+campo que más la ha trabajado es la búsqueda de arquitecturas neuronales (NAS, por sus siglas
+en inglés), donde el coste de entrenar a fondo cada arquitectura candidata es prohibitivo:
+evaluar un espacio de búsqueda completo puede requerir miles de horas de procesador gráfico. La
+respuesta natural ha sido estimar el rendimiento final de cada candidata a partir de unas pocas
+épocas de entrenamiento, de modo que el ranking aproximado baste para descartar la mayoría y
+reservar el cómputo para las prometedoras.
+
+El representante más directo de esta línea es el estimador de velocidad de entrenamiento (TSE),
+propuesto por Ru et al.~\cite{ru2021speedy}. La observación que lo sustenta es que las
+arquitecturas que acabarán generalizando mejor tienden a entrenar más deprisa desde el
+principio, de modo que una suma de las pérdidas de entrenamiento tempranas, sin tocar el
+conjunto de test ni un conjunto de validación, ya ordena bien a las candidatas. Los autores
+muestran que su estimador correlaciona fuertemente, en términos de Spearman y Kendall, con el
+ranking real de test, y que lo hace de forma más estable que los llamados proxies de coste cero,
+que se evalúan en la inicialización sin entrenar nada. Su principal virtud es el coste: la
+pérdida de entrenamiento ya se calcula en cada paso, así que el estimador es prácticamente
+gratuito.
+
+Precisamente esa virtud es la que convierte a TSE en el rival a batir, no en un colaborador. Si
+la curva de pérdida temprana ya predice el resultado a coste nulo, cualquier métrica que exija
+instrumentar el gradiente tiene que demostrar que aporta algo por encima de ella. Este trabajo
+adopta esa exigencia como criterio central, y por eso TSE reaparece como predictor de referencia
+en la Sección~\ref{sec:sota-baselines}.
+
+\section{Familia de alineación o coherencia direccional}
 \label{sec:sota-alineacion}
-% coherent gradients, m-coherence, stiffness, gradient confusion, gradient disparity, GWA, NTK.
+
+La primera de las dos grandes familias agrupa las métricas que miden en qué medida los
+gradientes de ejemplos distintos apuntan hacia el mismo sitio. La intuición compartida es que,
+cuando ejemplos distintos producen gradientes alineados, la red está aprendiendo
+características comunes a muchos de ellos en lugar de memorizarlos uno a uno, y que esa
+coherencia se asocia con un aprendizaje más rápido y una mejor generalización.
+
+El marco conceptual de la familia es la hipótesis de gradientes coherentes de
+Chatterjee~\cite{chatterjee2020coherent}. Su punto de partida es una descomposición de la norma
+del gradiente del minibatch en la energía individual de cada ejemplo más los términos cruzados
+entre pares: cuando los términos cruzados son positivos, el gradiente agregado se refuerza en
+las direcciones que muchos ejemplos comparten y se cancela en las idiosincráticas, lo que
+explicaría por qué el descenso por gradiente estocástico generaliza sin sobreajustar de
+inmediato. El trabajo es sugerente, pero se queda en lo conceptual: sus medidas operativas
+exigen partir el conjunto de entrenamiento en ejemplos limpios y corruptos mediante ruido de
+etiquetas controlado, un montaje que no se traslada a un entrenamiento ordinario.
+
+La versión escalable de esa idea es la m-coherencia de Chatterjee y
+Zielinski~\cite{chatterjee2020making}. Reduce la coherencia a un único escalar calculable sobre
+un minibatch, con una interpretación intuitiva: aproximadamente el número medio de ejemplos que
+se benefician del paso de descenso obtenido a partir de un ejemplo cualquiera. Los autores
+observan, entrenando una ResNet-18 sobre ImageNet, que con etiquetas reales la coherencia sube
+deprisa y se mantiene alta, mientras que con etiquetas aleatorias permanece anclada en su valor
+ortogonal, lo que separa con nitidez el aprendizaje de la memorización. La limitación es de
+cobertura experimental: la evidencia procede de un único conjunto de datos a gran escala, con un
+tamaño de batch de 4096 y sin aumento de datos, condiciones lejanas a las de un entrenamiento
+típico, y la métrica se estudia como ventana a la memorización, no como predictor de eficiencia.
+
+La stiffness de Fort et al.~\cite{fort2019stiffness} mira el mismo fenómeno con el coseno entre
+gradientes de pares de ejemplos, pero desagregándolo por clases. Su matriz de stiffness por
+clase revela jerarquías semánticas que la red descubre sola, por ejemplo, que mejorar la
+clasificación de gatos ayuda más a la de perros que a la de camiones, y los autores documentan
+que la stiffness intra-clase decae hacia cero justo cuando empieza el sobreajuste, lo que la
+señala como indicador temprano. El inconveniente práctico es estadístico: el estimador se basa
+en promedios sobre pares de un probe pequeño, y su variante más informativa exige sondas de
+cierto tamaño para no quedar dominada por el ruido muestral.
+
+La gradient confusion de Sankararaman et al.~\cite{sankararaman2020impact} adopta el punto de
+vista del peor caso: mide el coseno más negativo entre cualquier par de gradientes, es decir,
+cuán antagónicos llegan a ser los ejemplos. Su aportación más citada es relacionar esta cantidad
+con la arquitectura: la confusión crece con la profundidad pero decrece con la anchura, lo que
+ofrece una explicación cuantitativa de por qué la sobreparametrización facilita el
+entrenamiento, y muestra que la normalización por lotes y las conexiones residuales la reducen
+de forma drástica. Como predictor temprano tiene dos debilidades: al ser un estadístico de
+extremo (un mínimo) es ruidoso, y su cálculo sobre muchos pares es de los más caros de la
+familia.
+
+La gradient disparity de Forouzesh y Thiran~\cite{forouzesh2021disparity} sustituye el coseno
+por la distancia entre los gradientes de dos minibatches independientes, derivada de una cota de
+tipo PAC-Bayes, y la propone como señal de parada temprana. Es de las pocas métricas de la
+familia con evidencia cuantitativa fuerte: los autores reportan una correlación de Pearson de
+0,957 entre la disparidad medida entre lotes de entrenamiento y la medida entre entrenamiento y
+validación sobre 220 configuraciones, lo que justifica usar la primera, que no gasta datos de
+validación, como sustituto de la segunda. Su limitación es de comparabilidad: la métrica depende
+del tamaño de batch (su varianza decrece con él), de modo que solo es comparable entre
+entrenamientos que lo fijen.
+
+La propuesta más reciente de la familia es la alineación gradiente-peso (GWA) de
+Hölzl~\cite{hoelzl2025gradient}, que mide el coseno entre el gradiente de cada ejemplo y los
+pesos del clasificador final. Es la métrica con la correlación reportada más alta de todo el
+corpus: Pearson de 0,99 y Spearman de 0,97 entre su valor máximo a lo largo del entrenamiento y
+la accuracy de test, y además admite una forma cerrada que la deja casi gratis cuando se calcula
+solo sobre la última capa. Sus resultados, sin embargo, se obtienen con arquitecturas modernas
+de tipo convolucional y transformador y con un protocolo orientado a la robustez frente a ruido
+de etiquetas, por lo que queda abierto si esa correlación tan alta se sostiene en arquitecturas
+y condiciones distintas.
+
+Cierra la familia, en el plano teórico, el alineamiento entre el núcleo tangente neuronal (NTK)
+y la tarea, estudiado por Shan y Bordelon~\cite{shan2021theory}. El NTK describe la dinámica de
+entrenamiento en el límite de anchura infinita, y su alineamiento con la estructura del problema
+crece durante el entrenamiento de forma que correlaciona con la accuracy de test. Es un marco
+valioso para entender por qué la alineación importa, pero su cálculo exige el jacobiano de la
+salida respecto a los parámetros, prohibitivo en redes reales, y su justificación descansa en un
+límite de anchura infinita que no se da en la práctica. Por eso, en este trabajo, el NTK se
+recoge como soporte conceptual de la familia y no como métrica que se mida.
 
 \section{Familia de variabilidad estocástica}
 \label{sec:sota-variabilidad}
-% gradient noise scale, normalized variance, GSNR; relación con el batch size crítico.
 
-\section{Baselines sin instrumentar el gradiente}
+La segunda familia no mira la dirección relativa de los gradientes, sino su dispersión. La
+intuición es complementaria de la anterior: un gradiente cuya estimación varía mucho de un
+minibatch a otro da al optimizador una señal ruidosa, y la magnitud de ese ruido respecto a la
+señal condiciona cuánto se puede avanzar por paso y cuál es el tamaño de batch a partir del cual
+deja de merecer la pena agrandarlo.
+
+El trabajo de referencia es el modelo empírico de entrenamiento con lotes grandes de McCandlish
+et al.~\cite{mccandlish2018empirical}, que introduce la escala de ruido del gradiente (GNS): el
+cociente entre la traza de la covarianza del gradiente y el cuadrado de su norma. Su aportación
+es predecir, antes de barrer el hiperparámetro, el tamaño de batch crítico, esto es, el punto a
+partir del cual duplicar el batch deja de reducir el número de pasos necesarios. La métrica es,
+por construcción, una predicción de un hiperparámetro de entrenamiento más que de la eficiencia
+final, y su versión exacta requiere la Hessiana; la forma simplificada que se usa en la práctica
+asume que la curvatura es proporcional a la identidad, una aproximación cómoda pero no inocua.
+
+Faghri et al.~\cite{faghri2020study} estudian directamente la varianza del gradiente y proponen
+una varianza normalizada que la hace comparable entre problemas de distinta escala. Su hallazgo
+más llamativo es contraintuitivo: en CIFAR e ImageNet la varianza normalizada crece durante el
+entrenamiento en lugar de decrecer, lo que contradice la imagen ingenua de que el gradiente se
+va estabilizando a medida que la red aprende. Es un trabajo descriptivo más que predictivo: mide
+y caracteriza la varianza, pero no la usa para anticipar la eficiencia de un entrenamiento.
+
+Liu et al.~\cite{liu2020understanding} cierran la familia con la razón señal-ruido del gradiente
+por parámetro (GSNR), que es esencialmente el inverso de la varianza normalizada. Su tesis es
+que un GSNR alto durante el entrenamiento se asocia con un menor hueco de generalización, y la
+respaldan con un marco teórico que relaciona el GSNR con la mejora de generalización por paso, y
+con correlaciones de Pearson en el rango de 0,907 a 0,968 entre los dos lados de esa relación.
+La evidencia, sin embargo, procede en buena parte de entrenamientos con descenso de gradiente
+puro y tasas de aprendizaje pequeñas, condiciones que aíslan el fenómeno pero se alejan del
+entrenamiento estocástico habitual.
+
+Conviene situar aquí, como telón de fondo, dos trabajos que no aportan métricas pero justifican
+el interés por medir la varianza en lugar de combatirla. El gradiente estocástico de varianza
+reducida de Johnson y Zhang~\cite{johnson2013accelerating} demuestra que reducir explícitamente
+la varianza del estimador acelera la convergencia bajo convexidad fuerte, lo que legitima la
+varianza como cantidad relevante para la velocidad de entrenamiento. Pero Defazio y
+Bottou~\cite{defazio2019ineffectiveness} muestran, de forma empírica, que esa reducción fracasa
+en redes profundas modernas: la estructura de suma finita sobre la que se apoya se rompe con la
+normalización por lotes, el aumento de datos y el dropout, hasta el punto de que el método llega
+a inyectar más varianza de la que elimina. La conclusión que este trabajo extrae de ese
+contraste es que, en aprendizaje profundo real, la varianza del gradiente tiene más valor como
+señal diagnóstica que como objetivo a minimizar.
+
+Por último, los optimizadores que se barren en el estudio enmarcan también esta familia. El
+repaso de Ruder~\cite{ruder2016overview} ofrece la taxonomía de variantes de descenso por
+gradiente, y Adam~\cite{kingma2015adam} y su antecedente RMSProp~\cite{tieleman2012rmsprop}
+incorporan en su propia mecánica una razón señal-ruido por parámetro: dividen el gradiente por
+una estimación de su magnitud reciente, que es justamente lo que mide la familia de
+variabilidad. Esta coincidencia motiva una decisión de diseño que se justifica en el
+Capítulo~\ref{ch:metodologia}: medir todas las métricas sobre el gradiente bruto, y nunca sobre
+el paso ya preacondicionado por el optimizador, para que sean comparables entre SGD y Adam.
+
+\section{Predictores de referencia sin instrumentar el gradiente}
 \label{sec:sota-baselines}
-% TSE y early-val-accuracy@f: el rival a batir.
+
+El valor de este trabajo depende de una comparación honesta. Medir el gradiente cuesta, así que
+el rival no es la métrica más simple ni la que cada artículo proponga, sino el mejor predictor
+que se puede obtener sin instrumentar el gradiente en absoluto, leyendo solo lo que el
+entrenamiento ya produce. Ese predictor de referencia tiene dos componentes, ambos de coste
+prácticamente nulo.
+
+El primero es el estimador de velocidad de entrenamiento (TSE) de la
+Sección~\ref{sec:eda-prediccion}, que resume la curva de pérdida de entrenamiento temprana. El
+segundo, y probablemente el más fuerte, es la propia métrica de validación medida en la misma
+fracción temprana del entrenamiento, es decir, la accuracy o la pérdida de validación a una
+fracción dada. Es una señal casi gratuita y muy informativa: si las primeras épocas ya separan
+las configuraciones buenas de las malas en validación, una métrica de gradiente que no supere
+esa separación no añade nada que merezca su coste.
+
+Estos dos predictores definen el suelo que las métricas de gradiente deben superar. La
+comparación no se hace solo en términos de correlación cruda, sino de valor incremental: cuánto
+añade una métrica una vez descontado lo que la curva de pérdida y la validación temprana ya
+predicen. Este es el contraste que el objetivo~\ref{obj:incremental} del
+Capítulo~\ref{ch:introduccion} señala como decisivo, y su formalización se detalla en el
+Capítulo~\ref{ch:metodologia}.
 
 \section{Posicionamiento de este trabajo}
 \label{sec:sota-hueco}
-% El hueco: comparativa multi-familia + barrido temporal + robustez + frente de Pareto.
+
+La revisión anterior deja ver un patrón. Cada métrica se ha propuesto y validado por separado,
+con un objetivo propio (explicar la generalización, elegir el tamaño de batch o decidir cuándo
+parar), sobre un conjunto de datos y una arquitectura concretos, y rara vez frente al predictor
+de referencia barato. La Tabla~\ref{tab:sota-metricas} resume las métricas revisadas en los
+mismos ejes, lo que hace visible esa dispersión: conviven señales de signo y coste muy
+distintos, evaluadas en bancos de prueba que no se solapan.
+
+\begin{table}[ht]
+\centering
+\small
+\caption{Las métricas tempranas revisadas, situadas en ejes comunes. El coste es relativo al de
+un paso de entrenamiento. La señal indica el sentido que cada trabajo asocia con un
+entrenamiento más eficiente o una mejor generalización.}
+\label{tab:sota-metricas}
+\begin{tabular}{llll}
+\toprule
+\textbf{Métrica} & \textbf{Familia} & \textbf{Señal asociada} & \textbf{Coste} \\
+\midrule
+m-coherencia~\cite{chatterjee2020making}        & Alineación   & alta es mejor & medio \\
+Stiffness~\cite{fort2019stiffness}              & Alineación   & alta es mejor & medio \\
+Gradient confusion~\cite{sankararaman2020impact} & Alineación  & baja es mejor & alto  \\
+Gradient disparity~\cite{forouzesh2021disparity} & Alineación  & baja es mejor & bajo  \\
+GWA~\cite{hoelzl2025gradient}                   & Alineación   & alta es mejor & medio \\
+Varianza normalizada~\cite{faghri2020study}     & Variabilidad & baja es mejor & bajo  \\
+Escala de ruido GNS~\cite{mccandlish2018empirical} & Variabilidad & baja es mejor & medio \\
+GSNR~\cite{liu2020understanding}                & Variabilidad & alta es mejor & medio \\
+\midrule
+TSE (referencia)~\cite{ru2021speedy}            & ---          & baja es mejor & nulo  \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+De ese patrón se desprende el hueco que este trabajo ocupa. Hasta donde sabemos, ningún trabajo
+previo compara las dos familias sobre un mismo banco de pruebas, barre la fracción temprana del
+entrenamiento para establecer cuán pronto basta medir, comprueba la robustez de la relación al
+cambiar de arquitectura, de conjunto de datos y de optimizador, y, sobre todo, exige a cada
+métrica superar al predictor de referencia barato antes de darla por útil. La
+Tabla~\ref{tab:sota-posicion} resume esta comparación de cobertura.
+
+\begin{table}[ht]
+\centering
+\small
+\caption{Cobertura de este trabajo frente a trabajos representativos del estado del arte, en los
+ejes que definen la aportación.}
+\label{tab:sota-posicion}
+\begin{tabular}{lccccc}
+\toprule
+ & \textbf{Multi-} & \textbf{Barrido} & \textbf{Robustez} & \textbf{Control por} & \textbf{Pareto} \\
+\textbf{Trabajo} & \textbf{familia} & \textbf{temporal} & \textbf{cross-setting} & \textbf{baseline} & \textbf{coste-potencia} \\
+\midrule
+Ru et al.~\cite{ru2021speedy}                   & No      & Parcial & Parcial & ---  & No \\
+Forouzesh y Thiran~\cite{forouzesh2021disparity} & No     & Parcial & Parcial & No   & No \\
+Hölzl~\cite{hoelzl2025gradient}                 & No      & Parcial & Parcial & Parcial & No \\
+McCandlish et al.~\cite{mccandlish2018empirical} & No     & No      & Parcial & No   & No \\
+\textbf{Este trabajo}                           & Sí      & Sí      & Sí      & Sí   & Sí \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+La aportación no es, por tanto, una métrica nueva, sino una evaluación comparativa y rigurosa de
+las existentes. El resultado que se busca no es coronar a la que mejor predice, sino a la que
+mejor predice por unidad de coste, lo que se expresa como un frente de Pareto entre potencia
+predictiva y coste de cómputo. Conviene acotar también lo que el trabajo no puede afirmar: la
+evidencia se limita a la clasificación de imágenes, con ImageNet sustituido por su versión
+reducida, y es de naturaleza correlacional, de modo que las relaciones que se encuentren no
+autorizan conclusiones causales ni una extrapolación automática a otros dominios. El
+Capítulo~\ref{ch:metodologia} traduce este posicionamiento en un diseño experimental con
+hipótesis falsables.
