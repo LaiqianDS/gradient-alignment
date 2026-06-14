@@ -21,10 +21,16 @@ def _gd_core(batch_grads: torch.Tensor) -> dict[str, float]:
     """Mean L2 distance over all ``C(s, 2)`` unordered batch-gradient pairs.
 
     ``batch_grads`` is ``[s, P]`` (one flat gradient per batch). ``torch.pdist``
-    returns the ``C(s, 2)`` pairwise distances directly. No ``‖g‖``
-    normalisation: that would break the paper's PAC-Bayes connection.
+    gives the ``C(s, 2)`` pairwise distances directly on CUDA/CPU; MPS lacks that
+    kernel (``aten::_pdist_forward``), so there the same pairs are enumerated by
+    hand. No ``‖g‖`` normalisation: that would break the paper's PAC-Bayes link.
     """
-    pairwise = torch.pdist(batch_grads, p=2)  # [C(s, 2)]
+    if batch_grads.device.type == "mps":
+        s = batch_grads.shape[0]
+        idx = torch.triu_indices(s, s, offset=1).to(batch_grads.device)
+        pairwise = (batch_grads[idx[0]] - batch_grads[idx[1]]).norm(dim=1)
+    else:
+        pairwise = torch.pdist(batch_grads, p=2)
     return {"gd/scalar": pairwise.mean().item()}
 
 

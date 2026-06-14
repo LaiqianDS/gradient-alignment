@@ -39,6 +39,8 @@ def _gwa_aggregate(gammas: torch.Tensor) -> dict[str, float]:
     flipping the sign. Constant cosines (``m2 = 0``) leave the kurtosis
     undefined: ``gwa/kurt`` and ``gwa/value`` are NaN, ``gwa/score_mean`` stays.
     """
+    if gammas.device.type == "mps":
+        gammas = gammas.cpu()
     g = gammas.double()
     M1 = g.mean()
     m2 = ((g - M1) ** 2).mean()
