@@ -18,7 +18,7 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 
-from .primitives import EPS, per_sample_grad_matrix
+from .primitives import EPS, stream_grad_moments
 
 
 def _mcoh_core(G: torch.Tensor) -> dict[str, float]:
@@ -33,6 +33,15 @@ def _mcoh_core(G: torch.Tensor) -> dict[str, float]:
     return {"mcoh/global": float(alpha)}
 
 
+def _mcoh_from_moments(S: torch.Tensor, Q: torch.Tensor) -> dict[str, float]:
+    """``_mcoh_core`` from the streamed moments ``S = Σg_i``, ``Q = Σg_i²``.
+
+    ``num = ‖S‖²`` and the denominator ``Σ_i‖g_i‖² = Q.sum()`` -- identical to
+    the full-matrix core, which is precisely ``‖G.sum(0)‖² / (G*G).sum()``.
+    """
+    return {"mcoh/global": float(S.dot(S) / (Q.sum() + EPS))}
+
+
 class MCoherenceMetric:
     name = "m_coherence"
 
@@ -44,8 +53,8 @@ class MCoherenceMetric:
         loss_fn: nn.Module,
     ) -> dict[str, float]:
         model.eval()  # per-sample grads; mini-batches would inflate coherence
-        G = per_sample_grad_matrix(model, X, y, loss_fn)
-        return _mcoh_core(G)
+        S, Q, _ = stream_grad_moments(model, X, y, loss_fn)
+        return _mcoh_from_moments(S, Q)
 
 
 METRIC = MCoherenceMetric()

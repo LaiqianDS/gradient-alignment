@@ -17,7 +17,7 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 
-from .primitives import EPS, per_sample_grad_matrix
+from .primitives import EPS, stream_gram
 
 
 def _mean_upper(M: torch.Tensor, mask: torch.Tensor) -> float:
@@ -34,16 +34,20 @@ def _mean_upper(M: torch.Tensor, mask: torch.Tensor) -> float:
     return M[sel].mean().item()
 
 
-def _stiffness_core(G: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
-    """Pairwise stiffness over per-sample gradients ``G`` [M, P], labels ``y`` [M].
+def _stiffness_from_gram(
+    gram: torch.Tensor, norms: torch.Tensor, y: torch.Tensor
+) -> dict[str, float]:
+    """Pairwise stiffness from the ``[M, M]`` Gram and ``[M]`` row norms.
 
-    Builds the cosine matrix from row-normalised gradients and the sign matrix
-    from the raw Gram matrix, then averages the strict upper triangle globally and
-    masked by label equality (within) / inequality (between).
+    ``cos_{ij} = ⟨g_i, g_j⟩ / (‖g_i‖‖g_j‖) = Gram_{ij}/(n_i n_j)`` and the sign
+    matrix is ``sign(Gram)`` -- algebraically identical to the row-normalised
+    ``Gn @ Gn.T`` / ``sign(G @ G.T)`` of :func:`_stiffness_core`, but expressed
+    on the compact Gram so it can be fed by the streamed sweep. A zero-gradient
+    row clamps to ``EPS`` and contributes cosine 0 (the paper's ΔL₂=0 convention).
     """
-    Gn = G / G.norm(dim=1, keepdim=True).clamp_min(EPS)
-    cos = Gn @ Gn.T
-    sign = torch.sign(G @ G.T)
+    n = norms.clamp_min(EPS)
+    cos = gram / (n.unsqueeze(0) * n.unsqueeze(1))
+    sign = torch.sign(gram)
 
     same = y.unsqueeze(0) == y.unsqueeze(1)  # [M, M] within-class pair mask
     diff = ~same
@@ -59,6 +63,16 @@ def _stiffness_core(G: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
     }
 
 
+def _stiffness_core(G: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
+    """Pairwise stiffness over per-sample gradients ``G`` [M, P], labels ``y`` [M].
+
+    Forms the ``[M, M]`` Gram and per-row norms, then delegates to
+    :func:`_stiffness_from_gram` -- one shared math path for both the full-matrix
+    (tested) and the streamed ``compute()`` routes.
+    """
+    return _stiffness_from_gram(G @ G.T, G.norm(dim=1), y)
+
+
 class StiffnessMetric:
     name = "stiffness"
 
@@ -70,8 +84,8 @@ class StiffnessMetric:
         loss_fn: nn.Module,
     ) -> dict[str, float]:
         model.eval()
-        G = per_sample_grad_matrix(model, X, y, loss_fn)
-        return _stiffness_core(G, y)
+        gram, norms = stream_gram(model, X, y, loss_fn)
+        return _stiffness_from_gram(gram, norms, y)
 
 
 METRIC = StiffnessMetric()

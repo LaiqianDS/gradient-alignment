@@ -16,7 +16,7 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 
-from .primitives import EPS, per_sample_grad_matrix
+from .primitives import EPS, stream_grad_moments
 
 # Threshold on the per-column gradient norm below which a parameter is treated as
 # "dead" (dead ReLU, zero-init bias) and excluded from the GSNR aggregation.
@@ -48,6 +48,29 @@ def _gsnr_core(G: torch.Tensor) -> dict[str, float]:
     }
 
 
+def _gsnr_from_moments(S: torch.Tensor, Q: torch.Tensor, M: int) -> dict[str, float]:
+    """``_gsnr_core`` from the streamed moments ``S = Σg_i``, ``Q = Σg_i²``.
+
+    ``gbar = S/M``; the unbiased per-column variance is ``(Q − S²/M)/(M−1)`` and
+    the per-column gradient norm ``‖G[:, j]‖ = √Q_j``, so the dead-column filter
+    and the ``r_j = gbar_j²/var_j`` reduction match the full-matrix core exactly.
+    """
+    gbar = S / M
+    var = (Q - S * S / M) / (M - 1)
+    r = gbar.pow(2) / (var + EPS)
+
+    col_norm = Q.clamp_min(0).sqrt()
+    alive = col_norm > _DEAD_TOL
+    if bool(alive.any()):
+        r = r[alive]
+
+    return {
+        "gsnr/mean": float(r.mean()),
+        "gsnr/median": float(r.median()),
+        "gsnr/p95": float(torch.quantile(r, 0.95)),
+    }
+
+
 class GsnrMetric:
     """GSNR metric: per-sample ∇L sweep then :func:`_gsnr_core` aggregation."""
 
@@ -61,8 +84,8 @@ class GsnrMetric:
         loss_fn: nn.Module,
     ) -> dict[str, float]:
         model.eval()
-        G = per_sample_grad_matrix(model, X, y, loss_fn)
-        return _gsnr_core(G)
+        S, Q, M = stream_grad_moments(model, X, y, loss_fn)
+        return _gsnr_from_moments(S, Q, M)
 
 
 METRIC = GsnrMetric()

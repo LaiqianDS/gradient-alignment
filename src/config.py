@@ -35,10 +35,16 @@ class Config:
     seed: int = 42
 
     # --- metric probing -------------------------------------------------
-    # probe_size is M: the per-sample gradient batch. Peak memory for the
-    # [M, P] per-sample matrix is ~ M * num_params * 4 bytes — keep small on
-    # big models (see train.py's memory warning).
+    # probe_size is M: the per-sample gradient batch. It is a *scientific* knob
+    # (it sets the estimator's sample count), so it stays fixed across the grid.
     probe_size: int = 256
+
+    # chunk_size is rows-per-chunk for the streamed per-sample-grad sweeps. It is
+    # *operational only* — the streamed statistics are chunk-invariant, so it
+    # never enters the science; it just caps the GPU peak at [chunk_size, P]
+    # instead of the full [M, P] Jacobian. Lower it on a tight GPU. (Deliberately
+    # NOT in FIXED_KNOBS: it is not a confound axis.)
+    chunk_size: int = 32
 
     # --- efficiency target ----------------------------------------------
     threshold_acc: float | None = None  # val-acc level for "epochs-to-threshold"
@@ -59,7 +65,7 @@ _SCALAR_FLAGS = [
     ("dataset", str), ("model", str), ("optimizer", str),
     ("lr", float), ("batch_size", int), ("epochs", int),
     ("momentum", float), ("weight_decay", float), ("seed", int),
-    ("probe_size", int), ("out_dir", str), ("device", str),
+    ("probe_size", int), ("chunk_size", int), ("out_dir", str), ("device", str),
 ]
 
 

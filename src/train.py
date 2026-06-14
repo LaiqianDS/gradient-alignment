@@ -35,6 +35,7 @@ from config import Config, config_to_dict, parse_config
 from data import build_dataloaders, build_probe, build_train_eval_loader
 from logger import RunLogger
 from metrics import REGISTRY
+from metrics.primitives import set_chunk_size
 from metrics_runner import baseline_row, measure
 from models import build_model
 from seed import set_seed
@@ -82,18 +83,26 @@ def default_run_name(cfg: Config) -> str:
     return f"{cfg.model}_{cfg.dataset}_{cfg.optimizer}_lr{cfg.lr}_seed{cfg.seed}"
 
 
-def warn_probe_memory(num_params: int, probe_size: int) -> float:
-    """Print the peak [M, P] per-sample-grad memory and warn if it is large.
+def warn_probe_memory(num_params: int, probe_size: int, chunk_size: int) -> float:
+    """Print the streamed per-sample-grad memory profile and warn if it is large.
 
-    We surface this rather than silently capping M: changing M between runs
-    would make cross-model comparisons apples-to-oranges.
+    The dense [M, P] Jacobian is never materialised: per-sample grads stream in
+    row-chunks, so the *device* peak is [chunk_size, P], and only the pairwise
+    metrics assemble the full [M, P] in *host* RAM to form the [M, M] Gram. Both
+    are surfaced so a too-tight GPU (lower --chunk-size) or host (smaller probe
+    / model) is diagnosable up front. We never silently cap M: it is a scientific
+    knob, and changing it between runs would make cross-model comparisons
+    apples-to-oranges.
     """
-    gb = probe_size * num_params * 4 / 1e9
-    msg = f"[train] per-sample grad matrix ~{gb:.2f} GB (M={probe_size} x P={num_params:,} x 4B)"
-    if gb > 2.0:
-        msg += "  -- WARNING: large. Lower --probe-size or use a smaller model."
+    device_gb = chunk_size * num_params * 4 / 1e9
+    host_gb = probe_size * num_params * 4 / 1e9
+    msg = (f"[train] per-sample grad: device peak ~{device_gb:.2f} GB "
+           f"(chunk={chunk_size} x P={num_params:,} x 4B); "
+           f"host Gram ~{host_gb:.2f} GB (M={probe_size} x P)")
+    if device_gb > 4.0:
+        msg += "  -- WARNING: device peak large. Lower --chunk-size."
     print(msg)
-    return gb
+    return device_gb
 
 
 def epoch_mean_losses(step_losses: list[float], steps_per_epoch: int) -> list[float]:
@@ -238,9 +247,10 @@ def train(cfg: Config) -> dict:
     loss_fn = nn.CrossEntropyLoss()
     optimizer = build_optimizer(cfg, model)
     metrics = dict(REGISTRY)  # always all of them; discard post-hoc, never up front
+    set_chunk_size(cfg.chunk_size)  # cap the per-sample-grad device peak
 
     num_params = sum(p.numel() for p in model.parameters())
-    warn_probe_memory(num_params, cfg.probe_size)
+    warn_probe_memory(num_params, cfg.probe_size, cfg.chunk_size)
 
     logger = RunLogger(cfg.out_dir, run_name, config_to_dict(cfg))
 

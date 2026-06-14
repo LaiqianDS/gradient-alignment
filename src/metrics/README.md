@@ -112,11 +112,36 @@ Three rules keep the package modular and testable:
    optimizer's preconditioned step. That keeps values comparable across SGD and
    Adam — the whole point of a cross-optimizer study.
 
+### Memory: streaming the per-example sweep
+
+The dense `[M, P]` per-example Jacobian is `M·P·4` bytes — 14 GB for the `fc`
+head on Tiny ImageNet at `M=256` (`P≈13.8M`), which overflows a 16 GB GPU. So the
+six metrics that need per-example gradients **stream the probe in row-chunks**
+(`primitives.stream_grad_moments` / `stream_gram` / `iter_per_sample_grad_dicts`):
+the device only ever holds `[chunk_size, P]`. The variability metrics reduce to
+two float64 column moments (`S=Σgᵢ`, `Q=Σgᵢ²`); the pairwise ones assemble `G` in
+*host* RAM and form the tiny `[M, M]` Gram with a blocked matmul back on-device.
+
+- **`chunk_size`** (`Config`, default 32) is **operational only** — the streamed
+  statistics are chunk-invariant, so it never enters the science and is *not* in
+  `FIXED_KNOBS`. Lower it (`--chunk-size`) on a tight GPU. (Values do shift at
+  float32 ~1e-6 across chunk sizes via vmap GEMM tiling, so keep it fixed across a
+  sweep — the default already does.)
+- **Host RAM:** `stiffness` / `gradient_confusion` need ~`M·P·4` bytes of host RAM
+  for the assembled `G` (14 GB worst case). Below that they fail per-metric
+  (caught, logged) while the rest run.
+
+Each metric keeps its tested full-matrix `_core(G)`; only `compute()` drives the
+streamer (`tests/test_streaming.py` pins compute == core and chunk-invariance).
+The streamed outputs were checked against the pre-streaming implementation on a
+fixed model+probe and agree to float32 precision (worst ~4e-5 relative; the
+column metrics now accumulate in float64, so they are if anything more accurate).
+
 ```
 src/metrics/
   __init__.py        REGISTRY (8 metrics) + BASELINE (tse)
   base.py            the Metric contract (name + compute)
-  primitives.py      shared gradient helpers
+  primitives.py      shared gradient helpers + streaming sweeps
   <metric>.py        one file per metric: _core function + class + METRIC
 ```
 

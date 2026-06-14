@@ -21,7 +21,7 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 
-from .primitives import EPS, named_last_linear, per_sample_grads
+from .primitives import EPS, iter_per_sample_grad_dicts, named_last_linear
 
 # Excess-kurtosis correction constant from the paper (GWA_T denominator).
 _BETA = 1.2
@@ -79,20 +79,21 @@ class GwaMetric:
         loss_fn: nn.Module,
     ) -> dict[str, float]:
         model.eval()
-        grads = per_sample_grads(model, X, y, loss_fn)
-
         lname, module = named_last_linear(model)
-        g = grads[lname + ".weight"].flatten(start_dim=1)  # [M, W], bias excluded
         w = module.weight.detach().reshape(-1)  # [W] classifier weight vector
-
-        # cos(g_i, w) per sample. We keep raw ∇L: the paper's g = -∇L flips the
-        # sign, but negating w (or g) here would only flip every gamma in unison,
-        # leaving order/magnitude unchanged — so we leave the raw sign as-is.
-        gn = g / g.norm(dim=1).clamp_min(EPS).unsqueeze(1)
         wn = w / w.norm().clamp_min(EPS)
-        gammas = gn @ wn  # [M]
 
-        return _gwa_aggregate(gammas)
+        # cos(g_i, w) per sample, accumulated over streamed chunks (the head's
+        # weight grads are tiny, so only the [M] cosines survive). We keep raw
+        # ∇L: the paper's g = -∇L flips the sign, but negating w (or g) here would
+        # only flip every gamma in unison, leaving order/magnitude unchanged.
+        chunks = []
+        for grads, _ in iter_per_sample_grad_dicts(model, X, y, loss_fn):
+            g = grads[lname + ".weight"].flatten(start_dim=1)  # [c, W], bias excluded
+            gn = g / g.norm(dim=1).clamp_min(EPS).unsqueeze(1)
+            chunks.append(gn @ wn)  # [c]
+
+        return _gwa_aggregate(torch.cat(chunks))
 
 
 METRIC = GwaMetric()
