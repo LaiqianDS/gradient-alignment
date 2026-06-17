@@ -1,27 +1,342 @@
 \chapter{Fundamentos teóricos}
 \label{ch:fundamentos}
-% Definiciones formales (fórmulas). Fuente: metrics.md + Conceptos/.
+% Definiciones formales. Las cifras y la dirección de cada métrica siguen la versión
+% auditada de docs/research/Métricas.md y las notas de Papers/, no Conceptos.md.
+
+Este capítulo fija las definiciones formales que el Capítulo~\ref{ch:estado-del-arte}
+maneja en su versión conceptual. Primero se establece la notación común, desde el
+descenso por gradiente estocástico hasta la geometría de los gradientes por ejemplo
+(Secciones~\ref{sec:sgd} y~\ref{sec:geometria}). Sobre esa base se definen las dos
+familias de métricas, la de alineación y la de variabilidad
+(Secciones~\ref{sec:def-alineacion} y~\ref{sec:def-variabilidad}), y el marco del núcleo
+tangente neuronal que las sostiene en el plano teórico (Sección~\ref{sec:ntk}). La
+Sección~\ref{sec:eficiencia} define los indicadores de eficiencia que actúan como
+variables a predecir. Aquí solo se definen los objetos; el protocolo de medición (el
+\emph{probe}, las ventanas, el suavizado) y las hipótesis con signo asociadas a cada
+métrica se detallan en el Capítulo~\ref{ch:metodologia}.
 
 \section{Descenso por gradiente estocástico}
 \label{sec:sgd}
-% SGD mini-batch; estimador insesgado; primer y segundo momento.
+
+Sea un conjunto de entrenamiento de $n$ ejemplos $\{(x_i, y_i)\}_{i=1}^n$, una red
+$f_\theta$ con parámetros $\theta \in \mathbb{R}^P$ y una función de pérdida por ejemplo
+$\ell_i(\theta) = \ell(f_\theta(x_i), y_i)$. El objetivo del entrenamiento es minimizar el
+riesgo empírico $f(\theta) = \tfrac{1}{n}\sum_{i=1}^n \ell_i(\theta)$. El descenso por
+gradiente estocástico con minibatch no evalúa el gradiente exacto $\nabla f(\theta)$, sino
+una estimación sobre un subconjunto $S_t$ de $B$ ejemplos extraídos al azar en cada paso:
+
+\begin{equation}
+\theta_{t+1} = \theta_t - \eta_t\, \hat{g}_t,
+\qquad
+\hat{g}_t = \frac{1}{B}\sum_{i \in S_t} \nabla_\theta \ell_i(\theta_t),
+\label{eq:sgd}
+\end{equation}
+
+donde $\eta_t$ es la tasa de aprendizaje. Cuando los ejemplos se muestrean de forma
+independiente, el estimador es \emph{insesgado}, $\mathbb{E}[\hat{g}_t] = \nabla f(\theta_t)$,
+lo que garantiza que SGD optimiza la pérdida correcta y no una distorsión sistemática de
+ella. Su dispersión, en cambio, no es nula: para ejemplos i.i.d.
+
+\begin{equation}
+\operatorname{Var}[\hat{g}_t] = \frac{1}{B}\operatorname{tr}(\Sigma),
+\qquad
+\Sigma = \operatorname{Cov}_i\!\big[\nabla_\theta \ell_i(\theta_t)\big],
+\label{eq:sgd-var}
+\end{equation}
+
+con $\Sigma$ la covarianza del gradiente por ejemplo. Esta varianza escala como $1/B$ pero
+persiste incluso en el óptimo, donde $\nabla f = 0$ y aun así $\operatorname{Var}[\hat{g}] > 0$,
+porque cada minibatch apunta a un objetivo ligeramente distinto. Es el suelo de ruido que
+obliga a decaer la tasa de aprendizaje para converger en lugar de orbitar el mínimo, y es
+la cantidad que cuantifica la familia de variabilidad.
+
+Dos resúmenes estadísticos del gradiente por ejemplo vertebran el resto del capítulo. El
+\emph{primer momento} $\mathbb{E}[g]$ describe la dirección consistente del gradiente y es
+lo que estiman el momento y la media móvil $m_t$ de Adam~\cite{kingma2015adam}. El
+\emph{segundo momento}, a través de $\mathbb{E}[\|g\|^2]$ o de la traza de $\Sigma$,
+describe su magnitud y su dispersión, y es lo que recogen el segundo momento $v_t$ de Adam
+y la escala de ruido del gradiente. Las dos familias de métricas leen, respectivamente, la
+dirección relativa de los gradientes por ejemplo (alineación) y su dispersión
+(variabilidad). Para que ambas sean comparables entre SGD y Adam, todas se calculan sobre
+el gradiente bruto $\nabla \ell$ y nunca sobre el paso ya preacondicionado por el
+optimizador, decisión que el Capítulo~\ref{ch:estado-del-arte} justifica y que el
+Capítulo~\ref{ch:metodologia} retoma.
 
 \section{Geometría del gradiente}
 \label{sec:geometria}
-% Gradientes per-ejemplo, matriz de Gram, similitud coseno.
+
+El objeto sobre el que se construyen casi todas las métricas es el gradiente por ejemplo
+
+\begin{equation}
+g_i = \nabla_\theta\, \ell(f_\theta(x_i), y_i) \in \mathbb{R}^P,
+\label{eq:per-sample}
+\end{equation}
+
+el gradiente de la pérdida de un único ejemplo, antes de promediar. El gradiente del
+minibatch es su media $\hat{g} = \tfrac{1}{B}\sum_i g_i$, pero esa media descarta la
+estructura estadística que las métricas explotan: la distribución de los $g_i$ (su
+covarianza, su curtosis) describe el ruido, y sus productos internos por pares describen si
+los ejemplos cooperan o se cancelan. Para medirlos sin contaminar la dinámica de
+entrenamiento, las métricas se evalúan sobre un \emph{probe} fijo de $M$ ejemplos,
+muestreado una sola vez y reutilizado en cada medición, de modo que la variación temporal
+de la métrica refleje cambios reales en el modelo y no el remuestreo.
+
+Las dos operaciones elementales son la matriz de Gram y la similitud coseno. La matriz de
+Gram recoge todos los productos internos por pares, $\mathbf{G}_{ij} = \langle g_i, g_j\rangle$,
+y la similitud coseno los normaliza por magnitud:
+
+\begin{equation}
+\cos(g_i, g_j) = \frac{\langle g_i, g_j\rangle}{\|g_i\|\,\|g_j\|} \in [-1, 1].
+\label{eq:cosine}
+\end{equation}
+
+El coseno vale $1$ si los dos gradientes apuntan en la misma dirección, $0$ si son
+ortogonales y $-1$ si son opuestos. La normalización por norma importa porque lo relevante
+para la cooperación entre ejemplos es la dirección relativa, no la escala individual de
+cada gradiente. Conviene además recordar un hecho de alta dimensión: dos vectores
+isótropos aleatorios en $\mathbb{R}^P$ tienen un coseno típico del orden de $1/\sqrt{P}$,
+prácticamente cero cuando $P$ es del orden de millones. Por tanto, cualquier desviación
+sistemática positiva del coseno medio entre gradientes por ejemplo es señal real y no
+fluctuación muestral.
 
 \section{Métricas de alineación}
 \label{sec:def-alineacion}
-% m-coherence, stiffness, gradient confusion, gradient disparity, GWA; predicción con signo (H6).
+
+La familia de alineación cuantifica en qué medida los gradientes de ejemplos distintos
+apuntan hacia el mismo sitio. Su marco conceptual es la descomposición de la norma del
+gradiente del minibatch~\cite{chatterjee2020coherent},
+
+\begin{equation}
+\Big\|\sum_i g_i\Big\|^2 = \sum_i \|g_i\|^2 + \sum_{i \neq j} \langle g_i, g_j\rangle,
+\label{eq:cgh}
+\end{equation}
+
+donde el primer término es la energía individual de cada ejemplo y el segundo, la suma de
+productos internos cruzados, es donde vive la coherencia. Las métricas siguientes son
+distintos agregadores de ese término cruzado.
+
+\paragraph{m-coherencia.} Reduce la coherencia a un único escalar sobre el probe de $M$
+ejemplos~\cite{chatterjee2020making}:
+
+\begin{equation}
+\alpha = \frac{\big\|\sum_{i=1}^{M} g_i\big\|^2}{\sum_{i=1}^{M} \|g_i\|^2} \in [0, M].
+\label{eq:mcoherence}
+\end{equation}
+
+Vale $M$ cuando los gradientes son idénticos y $1$ en el \emph{límite ortogonal}, donde son
+mutuamente perpendiculares y de misma norma; valores por debajo de $1$ indican gradientes
+anticorrelados. Su lectura intuitiva es el número medio de ejemplos que se benefician de un
+paso de descenso obtenido a partir del gradiente de un ejemplo cualquiera. Una alineación
+mayor se asocia con un aprendizaje más coherente, de modo que se predice $\alpha$ alta como
+señal de entrenamiento eficiente.
+
+\paragraph{Stiffness.} Mide el coseno entre gradientes de pares de ejemplos, desagregado
+por clases~\cite{fort2019stiffness}. Sobre el probe se definen una variante de coseno y una
+de signo,
+
+\begin{equation}
+S_{\cos} = \mathbb{E}_{i \neq j}\!\big[\cos(g_i, g_j)\big],
+\qquad
+S_{\operatorname{sign}} = \mathbb{E}_{i \neq j}\!\big[\operatorname{sign}\langle g_i, g_j\rangle\big],
+\label{eq:stiffness}
+\end{equation}
+
+cada una restringida a pares de la misma clase ($y_i = y_j$, stiffness \emph{intra-clase})
+o de clases distintas ($y_i \neq y_j$, \emph{inter-clase}). Una stiffness intra-clase alta
+indica que la red ha aprendido características compartidas y que cada paso de gradiente sobre
+un ejemplo beneficia al resto de su clase; el indicador robusto es la diferencia
+intra-clase menos inter-clase. La señal predictiva es más fuerte en la fase temprana,
+porque la stiffness decae hacia cero cuando comienza el sobreajuste.
+
+\paragraph{Gradient confusion.} Adopta el punto de vista del peor caso: el coseno más
+negativo entre cualquier par de gradientes del probe~\cite{sankararaman2020impact}. En su
+forma normalizada,
+
+\begin{equation}
+\hat{\eta} = -\min_{i \neq j} \cos(g_i, g_j).
+\label{eq:confusion}
+\end{equation}
+
+Un $\hat{\eta}$ alto señala que existe al menos un par de ejemplos cuyos gradientes se
+oponen con fuerza, lo que frena el avance neto de SGD; un $\hat{\eta}$ cercano a cero indica
+gradientes que no se contradicen. Por ser un estadístico de extremo es ruidoso, así que
+junto al mínimo se reporta la masa de la distribución de cosenos. Se predice que una
+confusión menor acompaña a un entrenamiento más rápido.
+
+\paragraph{Gradient disparity.} Sustituye el coseno por la distancia entre los gradientes
+de dos minibatches independientes, derivada de una cota de tipo
+PAC-Bayes~\cite{forouzesh2021disparity}. Para $s$ submuestras del probe,
+
+\begin{equation}
+\overline{\mathcal{D}} = \binom{s}{2}^{-1} \sum_{i < j} \|g_i - g_j\|_2.
+\label{eq:disparity}
+\end{equation}
+
+Es una magnitud $\ell_2$ \emph{sin normalizar}, no una similitud coseno: la cota teórica
+del trabajo depende de $\|g_i - g_j\|_2^2$, de modo que dividir por la norma rompería la
+conexión y no se hace. Una disparidad baja indica minibatches coherentes, y se predice como
+señal de eficiencia, con la salvedad de que su magnitud depende del tamaño de batch y solo
+es comparable entre entrenamientos que lo fijen.
+
+\paragraph{Alineación gradiente-peso (GWA).} Mide el coseno entre el gradiente por ejemplo
+y los pesos del clasificador final, restringido a la última capa
+lineal~\cite{hoelzl2025gradient}. Para cada ejemplo del probe,
+$\gamma_i = \cos\!\big(g_i^{\text{(últ.)}}, w^{\text{(últ.)}}\big)$, y el agregado por época
+corrige la media por el exceso de curtosis de la distribución de puntuaciones:
+
+\begin{equation}
+\mathrm{GWA} = \frac{\bar{\gamma}}{\dfrac{\mu_4}{\mu_2^{2}} - 3 + \beta},
+\qquad \beta = 1{,}2,
+\label{eq:gwa}
+\end{equation}
+
+donde $\bar{\gamma}$ es la media de las $\gamma_i$, $\mu_2$ y $\mu_4$ sus momentos centrales
+de segundo y cuarto orden, y $\mu_4/\mu_2^2 - 3$ el exceso de curtosis (nulo para una
+gaussiana). El denominador descuenta las distribuciones de cola pesada, donde pocas
+muestras dominan la media. El trabajo de origen define el gradiente como $-\nabla\ell$; al
+medirse sobre el gradiente bruto $\nabla\ell$ el signo se invierte, lo que se documenta en
+el análisis. Una GWA alta se asocia con mejor generalización.
+
+Cada una de estas definiciones lleva implícita una predicción direccional: más coherencia,
+más stiffness intra-clase, menos confusión, menos disparidad o más alineación
+gradiente-peso deberían acompañar a un entrenamiento más eficiente. Esas predicciones con
+signo se formalizan como hipótesis falsable en el Capítulo~\ref{ch:metodologia}.
 
 \section{Métricas de variabilidad}
 \label{sec:def-variabilidad}
-% NGV, GNS (B_simple), GSNR; relaciones (GNS ~ B*NGV; GSNR primo por-parámetro de NGV).
+
+La familia de variabilidad no mira la dirección relativa de los gradientes, sino su
+dispersión respecto a la señal. Sus tres métricas son facetas de una misma razón
+señal-ruido del gradiente.
+
+\paragraph{Varianza normalizada (NGV).} Hace comparable la varianza del gradiente entre
+problemas de distinta escala dividiéndola por la magnitud de la señal~\cite{faghri2020study}.
+Estimada sobre $K$ sub-batches independientes del probe,
+
+\begin{equation}
+\mathrm{NGV} = \frac{\operatorname{tr}\!\big(\operatorname{Cov}(g)\big)}{\|\mathbb{E}[g]\|^2}.
+\label{eq:ngv}
+\end{equation}
+
+Es el inverso de una razón señal-ruido: por debajo de $1$ la señal del gradiente medio
+domina sobre el ruido, por encima domina el ruido. Esta forma, de tipo traza sobre norma,
+es una adaptación deliberada de la versión literal del trabajo de origen
+($\mathbb{V}[g_j]/\mathbb{E}[g_j^2]$ por coordenada), monótonamente equivalente. Una NGV
+menor indica menos ruido relativo, si bien empíricamente la métrica crece durante el
+entrenamiento en lugar de decrecer.
+
+\paragraph{Escala de ruido del gradiente (GNS).} Predice, antes de barrer el
+hiperparámetro, el tamaño de batch crítico a partir del cual ampliar el batch deja de
+reducir el número de pasos~\cite{mccandlish2018empirical}. Su forma simplificada es
+
+\begin{equation}
+\mathcal{B}_{\text{simple}} = \frac{\operatorname{tr}(\Sigma)}{\|G\|^2},
+\label{eq:gns}
+\end{equation}
+
+con $\Sigma$ la covarianza por ejemplo y $G$ el gradiente medio. La versión exacta
+$\mathcal{B}_{\text{noise}} = \operatorname{tr}(H\Sigma)/(G^\top H G)$ requiere la Hessiana
+$H$ y se descarta por coste; la simplificada asume $H \propto I$. Por construcción,
+$\mathcal{B}_{\text{simple}} \approx B \cdot \mathrm{NGV}$, relación exacta en esperanza que
+emparenta esta métrica con la NGV.
+
+\paragraph{Razón señal-ruido por parámetro (GSNR).} Lleva la razón señal-ruido al nivel de
+cada parámetro $\theta_j$~\cite{liu2020understanding}:
+
+\begin{equation}
+r(\theta_j) = \frac{\tilde{g}(\theta_j)^2}{\rho^2(\theta_j)},
+\qquad
+\tilde{g}(\theta_j) = \mathbb{E}_i[g_{i,j}],
+\quad
+\rho^2(\theta_j) = \operatorname{Var}_i[g_{i,j}],
+\label{eq:gsnr}
+\end{equation}
+
+agregado por la media sobre los parámetros, nunca por la suma, que sería incomparable entre
+arquitecturas de distinto tamaño. Es esencialmente el recíproco por parámetro de la NGV: un
+GSNR alto significa que la media del gradiente por ejemplo domina a su varianza, y se asocia
+con un hueco de generalización pequeño. Las tres métricas miden, pues, la misma razón
+señal-ruido desde ángulos distintos, lo que las hace parcialmente redundantes; esa
+redundancia se contrasta empíricamente, como recoge el Capítulo~\ref{ch:metodologia}.
 
 \section{El kernel tangente neuronal (NTK)}
 \label{sec:ntk}
-% Marco teórico (régimen lazy); se menciona pero NO se computa.
+
+El núcleo tangente neuronal da el marco teórico que sostiene la familia de alineación. Se
+define como el producto interno entre los jacobianos de la salida de la red respecto a sus
+parámetros, evaluados en dos entradas~\cite{shan2021theory}:
+
+\begin{equation}
+K(x, x'; \theta) = \nabla_\theta f(x, \theta) \cdot \nabla_\theta f(x', \theta).
+\label{eq:ntk}
+\end{equation}
+
+En el límite de anchura infinita y tasa de aprendizaje pequeña, el NTK permanece constante
+durante todo el entrenamiento y la dinámica equivale a una regresión kernel con $K$ fijo: es
+el llamado régimen \emph{lazy}, donde la red no aprende características nuevas. Las redes
+finitas que funcionan en la práctica están fuera de ese régimen, y su NTK empírico
+evoluciona alineándose con la estructura de la tarea. Esa alineación se cuantifica con la
+alineación núcleo-tarea,
+
+\begin{equation}
+\mathrm{KTA} = \frac{\langle \mathbf{K}, \mathbf{y}\mathbf{y}^\top\rangle_F}
+{\|\mathbf{K}\|_F\,\|\mathbf{y}\mathbf{y}^\top\|_F} \in [0, 1],
+\label{eq:kta}
+\end{equation}
+
+con $\mathbf{K}$ la matriz de Gram del NTK sobre el probe y $\mathbf{y}\mathbf{y}^\top$ el
+objetivo, definido positivo. En este trabajo el NTK se recoge como soporte conceptual de la
+familia de alineación, no como métrica que se mida: su cálculo exige el jacobiano de la
+salida respecto a los parámetros, prohibitivo en redes reales, por lo que queda fuera del
+alcance de la instrumentación.
 
 \section{Indicadores de eficiencia del entrenamiento}
 \label{sec:eficiencia}
-% Épocas-a-umbral (censurado), AUC de test-loss, best test-loss.
+
+Las métricas anteriores son las variables predictoras; las que siguen son las variables a
+predecir, esto es, lo que en este trabajo se entiende por eficiencia del entrenamiento. Se
+leen sobre la curva de monitorización de validación a lo largo del presupuesto de épocas
+$T$. El protocolo concreto, incluido el suavizado de la curva, la separación
+entrenamiento/validación/test y el tratamiento del censurado en el análisis, se especifica
+en el Capítulo~\ref{ch:metodologia}.
+
+\paragraph{Épocas hasta el umbral (indicador primario).} El número de épocas que tarda la
+precisión de validación en alcanzar un nivel objetivo $\tau$ propio de cada conjunto de
+datos,
+
+\begin{equation}
+t^\star = \min\{\, t \le T : \mathrm{acc}_{\text{val}}(t) \ge \tau \,\}.
+\label{eq:epochs-to-threshold}
+\end{equation}
+
+Si la precisión no cruza el umbral dentro del presupuesto, el valor queda \emph{censurado}:
+no se descarta, sino que se trata como el peor resultado posible, porque los extremos de la
+rejilla de tasas de aprendizaje no llegan al umbral por diseño. Un $t^\star$ menor indica un
+entrenamiento más rápido.
+
+\paragraph{AUC de la pérdida de validación.} El área bajo la curva de pérdida de validación
+dentro del presupuesto, aproximada por la regla trapezoidal sobre el eje de épocas. Resume
+toda la trayectoria en un escalar: cuanto menor es el área, más rápido desciende la pérdida.
+
+\paragraph{Mejor pérdida de validación.} El mínimo de la pérdida de validación alcanzado
+dentro del presupuesto, que mide el mejor rendimiento intermedio con independencia de la
+velocidad con que se alcanza.
+
+\paragraph{Rendimiento final.} La precisión sobre el conjunto de test, evaluada una única
+vez al terminar el entrenamiento. Es la variable objetivo certificada, separada de la curva
+de validación que se monitoriza durante el entrenamiento.
+
+\paragraph{Gap de generalización.} La diferencia entre el rendimiento en test y en
+entrenamiento al final del run, medida sobre un subconjunto fijo del conjunto de
+entrenamiento del mismo tamaño que el de test. En términos de pérdida y de precisión,
+
+\begin{equation}
+\mathrm{gap}_{\text{loss}} = \mathcal{L}_{\text{test}} - \mathcal{L}_{\text{train}},
+\qquad
+\mathrm{gap}_{\text{acc}} = \mathrm{acc}_{\text{train}} - \mathrm{acc}_{\text{test}},
+\label{eq:gap}
+\end{equation}
+
+donde un valor positivo indica sobreajuste. Es la variable objetivo de generalización frente
+a la que se contrastan, en particular, las métricas que sus trabajos de origen vinculan al
+hueco de generalización.

@@ -67,9 +67,11 @@ La versión escalable de esa idea es la m-coherencia de Chatterjee y
 Zielinski~\cite{chatterjee2020making}. Reduce la coherencia a un único escalar calculable sobre
 un minibatch, con una interpretación intuitiva: aproximadamente el número medio de ejemplos que
 se benefician del paso de descenso obtenido a partir de un ejemplo cualquiera. Los autores
-observan, entrenando una ResNet-18 sobre ImageNet, que con etiquetas reales la coherencia sube
-deprisa y se mantiene alta, mientras que con etiquetas aleatorias permanece anclada en su valor
-ortogonal, lo que separa con nitidez el aprendizaje de la memorización. La limitación es de
+observan, entrenando una ResNet-18 sobre ImageNet, que con etiquetas reales la coherencia crece
+deprisa, mientras que con etiquetas aleatorias también acaba emergiendo, solo que mucho más
+despacio. De hecho, que la coherencia surja incluso donde no hay estructura que generalizar es el
+hallazgo que da título al trabajo; lo que separa el aprendizaje de la memorización no es la
+presencia de coherencia, sino la velocidad con que aparece. La limitación es de
 cobertura experimental: la evidencia procede de un único conjunto de datos a gran escala, con un
 tamaño de batch de 4096 y sin aumento de datos, condiciones lejanas a las de un entrenamiento
 típico, y la métrica se estudia como ventana a la memorización, no como predictor de eficiencia.
@@ -115,8 +117,8 @@ y condiciones distintas.
 
 Cierra la familia, en el plano teórico, el alineamiento entre el núcleo tangente neuronal (NTK)
 y la tarea, estudiado por Shan y Bordelon~\cite{shan2021theory}. El NTK describe la dinámica de
-entrenamiento en el límite de anchura infinita, y su alineamiento con la estructura del problema
-crece durante el entrenamiento de forma que correlaciona con la accuracy de test. Es un marco
+entrenamiento en el límite de anchura infinita, y su alineamiento con la estructura de la tarea
+crece durante el entrenamiento y acelera el aprendizaje, tanto más cuanto más profunda es la red. Es un marco
 valioso para entender por qué la alineación importa, pero su cálculo exige el jacobiano de la
 salida respecto a los parámetros, prohibitivo en redes reales, y su justificación descansa en un
 límite de anchura infinita que no se da en la práctica. Por eso, en este trabajo, el NTK se
@@ -226,7 +228,7 @@ m-coherencia~\cite{chatterjee2020making}        & Alineación   & alta es mejor 
 Stiffness~\cite{fort2019stiffness}              & Alineación   & alta es mejor & medio \\
 Gradient confusion~\cite{sankararaman2020impact} & Alineación  & baja es mejor & alto  \\
 Gradient disparity~\cite{forouzesh2021disparity} & Alineación  & baja es mejor & bajo  \\
-GWA~\cite{hoelzl2025gradient}                   & Alineación   & alta es mejor & medio \\
+GWA~\cite{hoelzl2025gradient}                   & Alineación   & alta es mejor & bajo  \\
 Varianza normalizada~\cite{faghri2020study}     & Variabilidad & baja es mejor & bajo  \\
 Escala de ruido GNS~\cite{mccandlish2018empirical} & Variabilidad & baja es mejor & medio \\
 GSNR~\cite{liu2020understanding}                & Variabilidad & alta es mejor & medio \\
