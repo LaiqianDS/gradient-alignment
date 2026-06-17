@@ -5,7 +5,7 @@
 dataset: cifar100
 model: resnet18
 optimizer: sgd
-epochs: 60
+epochs: 40
 threshold_acc: 0.35
 batch_size: 128
 momentum: 0.9

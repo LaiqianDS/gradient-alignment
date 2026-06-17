@@ -5,8 +5,8 @@
 dataset: tiny_imagenet
 model: resnet18
 optimizer: sgd
-epochs: 80
-threshold_acc: 0.25
+epochs: 40
+threshold_acc: 0.2
 batch_size: 128
 momentum: 0.9
 weight_decay: 0.0

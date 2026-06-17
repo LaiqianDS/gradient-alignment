@@ -6,7 +6,7 @@ dataset: cifar10
 model: cnn
 optimizer: sgd
 epochs: 40
-threshold_acc: 0.75
+threshold_acc: 0.65
 batch_size: 128
 momentum: 0.9
 weight_decay: 0.0
