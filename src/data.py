@@ -77,19 +77,55 @@ def _build_transform(spec: dict) -> transforms.Compose:
     )
 
 
-def _build_dataset(dataset: str, train: bool, data_root: Path) -> Dataset:
-    """Construct the train/test Dataset with the shared transform applied."""
+class _TinyImageNetVal(Dataset):
+    """Tiny ImageNet's val split as a labelled test set.
+
+    The downloaded val/ is flat (val/images/*.JPEG + val_annotations.txt), not
+    the per-class layout ImageFolder expects, so ImageFolder would map every
+    image to a single class. This reads the annotations and labels each image
+    with the *train* ImageFolder's class_to_idx, so train and test share class
+    indices (any other ordering, e.g. wnids.txt, would permute the labels).
+    """
+
+    def __init__(self, val_root: Path, class_to_idx: dict[str, int], transform):
+        annotations = (val_root / "val_annotations.txt").read_text().splitlines()
+        self.samples = [
+            (val_root / "images" / fname, class_to_idx[wnid])
+            for fname, wnid, *_ in (line.split("\t") for line in annotations)
+        ]
+        self.transform = transform
+        self.loader = datasets.folder.default_loader  # PIL load + convert("RGB")
+
+    def __len__(self) -> int:
+        return len(self.samples)
+
+    def __getitem__(self, index: int):
+        path, target = self.samples[index]
+        return self.transform(self.loader(path)), target
+
+
+def _build_dataset(
+    dataset: str, train: bool, data_root: Path, class_to_idx: dict[str, int] | None = None
+) -> Dataset:
+    """Construct the train/test Dataset with the shared transform applied.
+
+    ``class_to_idx`` is the train ImageFolder mapping, needed only to label the
+    tiny_imagenet test (val) split consistently with train.
+    """
     spec = _check_dataset(dataset)
     transform = _build_transform(spec)
 
     if dataset == "tiny_imagenet":
-        root = data_root / "tiny-imagenet-200" / ("train" if train else "val")
+        base = data_root / "tiny-imagenet-200"
+        root = base / ("train" if train else "val")
         if not root.is_dir():
             raise FileNotFoundError(
                 f"Tiny ImageNet not found at {root}. Download it manually to "
-                f"{data_root / 'tiny-imagenet-200'}/ (train/ and val/ subdirs)."
+                f"{base}/ (train/ and val/ subdirs)."
             )
-        return datasets.ImageFolder(root, transform=transform)
+        if train:
+            return datasets.ImageFolder(root, transform=transform)
+        return _TinyImageNetVal(root, class_to_idx, transform)
 
     cls = _TV_CLASSES[dataset]
     return cls(data_root / dataset, train=train, download=True, transform=transform)
@@ -130,7 +166,10 @@ def build_dataloaders(
     root = DATA_PATH if data_root is None else Path(data_root)
 
     full_train = _build_dataset(dataset, train=True, data_root=root)
-    test_set = _build_dataset(dataset, train=False, data_root=root)
+    test_set = _build_dataset(
+        dataset, train=False, data_root=root,
+        class_to_idx=getattr(full_train, "class_to_idx", None),
+    )
     train_idx, val_idx = stratified_split_indices(
         full_train.targets, spec["val_size"], SPLIT_SEED
     )

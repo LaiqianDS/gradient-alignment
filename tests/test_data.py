@@ -70,6 +70,41 @@ def test_tiny_imagenet_missing_dir_raises(tmp_path):
         build_dataloaders("tiny_imagenet", batch_size=8, seed=0, data_root=tmp_path)
 
 
+def _make_fake_tiny_imagenet(root):
+    """Minimal on-disk tiny-imagenet tree: ImageFolder train/, flat val/."""
+    from PIL import Image
+
+    base = root / "tiny-imagenet-200"
+    wnids = ["n00000003", "n00000001", "n00000002"]  # deliberately not sorted
+    for wnid in wnids:
+        d = base / "train" / wnid / "images"
+        d.mkdir(parents=True)
+        Image.new("RGB", (64, 64)).save(d / f"{wnid}_0.JPEG")
+    val_images = base / "val" / "images"
+    val_images.mkdir(parents=True)
+    Image.new("RGB", (64, 64)).save(val_images / "val_0.JPEG")
+    # n00000003 sorts last -> train index 2, so a correct loader labels it 2.
+    (base / "val" / "val_annotations.txt").write_text(
+        "val_0.JPEG\tn00000003\t0\t0\t63\t63\n"
+    )
+
+
+def test_tiny_imagenet_val_labels_align_with_train(tmp_path):
+    # Regression: the flat val/ split must be labelled via the train ImageFolder's
+    # class_to_idx, not ImageFolder(val/) which would map every image to class 0.
+    from data import _build_dataset
+
+    _make_fake_tiny_imagenet(tmp_path)
+    train = _build_dataset("tiny_imagenet", train=True, data_root=tmp_path)
+    test = _build_dataset(
+        "tiny_imagenet", train=False, data_root=tmp_path,
+        class_to_idx=train.class_to_idx,
+    )
+    assert train.class_to_idx["n00000003"] == 2  # sorted wnids -> last index
+    _, label = test[0]
+    assert label == 2  # the bug gave 0 here
+
+
 def _fake_dataset(n=50, dim=3):
     return TensorDataset(torch.randn(n, dim), torch.randint(0, 3, (n,)))
 
