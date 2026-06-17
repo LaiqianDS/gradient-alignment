@@ -8,6 +8,8 @@ raw loss gradient ∇L so values stay comparable across optimisers.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import torch
 import torch.nn as nn
 from torch.func import functional_call, grad, vmap
@@ -216,3 +218,98 @@ def named_last_linear(model) -> tuple[str, nn.Linear]:
     if last is None:
         raise ValueError("model has no nn.Linear layer")
     return last
+
+
+# ---------------------------------------------------------------------------
+# One shared per-sample sweep for the whole probe.
+#
+# The per-sample ∇L sweep is a probe's dominant cost, and six metrics each
+# recompute it through their own ``compute()``. ``stream_shared`` runs it once
+# and returns every product they need; ``metrics_runner.measure`` builds it once
+# and feeds each metric its ``reduce``.
+# ---------------------------------------------------------------------------
+
+@dataclass
+class SharedSweep:
+    """Products of one per-sample ∇L sweep, shared across the six per-sample metrics.
+
+    * ``S``, ``Q``, ``M`` -- the two per-column float64 moments (Σ gᵢ, Σ gᵢ²)
+      and the sample count, exactly as :func:`stream_grad_moments` returns them
+      (consumed by ``gns_simple`` / ``gsnr`` / ``m_coherence``).
+    * ``gram``, ``norms`` -- the ``[M, M]`` Gram and ``[M]`` row norms, exactly as
+      :func:`stream_gram` returns them (consumed by ``stiffness`` /
+      ``gradient_confusion``).
+    * ``gwa_cos`` -- the ``[M]`` per-sample cosines ``cos(gᵢ, w_T)`` to the
+      normalised last-layer weight, the input ``gwa._gwa_aggregate`` reduces.
+    * ``y`` -- the probe labels the sweep was computed over, so a ``reduce`` is a
+      pure function of the sweep alone (only ``stiffness`` needs them, for its
+      within/between-class pair masks).
+    """
+
+    S: torch.Tensor
+    Q: torch.Tensor
+    M: int
+    gram: torch.Tensor
+    norms: torch.Tensor
+    gwa_cos: torch.Tensor
+    y: torch.Tensor
+
+
+def stream_shared(model, X, y, loss_fn, chunk_size: int | None = None) -> SharedSweep:
+    """One per-sample ∇L sweep feeding every per-sample metric (see :class:`SharedSweep`).
+
+    Streams the probe in row-chunks exactly as :func:`stream_grad_moments` and
+    :func:`stream_gram`, but computes :func:`per_sample_grads` **once** per chunk
+    and derives the moments, the host-assembled ``[M, P]`` for the Gram, and the
+    gwa last-layer cosines from that single dict -- so the expensive
+    ``vmap(grad(functional_call))`` runs once per chunk instead of once per metric.
+    Device peak is ``[chunk_size, P]`` and host peak the full ``[M, P]`` f32,
+    matching a single ``stream_gram`` call. The products are the same the
+    per-metric streamers produce (same float64 moment accumulation, same
+    column-blocked Gram), so each metric's ``reduce`` equals its ``compute``.
+    """
+    device = X.device
+    acc = _moment_device(device)
+    lname, head = named_last_linear(model)
+    wn = head.weight.detach().reshape(-1)
+    wn = wn / wn.norm().clamp_min(EPS)  # [W] normalised classifier weight
+
+    S = Q = None
+    M = 0
+    g_host: list[torch.Tensor] = []
+    cos_chunks: list[torch.Tensor] = []
+    cs = _resolve_chunk(chunk_size)
+    for s in range(0, X.shape[0], cs):
+        Xc, yc = X[s : s + cs], y[s : s + cs]
+        grads = per_sample_grads(model, Xc, yc, loss_fn)
+        Gc = flatten_grads(grads, batched=True)  # [c, P] on device
+
+        # Gram source: stash the chunk on the host (peak = full [M, P] f32).
+        Gc_cpu = Gc.to("cpu")
+        g_host.append(Gc_cpu)
+
+        # Moments in float64 on the accumulation device (MPS rejects float64, so
+        # acc is the host there); float64 keeps tr Σ / variance free of fp32
+        # cancellation. When acc is the host, reuse Gc_cpu instead of copying the
+        # chunk device→host a second time; on CUDA accumulate on-device from Gc.
+        Gd = (Gc_cpu if acc.type == "cpu" else Gc).to(acc).double()
+        chunk_S, chunk_Q = Gd.sum(0), (Gd * Gd).sum(0)
+        S = chunk_S if S is None else S + chunk_S
+        Q = chunk_Q if Q is None else Q + chunk_Q
+        M += Gc.shape[0]
+
+        # gwa: cosine of each per-sample head-weight grad to w_T (bias excluded),
+        # computed on the streamed chunk exactly as ``gwa.compute`` does.
+        hg = grads[lname + ".weight"].flatten(start_dim=1)  # [c, W]
+        hgn = hg / hg.norm(dim=1).clamp_min(EPS).unsqueeze(1)
+        cos_chunks.append((hgn @ wn).to("cpu"))  # [c]
+
+    # Gram in column blocks back on the model device (matches stream_gram).
+    G = torch.cat(g_host)
+    _, P = G.shape
+    gram = torch.zeros(M, M, device=device)
+    for s in range(0, P, _COL_BLOCK):
+        Gb = G[:, s : s + _COL_BLOCK].to(device)
+        gram = gram + Gb @ Gb.T
+    norms = gram.diagonal().clamp_min(0).sqrt()
+    return SharedSweep(S=S, Q=Q, M=M, gram=gram, norms=norms, gwa_cos=torch.cat(cos_chunks), y=y)

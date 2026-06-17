@@ -32,10 +32,13 @@ row.update(BASELINE.compute(loss_history))             # baseline takes losses, 
 ## The metrics
 
 They fall into two families, plus one baseline. "Per-example gradient" means the
-gradient computed from a *single* training example (not a whole batch). The
-*implementation* of gradient extraction is shared (`primitives.py`), but each
-metric currently recomputes its own gradients per measurement — there is no
-shared cache of sweeps yet.
+gradient computed from a *single* training example (not a whole batch). Gradient
+extraction is shared at two levels: the *implementation* lives once in
+`primitives.py`, and at measurement time the six metrics that need the per-example
+sweep share a *single* sweep per probe (`primitives.stream_shared`, driven by
+`metrics_runner.measure`) instead of recomputing it six times. The two
+batch-gradient metrics (`normalized_variance`, `gradient_disparity`) still run
+their own `batch_grad` sweeps.
 
 ### Family 1 — Variability: how noisy are the gradients?
 
@@ -131,11 +134,32 @@ two float64 column moments (`S=Σgᵢ`, `Q=Σgᵢ²`); the pairwise ones assembl
   for the assembled `G` (14 GB worst case). Below that they fail per-metric
   (caught, logged) while the rest run.
 
-Each metric keeps its tested full-matrix `_core(G)`; only `compute()` drives the
-streamer (`tests/test_streaming.py` pins compute == core and chunk-invariance).
-The streamed outputs were checked against the pre-streaming implementation on a
-fixed model+probe and agree to float32 precision (worst ~4e-5 relative; the
-column metrics now accumulate in float64, so they are if anything more accurate).
+Each metric keeps its tested full-matrix `_core(G)`; `compute()` drives the
+streamer standalone and `reduce(sweep, y)` reads the shared sweep (next section).
+`tests/test_streaming.py` pins compute == core, chunk-invariance, and
+reduce == compute. The streamed outputs were checked against the pre-streaming
+implementation on a fixed model+probe and agree to float32 precision (worst ~4e-5
+relative; the column metrics now accumulate in float64, so they are if anything
+more accurate).
+
+### One shared sweep per probe
+
+Driving each metric's `compute()` independently ran the per-example
+`vmap(grad(...))` sweep **six times** per probe — the single dominant cost
+(profiling, 2026-06: a full `measure()` over Tiny ImageNet dims was 35 s for `fc`,
+101 s for `resnet18` at `M=64` on MPS). `primitives.stream_shared` now runs it
+**once**, returning every product the six per-example metrics consume — the float64
+moments `S,Q`, the `[M, M]` Gram and row norms, and the `gwa` cosines — and
+`metrics_runner.measure` builds it once and hands each metric its `reduce`.
+`compute()` stays as the standalone path the per-metric tests exercise.
+
+The shared and standalone paths are **bit-identical** (0.0 difference across every
+logged key on `fc`/`resnet18`), so the optimization is a pure speedup with no
+effect on logged values. Realized wall-clock on MPS was ~2× (less than the 6×
+fewer sweeps, because float64 moment accumulation, host transfers and the Gram
+matmul dominate there; larger gains expected on CUDA). The two batch-gradient
+metrics still run their own sweeps; folding them in is the remaining lever — it
+would shift their values at ~1e-6, so it is left out for now.
 
 ```
 src/metrics/

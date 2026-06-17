@@ -56,5 +56,9 @@ class MCoherenceMetric:
         S, Q, _ = stream_grad_moments(model, X, y, loss_fn)
         return _mcoh_from_moments(S, Q)
 
+    def reduce(self, sweep) -> dict[str, float]:
+        """Same as :meth:`compute`, off the shared sweep (see ``metrics_runner``)."""
+        return _mcoh_from_moments(sweep.S, sweep.Q)
+
 
 METRIC = MCoherenceMetric()

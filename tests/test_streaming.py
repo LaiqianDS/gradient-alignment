@@ -19,8 +19,14 @@ from metrics import primitives
 from metrics.gns_simple import METRIC as GNS, _gns_core
 from metrics.gradient_confusion import METRIC as CONF, _confusion_core
 from metrics.gsnr import METRIC as GSNR, _gsnr_core
+from metrics.gwa import METRIC as GWA
 from metrics.m_coherence import METRIC as MCOH, _mcoh_core
-from metrics.primitives import per_sample_grad_matrix, stream_grad_moments, stream_gram
+from metrics.primitives import (
+    per_sample_grad_matrix,
+    stream_grad_moments,
+    stream_gram,
+    stream_shared,
+)
 from metrics.stiffness import METRIC as STIFF, _stiffness_core
 from synthetic import synthetic_probe, tiny_mlp
 
@@ -115,6 +121,42 @@ def test_gwa_compute_is_chunk_invariant(probe):
         out = GWA.compute(model, X, y, lf)
         for k in full:
             assert out[k] == pytest.approx(full[k], rel=1e-6, abs=1e-6), (chunk, k)
+
+
+# --- shared sweep: one pass == the separate per-metric streamers ----------
+
+@pytest.mark.parametrize("chunk", CHUNKS)
+def test_stream_shared_matches_separate_primitives(probe, chunk):
+    # The single shared pass must reproduce, product for product, what the
+    # per-metric stream_grad_moments / stream_gram paths compute on their own.
+    model, X, y, lf, _G = probe
+    sweep = stream_shared(model, X, y, lf, chunk_size=chunk)
+    S, Q, M = stream_grad_moments(model, X, y, lf, chunk_size=chunk)
+    gram, norms = stream_gram(model, X, y, lf, chunk_size=chunk)
+    assert sweep.M == M == 40
+    assert torch.allclose(sweep.S, S, rtol=1e-6, atol=1e-6)
+    assert torch.allclose(sweep.Q, Q, rtol=1e-6, atol=1e-6)
+    assert torch.allclose(sweep.gram, gram, atol=1e-6)
+    assert torch.allclose(sweep.norms, norms, atol=1e-6)
+
+
+# (metric, key the reduce path must agree with compute on)
+_SHARED_METRICS = [GNS, GSNR, MCOH, STIFF, CONF, GWA]
+
+
+@pytest.mark.parametrize("metric", _SHARED_METRICS)
+def test_shared_reduce_matches_standalone_compute(probe, metric):
+    # The shared-sweep reduce() must equal the metric's own compute(): same keys,
+    # same values. This is the contract that makes the measure() optimization a
+    # pure speedup with no effect on the logged metric values.
+    model, X, y, lf, _G = probe
+    primitives.set_chunk_size(7)  # force genuine multi-chunk streaming on both paths
+    sweep = stream_shared(model, X, y, lf)
+    shared = metric.reduce(sweep)
+    standalone = metric.compute(model, X, y, lf)
+    assert set(shared) == set(standalone)
+    for k in standalone:
+        assert shared[k] == pytest.approx(standalone[k], rel=1e-4, abs=1e-6), (metric.name, k)
 
 
 def test_set_chunk_size_is_read_live_not_frozen():

@@ -66,5 +66,9 @@ class GradientConfusionMetric:
         gram, norms = stream_gram(model, X, y, loss_fn)
         return _confusion_from_gram(gram, norms)
 
+    def reduce(self, sweep) -> dict[str, float]:
+        """Same as :meth:`compute`, off the shared sweep (see ``metrics_runner``)."""
+        return _confusion_from_gram(sweep.gram, sweep.norms)
+
 
 METRIC = GradientConfusionMetric()

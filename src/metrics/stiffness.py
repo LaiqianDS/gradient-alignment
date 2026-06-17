@@ -87,5 +87,9 @@ class StiffnessMetric:
         gram, norms = stream_gram(model, X, y, loss_fn)
         return _stiffness_from_gram(gram, norms, y)
 
+    def reduce(self, sweep) -> dict[str, float]:
+        """Same as :meth:`compute`, off the shared sweep (see ``metrics_runner``)."""
+        return _stiffness_from_gram(sweep.gram, sweep.norms, sweep.y)
+
 
 METRIC = StiffnessMetric()

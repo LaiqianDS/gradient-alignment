@@ -87,5 +87,9 @@ class GsnrMetric:
         S, Q, M = stream_grad_moments(model, X, y, loss_fn)
         return _gsnr_from_moments(S, Q, M)
 
+    def reduce(self, sweep) -> dict[str, float]:
+        """Same as :meth:`compute`, off the shared sweep (see ``metrics_runner``)."""
+        return _gsnr_from_moments(sweep.S, sweep.Q, sweep.M)
+
 
 METRIC = GsnrMetric()

@@ -95,5 +95,9 @@ class GwaMetric:
 
         return _gwa_aggregate(torch.cat(chunks))
 
+    def reduce(self, sweep) -> dict[str, float]:
+        """Same as :meth:`compute`, off the shared sweep's precomputed cosines."""
+        return _gwa_aggregate(sweep.gwa_cos)
+
 
 METRIC = GwaMetric()
