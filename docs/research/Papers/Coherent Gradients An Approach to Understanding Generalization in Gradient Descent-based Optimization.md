@@ -121,8 +121,6 @@ logger.log_scalar("cgh/aligned_fraction", aligned_fraction.item(), step=t)
 - [[The Impact of Neural Network Overparameterization on Gradient Confusion and Stochastic Gradient Descent]] — citado por el paper; gradient confusion es el caso adverso de la alineación (gradientes anti-correlacionados) y conecta coherencia con sobreparametrización y velocidad de SGD.
 - [[Understanding Why Neural Networks Generalize Well Through GSNR of Parameters]] — mismo problema (generalización vía estadística de gradientes per-sample); su argumento de same-sign gradients es el análogo por-parámetro de la coherencia por-dirección.
 - [[Gradient-Weight Alignment as a Train-Time Proxy for Generalization in Classification Tasks]] — misma familia (proxy de alineación train-time para predecir generalización); hereda la motivación de la CGH para un score per-sample barato.
-- [[A Theory of Neural Tangent Kernel Alignment and Its Influence on Training]] — noción de alineación afín (kernel-target alignment del NTK); enlaza coherencia de gradientes con la teoría de núcleos tangentes.
-
 ## Otros papers interesantes a revisar
 
 - **Understanding deep learning requires rethinking generalization** (Zhang, Bengio, Hardt, Recht, Vinyals, 2017) — la paradoja de generalización (ajustar etiquetas aleatorias con la misma red) que motiva todo el paper y el TFG. arXiv:1611.03530.

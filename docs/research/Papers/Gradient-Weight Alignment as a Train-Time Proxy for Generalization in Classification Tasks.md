@@ -152,9 +152,7 @@ El `accumulator` mantiene los momentos centrales de la distribución de scores c
 - [[Stiffness - A New Perspective on Generalization in Neural Networks]] — familia alineación; cosine-stiffness es el mismo coseno entre gradientes per-sample, pero entre pares de muestras en vez de gradiente-vs-pesos.
 - [[Making Coherence Out of Nothing At All - Measuring the Evolution of Gradient Alignment]] — familia alineación; m-coherence mide alineamiento gradiente-vs-gradiente promedio, alternativa per-sample escalable como GWA.
 - [[The Impact of Neural Network Overparameterization on Gradient Confusion and Stochastic Gradient Descent]] — familia alineación; gradient confusion (min coseno entre gradientes per-sample) comparte la lectura geométrica de coherencia direccional.
-- [[Coherent Gradients An Approach to Understanding Generalization in Gradient Descent-based Optimization]] — familia alineación; marco CGH del que GWA hereda la intuición de coherencia $\to$ generalización.
-- [[A Theory of Neural Tangent Kernel Alignment and Its Influence on Training]] — familia alineación vía kernel-target alignment, también restringible a last-layer; alineamiento como predictor de aprendizaje.
-- [[Disparity Between Batches as a Signal for Early Stopping]] — paper comparable directo: proxy train-time barato para early stopping (GD); GWA lo usa como baseline competidor en sus tablas.
+- [[Coherent Gradients An Approach to Understanding Generalization in Gradient Descent-based Optimization]] — familia alineación; marco CGH del que GWA hereda la intuición de coherencia $\to$ generalización.- [[Disparity Between Batches as a Signal for Early Stopping]] — paper comparable directo: proxy train-time barato para early stopping (GD); GWA lo usa como baseline competidor en sus tablas.
 - [[Speedy Performance Estimation for Neural Architecture Search]] — paper comparable directo: TSE/TSE-EMA, mismo problema de predicción temprana barata; es el baseline del TFG.
 
 ## Otros papers interesantes a revisar
