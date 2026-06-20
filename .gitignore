@@ -3,5 +3,8 @@ reports_pilot/
 .DS_Store
 .obsidian
 PDFs/
+pending/
 
 __pycache__/
+
+.vscode/
