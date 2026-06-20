@@ -1,0 +1,8 @@
+{
+  // Auto-build de LaTeX Workshop (onSave): la salida va a thesis/render/, la
+  // misma carpeta que usan thesis/.latexmkrc y thesis/build.sh. %DIR% es la
+  // carpeta del archivo raiz (thesis/), asi que esto resuelve a thesis/render/
+  // independientemente de que carpeta tengas abierta como workspace. Mantiene
+  // limpia la raiz de thesis/ (nunca se generan PDF ni auxiliares ahi).
+  "latex-workshop.latex.outDir": "%DIR%/render"
+}
