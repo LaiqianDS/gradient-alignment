@@ -27,7 +27,7 @@ fuera posible anticipar, a partir de una fracción inicial del entrenamiento, si
 configuración va a ser eficiente, se podría decidir antes y reservar el cómputo para las
 candidatas prometedoras. La cuestión es qué señal temprana contiene esa información.
 
-El gradiente es una candidata natural. Es la única información que el optimizador usa para
+Precisamente, si analizamos las diferentes partes que componen el proceso de entrenamiento de una red neural, el gradiente surge como la señal más natural para observar el progreso del aprendizaje. Es la única información que el optimizador utiliza para
 avanzar en cada paso, de modo que su comportamiento en las primeras etapas refleja
 directamente cómo está aprendiendo la red. Dos aspectos del gradiente han recibido atención
 de forma independiente. El primero es su variabilidad estocástica, es decir, cuánto cambia el

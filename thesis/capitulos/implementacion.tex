@@ -1,6 +1,8 @@
 \chapter{Implementación}
 \label{ch:implementacion}
 % El desarrollo software; no volcar código entero. Fuente: src/ + README.
+% Frontera con metodología: aquí solo el CÓMO; el QUÉ/POR QUÉ está en \ref{ch:metodologia}.
+% No repetir decisiones de diseño; describir su realización.
 
 \section{Arquitectura del pipeline}
 \label{sec:pipeline}
@@ -12,7 +14,9 @@
 
 \section{Reproducibilidad}
 \label{sec:reproducibilidad}
-% seed.py; constantes de normalización por dataset; caveat Tiny-ImageNet (~6e-4, libjpeg/Pillow).
+% Principio: seed.py, determinismo como requisito, normalización por dataset, caveat Tiny-ImageNet
+% (~6e-4, libjpeg/Pillow). El detalle reproducible (entorno, versiones, hardware) va en el anexo
+% \ref{sec:determinismo}; remitir, no repetir.
 
 \section{Ejecución y reanudación en cluster}
 \label{sec:ejecucion}
@@ -20,4 +24,5 @@
 
 \section{Pilot de calibración}
 \label{sec:pilot}
-% run_pilot.py: 1 run/celda, presupuesto doblado, reports_pilot/; fija presupuestos y umbrales.
+% run_pilot.py: 1 run/celda, presupuesto doblado, reports_pilot/. Aquí el PROCEDIMIENTO de
+% calibración; los valores resultantes (presupuestos/umbrales, overhead) se reportan en \ref{sec:res-pilot}.

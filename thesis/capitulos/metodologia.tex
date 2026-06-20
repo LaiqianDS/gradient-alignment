@@ -1,6 +1,8 @@
 \chapter{Metodología y diseño experimental}
 \label{ch:metodologia}
 % Núcleo pre-registrado (redactar antes de ver resultados). Fuente: 1 - Diseño.md + pending/.
+% Frontera con implementación: aquí el QUÉ y el POR QUÉ (decisiones de diseño);
+% el CÓMO (realización en software) va en el cap. \ref{ch:implementacion}.
 
 \section{Hipótesis}
 \label{sec:hipotesis}
@@ -21,7 +23,79 @@
 
 \section{Setup de entrenamiento}
 \label{sec:setup}
-% Datasets, arquitecturas (FC/CNN/ResNet-18), SGD y Adam; normalización sin augmentation.
+% Pendiente en esta sección: arquitecturas (FC/CNN/ResNet-18), optimizadores (SGD/Adam) y
+% normalización sin augmentation.
+
+El estudio emplea cuatro conjuntos de clasificación de imágenes de dificultad creciente:
+MNIST~\cite{lecun1998gradient}, CIFAR-10 y CIFAR-100~\cite{krizhevsky2009learning} y
+Tiny-ImageNet~\cite{le2015tiny}. En todos ellos el conjunto de prueba oficial se mantiene intacto y
+el de validación se recorta del entrenamiento oficial mediante muestreo estratificado por clase con
+una semilla fija; en CIFAR esto reproduce el split 45k/5k de He et al.~\cite{he2015deep}. Así la
+validación conserva las proporciones de clase del entrenamiento y la partición es idéntica en los
+más de novecientos entrenamientos. La Tabla~\ref{tab:datasets} recoge los tamaños resultantes, el
+número de clases y la dimensión de entrada de cada conjunto.
+
+\begin{table}[ht]
+\centering
+\small
+\caption{Conjuntos de datos y particiones. El conjunto de validación se obtiene del entrenamiento
+oficial por muestreo estratificado por clase con semilla fija; el de prueba es el oficial. En
+Tiny-ImageNet el conjunto de validación público hace de prueba, porque las etiquetas del de prueba
+oficial no son públicas; por eso el total usable es de 110.000 ejemplos y no de 120.000.}
+\label{tab:datasets}
+\begin{tabular}{lrrrrcc}
+\toprule
+\textbf{Conjunto} & \textbf{Total} & \textbf{Entren.} & \textbf{Valid.} & \textbf{Prueba} & \textbf{Clases} & \textbf{Dimensión} \\
+\midrule
+MNIST          & 70.000  & 50.000 & 10.000 & 10.000 & 10  & $1{\times}28{\times}28$ \\
+CIFAR-10       & 60.000  & 45.000 & 5.000  & 10.000 & 10  & $3{\times}32{\times}32$ \\
+CIFAR-100      & 60.000  & 45.000 & 5.000  & 10.000 & 100 & $3{\times}32{\times}32$ \\
+Tiny-ImageNet  & 110.000 & 90.000 & 10.000 & 10.000 & 200 & $3{\times}64{\times}64$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+La Tabla~\ref{tab:datasets} fija el tamaño del problema; conviene además situar qué exactitud cabe
+esperar de cada arquitectura en estas condiciones. La comparación honesta no se hace contra el estado
+del arte, que casi siempre usa aumento de datos, weight decay y entrenamientos largos, sino contra el
+\emph{régimen comparable}: redes entrenadas desde cero, sin aumento de datos y a resolución nativa, que
+es el de este estudio. La Tabla~\ref{tab:referencias} reúne ese régimen para las tres arquitecturas, con
+cifras tomadas de filas de ablación o de baseline de la literatura: para el MLP, Bachmann et
+al.~\cite{bachmann2023scaling}; para la CNN pequeña, Chen y Ho~\cite{chen2018deep} (cota superior, con
+activación GReLU) y Mantzaris~\cite{mantzaris2025exploring} (cota inferior, con BatchNorm); y para
+ResNet-18, las filas sin aumento de Ye et al.~\cite{ye2024zeropur} y Ko et
+al.~\cite{ko2024learning}, con Larsson et al.~\cite{larsson2017fractalnet} como corroboración en
+CIFAR-100. En MNIST cualquier red pequeña satura en torno al 99\,\% (LeCun et al.~\cite{lecun1998gradient}).
+
+\begin{table}[ht]
+\centering
+\small
+\caption{Exactitud de test de referencia por arquitectura en el \emph{régimen comparable} (desde cero,
+sin aumento de datos, resolución nativa), que es el de este estudio. Son bandas esperadas, no objetivos:
+las fuentes suelen entrenar más tiempo o con redes algo mayores, de modo que acotan por arriba. Las
+celdas con $\dagger$ no tienen baseline publicado en este régimen (CNN simple y ResNet-18 desde cero,
+sin aumento, a 64$\times$64 nativo en Tiny-ImageNet); son estimaciones y un punto de datos novedoso del
+estudio.}
+\label{tab:referencias}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Arquitectura} & \textbf{MNIST} & \textbf{CIFAR-10} & \textbf{CIFAR-100} & \textbf{Tiny-ImageNet} \\
+\midrule
+FC (MLP 1024-1024)          & $\sim$98,4\,\%       & $\sim$50--54\,\% & $\sim$25--29\,\% & $\sim$8--12\,\% \\
+CNN (3 bloques)             & $\sim$99,0--99,4\,\% & $\sim$70--80\,\% & $\sim$45--55\,\% & $\sim$20--35\,\%\,$\dagger$ \\
+ResNet-18 (stem 3$\times$3) & $\sim$99,0--99,5\,\% & $\sim$84--92\,\% & $\sim$50--57\,\% & $\sim$40--50\,\%\,$\dagger$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Como cota laxa de contexto, ResNet-18 entrenada desde cero a resolución nativa pero \emph{con} aumento de
+datos alcanza 94,55\,\% (CIFAR-10), 78,07\,\% (CIFAR-100) y 50,68\,\% (Tiny-ImageNet) según
+GenURL~\cite{li2023genurl}; la distancia con la Tabla~\ref{tab:referencias} es justo lo que aportan el
+aumento de datos, el weight decay y los entrenamientos largos. Para el MLP y la CNN, los mejores
+resultados publicados exigen cambiar de clase de arquitectura (redes densas que aprenden conectividad
+local tipo convolución, Neyshabur~\cite{neyshabur2020towards}; redes totalmente convolucionales
+profundas, Springenberg et al.~\cite{springenberg2015striving}), de modo que no son techos comparables
+del MLP llano ni de la CNN simple.
 
 \section{Matriz de experimentos}
 \label{sec:matriz}
