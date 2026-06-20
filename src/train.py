@@ -25,6 +25,7 @@ Run::
 
 from __future__ import annotations
 
+import os
 import time
 
 import pandas as pd
@@ -230,6 +231,13 @@ def efficiency_summary(df: pd.DataFrame, cfg: Config) -> dict:
 
 def train(cfg: Config) -> dict:
     """Run one training job end to end; return its efficiency summary."""
+    # Set before the first CUDA allocation (model.to below): expandable_segments
+    # lets the caching allocator grow segments instead of fragmenting, which is
+    # what makes the per-sample sweeps OOM on the fc x tiny_imagenet cell. import
+    # torch does not init CUDA, so here -- ahead of resolve_device's is_available
+    # -- is early enough. Allocator strategy only; metric values are unaffected.
+    # ``setdefault`` keeps a shell value (or run_matrix.child_env) authoritative.
+    os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
     run_start = time.perf_counter()
     set_seed(cfg.seed)
     device = resolve_device(cfg.device)
