@@ -34,6 +34,7 @@ Examples::
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -140,6 +141,22 @@ def build_command(run: Run) -> list[str]:
     ]
 
 
+def child_env() -> dict[str, str]:
+    """Environment for a training subprocess (a copy of ours plus one knob).
+
+    Enables the CUDA caching allocator's ``expandable_segments`` so it can grow
+    segments instead of fragmenting: the per-sample gradient sweeps on the
+    fc x tiny_imagenet cell otherwise hit an OOM ("X GiB free but cannot
+    allocate Y") even though most of the reserved pool is idle. This is an
+    allocator *strategy* only -- it changes how GPU memory is requested, never
+    what is computed, so metric values are unaffected. A value already set in
+    the shell wins (``setdefault``), so it stays overridable without code edits.
+    """
+    env = dict(os.environ)
+    env.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+    return env
+
+
 def print_status(runs: list[Run]) -> None:
     """Print per-cell and overall done/total counts."""
     cells: dict[tuple[str, str, str], list[Run]] = {}
@@ -181,7 +198,7 @@ def execute(runs: list[Run], dry_run: bool = False, limit: int | None = None) ->
             print("  DRY  " + " ".join(cmd))
             continue
         print(f"\n[run_matrix] ({i}/{len(pending)}) {run.name}")
-        if subprocess.run(cmd).returncode != 0:
+        if subprocess.run(cmd, env=child_env()).returncode != 0:
             print(f"[run_matrix] FAILED: {run.name} (left pending)")
             failures.append(run)
 

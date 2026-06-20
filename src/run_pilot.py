@@ -49,7 +49,7 @@ from pathlib import Path
 import pandas as pd
 
 from config import DATASET_BUDGET, DATASETS, LR_GRID, MODELS, OPTIMIZERS
-from run_matrix import ROOT, TRAIN_SCRIPT, cell_path, run_name_for
+from run_matrix import ROOT, TRAIN_SCRIPT, cell_path, child_env, run_name_for
 
 PILOT_DIR = ROOT / "reports_pilot"
 PILOT_SEED = 0
@@ -148,7 +148,7 @@ def execute(runs: list[PilotRun], dry_run: bool = False) -> list[PilotRun]:
             print("  DRY  " + " ".join(cmd))
             continue
         print(f"\n[pilot] ({i}/{len(pending)}) {run.name}")
-        if subprocess.run(cmd).returncode != 0:
+        if subprocess.run(cmd, env=child_env()).returncode != 0:
             print(f"[pilot] FAILED: {run.name} (left pending)")
             failures.append(run)
 
