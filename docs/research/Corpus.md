@@ -1,6 +1,6 @@
 # Corpus: datasets y modelos por paper
 
-Qué datasets y arquitecturas usa cada paper del corpus, fusionados como pares **dataset → modelo (config)**, más las **frecuencias** que justifican el setup del TFG y las **decisiones de implementación**. Las frecuencias se cuentan sobre los 15 papers que proponen métrica o setup (los 16 del corpus menos *On the Ineffectiveness of Variance Reduced Optimization*, related-work); alimentan la convergencia de la literatura en [[1 - Diseño]].
+Qué datasets y arquitecturas usa cada paper del corpus, fusionados como pares **dataset → modelo (config)**, más las **frecuencias** que justifican el setup del TFG y las **decisiones de implementación**. Las frecuencias se cuentan sobre los 14 papers que proponen métrica o setup (los 15 del corpus menos *On the Ineffectiveness of Variance Reduced Optimization*, related-work); alimentan la convergencia de la literatura en [[1 - Diseño]].
 
 ---
 
@@ -12,13 +12,6 @@ Qué datasets y arquitecturas usa cada paper del corpus, fusionados como pares *
 - **ImageNet** → ResNet18 (lr 0.1, weight decay $1\times10^{-4}$, momentum 0.9).
 - **Random Features (RF), sintético** → modelo teacher ReLU (Rahimi & Recht, 2007), dimensión oculta $h_s = 1000$, ratio de sobreparametrización $h_s/N \in [0.1, 10]$, cross-entropy, mini-batch 10.
 - **Optimización.** Baselines SG-B, SG-2B, SVRG, GC (método propuesto); mini-batch $B = 128$ en todos los experimentos de imagen.
-
-## A Theory of Neural Tangent Kernel Alignment and Its Influence on Training (Shan & Bordelon, 2021)
-
-- **MNIST (subconjunto)** → MLP 2 capas $N=500$ ReLU (clasificación binaria odd-even y de 10 clases); MLPs ReLU de profundidad 2–5 para validar $\boldsymbol{K}_\infty \propto L\boldsymbol{y}\boldsymbol{y}^\top + \boldsymbol{K}_0$.
-- **CIFAR-10 (subconjunto, 100 imágenes, 2 clases)** → CNN y Wide ResNet (Zagoruyko & Komodakis, factor $k=3$, $b=2$ bloques).
-- **Datos sintéticos lineales** → redes lineales profundas $f(\boldsymbol{x}) = \boldsymbol{w}^{L+1\top}\boldsymbol{W}^L\cdots\boldsymbol{W}^1\boldsymbol{x}$ (validación analítica).
-- **Mezcla de 10 gaussianas / clasificación binaria aleatoria, sintético** → redes ReLU de dos capas $f(\boldsymbol{x}^\mu) = \sum_i V_i\,\text{ReLU}(\boldsymbol{w}_i\cdot\boldsymbol{x}^\mu)$ (kernel specialization multiclase).
 
 ## Accelerating Stochastic Gradient Descent using Predictive Variance Reduction (Johnson & Zhang, 2013)
 
@@ -122,8 +115,8 @@ Slides/Lecture deck (Coursera, Lecture 6a–6e) — sin experimentos propios sis
 ### Datasets (sobre los 15 papers con setup)
 
 **Reales (visión).**
-- **MNIST** — 10 papers: Faghri; Shan & Bordelon; Johnson & Zhang; Kingma & Ba; McCandlish; Chatterjee (Coherent Gradients); Forouzesh & Thiran; Fort et al.; Sankararaman; Liu.
-- **CIFAR-10** — 12 papers: Faghri; Shan & Bordelon; Johnson & Zhang; Kingma & Ba; McCandlish; Forouzesh & Thiran; Hölzl; Ru et al.; Fort et al.; Sankararaman; Liu; (cualitativo en Chatterjee & Zielinski).
+- **MNIST** — 9 papers: Faghri; Johnson & Zhang; Kingma & Ba; McCandlish; Chatterjee (Coherent Gradients); Forouzesh & Thiran; Fort et al.; Sankararaman; Liu.
+- **CIFAR-10** — 11 papers: Faghri; Johnson & Zhang; Kingma & Ba; McCandlish; Forouzesh & Thiran; Hölzl; Ru et al.; Fort et al.; Sankararaman; Liu; (cualitativo en Chatterjee & Zielinski).
 - **CIFAR-100** — 6 papers: Faghri; Forouzesh & Thiran; Ru et al.; Fort et al.; Sankararaman; (cualitativo en Chatterjee & Zielinski).
 - **ImageNet** — 4 papers: Faghri; McCandlish; Chatterjee & Zielinski; Hölzl (variante ImageNet-1k).
 - Otros (visión, 1 paper cada uno): Fashion MNIST (Fort et al.; cualitativo en Chatterjee & Zielinski); SVHN (McCandlish); CIFAR-10-N, CIFAR-C, ImageNet-V2/ReaL/C, ImageNet-21k, iNat18, Places365 (Hölzl); ImageNet-16-120 (Ru, vía NAS-Bench-201); Flower102 (Ru, vía RWNN); MRNet (Forouzesh & Thiran).
@@ -132,17 +125,17 @@ Slides/Lecture deck (Coursera, Lecture 6a–6e) — sin experimentos propios sis
 
 **Benchmarks NAS:** NAS-Bench-201, NAS-Bench-301 (Ru et al.).
 
-**Sintéticos / toy:** Random Features (Faghri); lineales / gaussianas / binaria aleatoria (Shan & Bordelon); toy $y = x_0 x_1 + \epsilon$ (Liu). **Label noise sintético sobre datasets reales** — 6 papers: Faghri (10% CIFAR-10); Chatterjee (25/50/75/100% MNIST); Chatterjee & Zielinski (0–100% ImageNet); Forouzesh & Thiran (50% MNIST y CIFAR-100); Hölzl (0/9/17/40% CIFAR-10-N, humanas); Liu (0–50% MNIST, real vs. aleatorio en CIFAR-10/ResNet18).
+**Sintéticos / toy:** Random Features (Faghri); toy $y = x_0 x_1 + \epsilon$ (Liu). **Label noise sintético sobre datasets reales** — 6 papers: Faghri (10% CIFAR-10); Chatterjee (25/50/75/100% MNIST); Chatterjee & Zielinski (0–100% ImageNet); Forouzesh & Thiran (50% MNIST y CIFAR-100); Hölzl (0/9/17/40% CIFAR-10-N, humanas); Liu (0–50% MNIST, real vs. aleatorio en CIFAR-10/ResNet18).
 
 **Sin experimentos propios:** Ruder 2017 (review); Tieleman & Hinton 2012 (slides).
 
 ### Arquitecturas (por familia)
 
-- **MLPs / Fully-Connected** (9 papers): Faghri; Shan & Bordelon; Johnson & Zhang; Kingma & Ba; Chatterjee 2019; Forouzesh & Thiran; Fort et al.; Sankararaman; Liu.
-- **CNNs (no-ResNet)** (9 papers): Shan & Bordelon; Kingma & Ba; McCandlish; Forouzesh & Thiran (AlexNet); Chatterjee & Zielinski (Inception-V3); Defazio & Bottou (LeNet-5); Fort et al.; Sankararaman; Liu.
-- **ResNets / Wide ResNets** (9 papers con ResNet estricto): Faghri (ResNet8/18/32); Shan & Bordelon (Wide ResNet $k=3$); McCandlish (ResNet-32/50); Forouzesh & Thiran (ResNet-18); Chatterjee & Zielinski (ResNet-18); Defazio & Bottou (ResNet-18/110/50); Fort et al. (ResNet20v1); Sankararaman (WRN $\beta$-$\ell$); Liu (ResNet18). (Hölzl usa ConvNeXt, no ResNet estricto.)
+- **MLPs / Fully-Connected** (8 papers): Faghri; Johnson & Zhang; Kingma & Ba; Chatterjee 2019; Forouzesh & Thiran; Fort et al.; Sankararaman; Liu.
+- **CNNs (no-ResNet)** (8 papers): Kingma & Ba; McCandlish; Forouzesh & Thiran (AlexNet); Chatterjee & Zielinski (Inception-V3); Defazio & Bottou (LeNet-5); Fort et al.; Sankararaman; Liu.
+- **ResNets / Wide ResNets** (8 papers con ResNet estricto): Faghri (ResNet8/18/32); McCandlish (ResNet-32/50); Forouzesh & Thiran (ResNet-18); Chatterjee & Zielinski (ResNet-18); Defazio & Bottou (ResNet-18/110/50); Fort et al. (ResNet20v1); Sankararaman (WRN $\beta$-$\ell$); Liu (ResNet18). (Hölzl usa ConvNeXt, no ResNet estricto.)
 - **DenseNets** (1): Defazio & Bottou. **VGG** (1): Forouzesh & Thiran. **Transformers / ViT / ConvNeXt** (2): Hölzl (ViT/S-16, ViT/B-16, ConvNeXt-Femto), Fort et al. (BERT, validación NLP). **LSTMs / RNNs** (1): McCandlish.
-- **Modelos clásicos (reg. logística L2, SVM)** (3): Johnson & Zhang; Kingma & Ba; Liu (contraste teórico). **Especiales (VAE, autoencoder, InfoGAN, Random Features)** (3): Faghri; Kingma & Ba; McCandlish. **Redes lineales profundas / teóricos** (1): Shan & Bordelon. **NAS search spaces** (1): Ru et al. **RL (A2C, PPO)** (1): McCandlish. **Dominio (MRNet)** (1): Forouzesh & Thiran. **Sin experimentos propios** (2): Ruder 2017, Tieleman & Hinton 2012.
+- **Modelos clásicos (reg. logística L2, SVM)** (3): Johnson & Zhang; Kingma & Ba; Liu (contraste teórico). **Especiales (VAE, autoencoder, InfoGAN, Random Features)** (3): Faghri; Kingma & Ba; McCandlish. **NAS search spaces** (1): Ru et al. **RL (A2C, PPO)** (1): McCandlish. **Dominio (MRNet)** (1): Forouzesh & Thiran. **Sin experimentos propios** (2): Ruder 2017, Tieleman & Hinton 2012.
 
 ---
 

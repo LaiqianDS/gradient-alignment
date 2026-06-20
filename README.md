@@ -17,16 +17,16 @@ fast a model reaches a target accuracy? (Bachelor's thesis / TFG.)
 
 ## Metrics
 
-Ten metrics from the gradient-alignment literature, in two families plus a
+Nine metrics from the gradient-alignment literature, in two families plus a
 baseline. The **variability** family — `normalized_variance`, `gns_simple`, and
 `gsnr` — captures how noisy the gradients are. The **alignment** family —
-`m_coherence`, `stiffness`, `gradient_disparity`, `gradient_confusion`, `gwa`, and
-`ntk_alignment` — captures whether per-example gradients point the same way. The
+`m_coherence`, `stiffness`, `gradient_disparity`, `gradient_confusion`, and
+`gwa` — captures whether per-example gradients point the same way. The
 **baseline**, `tse`, is the cheap loss-only predictor each gradient metric must
 beat to be worth its cost. Plain-language descriptions of every metric are in
 [`src/metrics/README.md`](src/metrics/README.md).
 
-All nine gradient metrics share one interface, so the training loop can run them
+All eight gradient metrics share one interface, so the training loop can run them
 over a single probe batch and collect one flat dict of scalars:
 
 ```python

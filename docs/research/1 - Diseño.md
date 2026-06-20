@@ -48,7 +48,7 @@ El conjunto *computado* está implementado y fijado en código (`src/metrics/`, 
 - **Alineación / coherencia direccional**: gradient confusion, stiffness, m-coherence, gradient disparity, GWA.
 - **Variabilidad estocástica**: gradient noise scale, normalized gradient variance, GSNR.
 
-Dos candidatas tempranas no aparecen como métricas separadas: la *cosine similarity entre gradientes de batches* ya está contenida en otras métricas (stiffness y gradient confusion se construyen sobre los cosenos por pares de gradientes per-ejemplo), y el *NTK alignment* se menciona como marco teórico pero no se computa (decisión 2026-06-09 en [[2 - Decisiones]]).
+Una candidata temprana no aparece como métrica separada: la *cosine similarity entre gradientes de batches* ya está contenida en otras métricas (stiffness y gradient confusion se construyen sobre los cosenos por pares de gradientes per-ejemplo).
 
 ### Ventana temporal
 
@@ -132,7 +132,7 @@ Extraído de [[Métricas]] y [[Corpus]]. Justifica el setup propuesto.
 - CNNs no-ResNet (típicamente 3 capas conv con filtros 3×3): 8/15.
 
 **Métricas tempranas** (las dos familias de §Diseño experimental, confirmadas por la literatura):
-- **Alineación / coherencia direccional** (7 papers): NTK alignment (Shan & Bordelon; se menciona como marco, no se computa — ver [[2 - Decisiones]]), GWA (Hölzl), m-coherence (Chatterjee & Zielinski), stiffness (Fort et al.), gradient confusion η (Sankararaman et al.), gradient disparity $\|g_i - g_j\|_2$ (Forouzesh & Thiran), Coherent Gradients $f_t^p$ (Chatterjee).
+- **Alineación / coherencia direccional** (6 papers): GWA (Hölzl), m-coherence (Chatterjee & Zielinski), stiffness (Fort et al.), gradient confusion η (Sankararaman et al.), gradient disparity $\|g_i - g_j\|_2$ (Forouzesh & Thiran), Coherent Gradients $f_t^p$ (Chatterjee).
 - **Variabilidad estocástica** (3 papers): normalized variance $\mathbb{V}[g]/\mathbb{E}[g]^2$ (Faghri et al.), GSNR $\tilde{g}^2/\rho^2$ (Liu et al.), gradient noise scale $B_{\text{simple}} = \operatorname{tr}(\Sigma)/\|G\|^2$ (McCandlish et al.).
 
 **Implicación para el TFG**:

@@ -8,8 +8,7 @@ maneja en su versión conceptual. Primero se establece la notación común, desd
 descenso por gradiente estocástico hasta la geometría de los gradientes por ejemplo
 (Secciones~\ref{sec:sgd} y~\ref{sec:geometria}). Sobre esa base se definen las dos
 familias de métricas, la de alineación y la de variabilidad
-(Secciones~\ref{sec:def-alineacion} y~\ref{sec:def-variabilidad}), y el marco del núcleo
-tangente neuronal que las sostiene en el plano teórico (Sección~\ref{sec:ntk}). La
+(Secciones~\ref{sec:def-alineacion} y~\ref{sec:def-variabilidad}). La
 Sección~\ref{sec:eficiencia} define los indicadores de eficiencia que actúan como
 variables a predecir. Aquí solo se definen los objetos; el protocolo de medición (el
 \emph{probe}, las ventanas, el suavizado) y las hipótesis con signo asociadas a cada
@@ -258,37 +257,6 @@ GSNR alto significa que la media del gradiente por ejemplo domina a su varianza,
 con un hueco de generalización pequeño. Las tres métricas miden, pues, la misma razón
 señal-ruido desde ángulos distintos, lo que las hace parcialmente redundantes; esa
 redundancia se contrasta empíricamente, como recoge el Capítulo~\ref{ch:metodologia}.
-
-\section{El kernel tangente neuronal (NTK)}
-\label{sec:ntk}
-
-El núcleo tangente neuronal da el marco teórico que sostiene la familia de alineación. Se
-define como el producto interno entre los jacobianos de la salida de la red respecto a sus
-parámetros, evaluados en dos entradas~\cite{shan2021theory}:
-
-\begin{equation}
-K(x, x'; \theta) = \nabla_\theta f(x, \theta) \cdot \nabla_\theta f(x', \theta).
-\label{eq:ntk}
-\end{equation}
-
-En el límite de anchura infinita y tasa de aprendizaje pequeña, el NTK permanece constante
-durante todo el entrenamiento y la dinámica equivale a una regresión kernel con $K$ fijo: es
-el llamado régimen \emph{lazy}, donde la red no aprende características nuevas. Las redes
-finitas que funcionan en la práctica están fuera de ese régimen, y su NTK empírico
-evoluciona alineándose con la estructura de la tarea. Esa alineación se cuantifica con la
-alineación núcleo-tarea,
-
-\begin{equation}
-\mathrm{KTA} = \frac{\langle \mathbf{K}, \mathbf{y}\mathbf{y}^\top\rangle_F}
-{\|\mathbf{K}\|_F\,\|\mathbf{y}\mathbf{y}^\top\|_F} \in [0, 1],
-\label{eq:kta}
-\end{equation}
-
-con $\mathbf{K}$ la matriz de Gram del NTK sobre el probe y $\mathbf{y}\mathbf{y}^\top$ el
-objetivo, definido positivo. En este trabajo el NTK se recoge como soporte conceptual de la
-familia de alineación, no como métrica que se mida: su cálculo exige el jacobiano de la
-salida respecto a los parámetros, prohibitivo en redes reales, por lo que queda fuera del
-alcance de la instrumentación.
 
 \section{Indicadores de eficiencia del entrenamiento}
 \label{sec:eficiencia}
