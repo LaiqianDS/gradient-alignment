@@ -138,6 +138,8 @@ Matiz sobre VD2 y VD3: la val-loss puede subir por **sobreconfianza** mientras l
 
 `seconds_to_threshold` queda **fuera** del análisis confirmatorio (el wall-clock en cluster compartido está confundido por la contención); solo exploratorio.
 
+**Salvedad de datos (pilot, Tiny-ImageNet).** Los runs de `reports_pilot/` para Tiny-ImageNet tienen el `final_test_acc` **mal calculado** (bug previo a la corrección), así que VD4 y, por depender del test, VD5 y VD6 no son fiables en esas celdas del pilot; las métricas del lado val (VD1-VD3) y el timing sí lo son. Para apuntar test-acc o gap de Tiny existe `reports_validity/`: las **6 celdas de Tiny del pilot re-corridas con la corrección** (FC/CNN/ResNet-18 × SGD/Adam, LR centrado, seed 0), que sustituyen a las 6 corruptas de `reports_pilot/`. Da un test-acc/gap corregido por celda, suficiente como referencia pero no para análisis (un solo LR y seed). Esa carpeta **no se versiona en git** (gitignored como todos los `reports_*`), así que no viaja con el clon; el test-acc definitivo de Tiny saldrá de la matriz completa, ya con el código corregido.
+
 ### 5.2 Hipótesis / objetivos de análisis
 
 Inferencia en **dos etapas**: Spearman ρ por celda (descriptivo) + Wilcoxon entre celdas (confirmatorio). El ρ de cada celda es solo un estadístico-resumen, **no** una prueba: los 40 runs de una celda no son independientes, porque el learning rate los clusteriza. La confirmación ocurre **entre celdas**, donde los runs sí son disjuntos. Criterios completos en [[Plan de análisis congelado]] §Contrastes.

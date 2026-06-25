@@ -4,13 +4,9 @@ Estudio correlacional. Objetivo único: cuantificar en qué medida métricas de 
 
 ## Pregunta de investigación
 
-¿Pueden métricas de variabilidad y alineación de gradientes, medidas en la fase inicial del entrenamiento, predecir la eficiencia del entrenamiento completo?
+¿Pueden las métricas de gradiente, medidas en la fase inicial del entrenamiento, predecir la eficiencia del entrenamiento completo?
 
-Sub-preguntas:
-- **Métricas**: ¿qué métrica es estable y computacionalmente viable?
-- **Resultado**: ¿predicen velocidad de convergencia o rendimiento final?
-- **Robustez**: ¿se mantiene la relación across learning rates y optimizadores?
-- **(Fuera de alcance, futuro)**: intervención basada en la señal (ej. ajuste dinámico de LR, early stopping).
+La eficiencia se entiende como tres constructos: velocidad de convergencia (VD1-VD3), rendimiento final (VD4) y generalización (VD5-VD6, el gap). La pregunta se evalúa contra los tres y se concreta en seis objetivos, formalizados como las hipótesis contrastables H1-H6 de §Hipótesis a contrastar. La intervención basada en la señal (early stopping, ajuste dinámico de LR) queda fuera de alcance (ver §Enfoque) y se recoge como trabajo futuro.
 
 ## Hipótesis operativa
 
@@ -23,9 +19,9 @@ Hipótesis falsada si las correlaciones son débiles (|ρ| < 0.3) o inestables e
 Formalización falsable de la hipótesis operativa en seis contrastes, cada uno con su criterio:
 
 - **H1 (existencia).** Al menos una métrica temprana de gradiente correlaciona con la eficiencia a |ρ| ≥ 0,3 dentro de la mayoría de condiciones. (Es la hipótesis operativa de arriba.)
-- **H2 (valor incremental — la decisiva).** Al menos una métrica conserva poder predictivo *tras controlar por el baseline de loss* (TSE + `val-loss@f`): ΔR² > 0 / correlación parcial significativa. Si H1 se cumple pero H2 falla, las métricas de gradiente son redundantes con la señal que la curva de loss ya da sin coste — un resultado negativo válido y no trivial.
-- **H3 (qué familia gana).** Una de las dos familias (alineación vs variabilidad) es sistemáticamente más predictiva o más robusta. El título apuesta por alineación; pregunta empírica abierta (ligada al riesgo de coherencia título–contenido).
-- **H4 (suficiencia temprana).** El poder predictivo satura pronto: ρ al 10% no es distinguible de ρ al 50% para las mejores métricas. Beneficio práctico: permite decidir antes.
+- **H2 (valor incremental, la decisiva).** Al menos una métrica conserva poder predictivo *tras controlar por el baseline de loss* (TSE + `val-loss@f`): el ΔR² al añadirla sobre el baseline es significativo (test F de modelos anidados) o su correlación parcial de Spearman lo es tras FDR. (Nota: "ΔR² > 0" a secas no basta como criterio; lo que se contrasta es su significación.) Si H1 se cumple pero H2 falla, las métricas de gradiente son redundantes con la señal que la curva de loss ya da sin coste, un resultado negativo válido y no trivial.
+- **H3 (qué familia gana).** Una de las dos familias (alineación vs variabilidad) es sistemáticamente más predictiva. Criterio falsable: la métrica de mayor ΔR² pertenece a la misma familia en ≥ 2/3 de las celdas (16/24), o el ΔR² agregado por familia difiere de forma significativa; si ninguna domina con ese criterio, H3 queda sin resolver y así se reporta. El título apuesta por alineación; pregunta empírica abierta (ligada al riesgo de coherencia título-contenido).
+- **H4 (suficiencia temprana).** El poder predictivo satura pronto: para toda métrica que supere H1, ρ al 10% no difiere significativamente de ρ al 50% (test de Steiger/Williams para correlaciones dependientes; criterio preespecificado "supera H1" para no seleccionar las mejores a posteriori). Beneficio práctico: permite decidir antes.
 - **H5 (invariancia cross-optimizador).** Como todas las métricas se computan sobre el gradiente bruto ∇L y nunca sobre el update preacondicionado, el signo de la correlación se preserva entre SGD y Adam. Consecuencia comprobable de la decisión "raw-grad".
 - **H6 (mecanismo, con signo).** Cada métrica trae una predicción *con signo* de su paper: alta stiffness intra-clase, alta m-coherence y baja gradient confusion → convergencia más rápida; NGV/GNS altos → más lento o batch mayor; GWA alto → mejor generalización. Que el signo observado coincida con el predicho es prueba más exigente que la magnitud.
 
@@ -39,7 +35,8 @@ Protocolo de evaluación (confirmado por el tutor y registrado el 2026-06-12, ve
 2. **VD2:** área bajo la curva (cruda) de val loss dentro de un presupuesto fijo de épocas.
 3. **VD3 (secundaria):** mejor val loss alcanzada dentro de ese presupuesto, sobre la curva suavizada.
 4. **VD4:** `final_test_acc`, la accuracy de test evaluada exactamente una vez al final del run (acompañada de `final_test_f1_macro` como verificación de robustez; en datasets balanceados F1-macro ≈ accuracy).
-5. **VD5 (generalización):** `final_gap_loss = final_test_loss − final_train_eval_loss` (primaria; positivo = sobreajuste), con `final_gap_acc = final_train_eval_acc − final_test_acc` como robustez (mismo sentido). El término de train se mide al final del run, en modo eval y con los mismos pesos, sobre un subconjunto fijo y estratificado del train (tamaño igual al test, `SPLIT_SEED`). Es el tercer constructo de eficiencia, junto a velocidad (VD1-VD3) y rendimiento final (VD4): mide cuánto sobreajusta el modelo (decisión 2026-06-14, [[2 - Decisiones]]). Sus contrastes llevan dos controles pre-registrados (suelo de ajuste por `final_train_eval_acc` y parcial por `final_train_eval_loss`) y la predicción direccional es la doble disociación (las métricas que reclaman generalización se asocian más al gap que a la velocidad, y al revés). Cubre un hueco que el diseño ya tenía: H6 compromete una afirmación de generalización (GWA/GSNR) que hasta ahora no tenía diana contra la que contrastarse.
+5. **VD5 (generalización, primaria):** `final_gap_loss = final_test_loss − final_train_eval_loss` (positivo = sobreajuste).
+6. **VD6 (generalización, robustez):** `final_gap_acc = final_train_eval_acc − final_test_acc` (mismo sentido que VD5). El término de train de ambas se mide al final del run, en modo eval y con los mismos pesos, sobre un subconjunto fijo y estratificado del train (tamaño igual al test, `SPLIT_SEED`). VD5 y VD6 forman el tercer constructo de eficiencia, junto a velocidad (VD1-VD3) y rendimiento final (VD4): miden cuánto sobreajusta el modelo (decisión 2026-06-14, [[2 - Decisiones]]). Sus contrastes forman familia FDR propia y llevan dos controles pre-registrados (suelo de ajuste por `final_train_eval_acc` y parcial por `final_train_eval_loss`); la predicción direccional es la doble disociación (las métricas que reclaman generalización se asocian más al gap que a la velocidad, y al revés). Cubren un hueco que el diseño ya tenía: H6 compromete una afirmación de generalización (GWA/GSNR) que hasta ahora no tenía diana contra la que contrastarse.
 
 ### Variables independientes (métricas tempranas)
 
@@ -71,7 +68,7 @@ Cómo se mide en la práctica (`src/train.py`): las métricas se registran al fi
 Rejilla completa: cuatro datasets × tres arquitecturas × dos optimizadores = **24 celdas** (celda = dataset × arquitectura × optimizador, la unidad del objetivo n ≥ 30 de §Riesgos abiertos #1). Decisión y justificación en [[2 - Decisiones]].
 
 - **Profundidad.** 8 LR × 5 seeds = 40 runs por celda → **~960 runs**, por encima del suelo n ≥ 30. La dispersión del predictor la dan los LR, no las seeds; de ahí que se priorice el nº de LR. Seeds compartidas {0,1,2,3,4} en todas las celdas para comparación pareada entre SGD y Adam (H5).
-- **Rejilla de LR (log-espaciada en medias décadas, por optimizador — no por modelo).** 8 puntos por optimizador, la misma rejilla para FC, CNN y ResNet-18 (decisión 2026-06-09 en [[2 - Decisiones]]). SGD (momentum 0,9): `{3e-4, 1e-3, 3e-3, 1e-2, 3e-2, 1e-1, 3e-1, 1.0}`. Adam: `{3e-5, 1e-4, 3e-4, 1e-3, 3e-3, 1e-2, 3e-2, 1e-1}` — misma forma, una década más abajo porque su paso efectivo va preescalado por 1/√v. El rango ancho (3,5 décadas) cubre los óptimos de las tres arquitecturas; los extremos divergen o no alcanzan el umbral por diseño, y esos runs censurados aportan rango al eje de eficiencia (VD1). El centro se recalibra tras el pilot si el óptimo de alguna celda queda descentrado.
+- **Rejilla de LR (log-espaciada en medias décadas, por optimizador, no por modelo).** 8 puntos por optimizador, la misma rejilla para FC, CNN y ResNet-18 (decisión 2026-06-09 en [[2 - Decisiones]]). SGD (momentum 0,9): `{3e-4, 1e-3, 3e-3, 1e-2, 3e-2, 1e-1, 3e-1, 1.0}`. Adam: `{3e-5, 1e-4, 3e-4, 1e-3, 3e-3, 1e-2, 3e-2, 1e-1}`, misma forma, una década más abajo porque su paso efectivo va preescalado por 1/√v. El rango ancho (3,5 décadas) cubre los óptimos de las tres arquitecturas; los extremos divergen o no alcanzan el umbral por diseño, y esos runs censurados aportan rango al eje de eficiencia (VD1). El centro se recalibra tras el pilot si el óptimo de alguna celda queda descentrado.
 - **Hiperparámetros fijos (no se barren, para no añadir confusores).** `batch_size=128`, `weight_decay=0`, `momentum=0.9` (SGD) / betas por defecto (Adam), `probe_size=256`, `windows=[0.05, 0.10, 0.25, 0.50, 1.0]`. Las métricas leen ∇L de la pérdida (no el paso preacondicionado), así que el weight decay no entra en su valor; se fija a 0 solo para no introducir un eje de trayectoria extra. La justificación de cada valor, uno a uno, está en [[2 - Decisiones]].
 - **Presupuesto y umbral por dataset** (puntos de partida, se calibran en el pilot; sin data augmentation → por debajo del SOTA): MNIST 20 épocas / umbral acc 0,97; CIFAR-10 40 / 0,75; CIFAR-100 60 / 0,35; Tiny-ImageNet 80 / 0,25. FC sobre CIFAR-100 y Tiny-ImageNet apenas aprende: esas celdas quedan censuradas en VD1 y se analizan con las VD secundarias (AUC de val-loss, mejor val-loss).
 - **Métricas.** Se computa el conjunto completo de métricas implementadas en toda la rejilla (en ResNet-18, las per-sample van last-layer-only). La lista *reportada* se poda luego por colinealidad con prueba (ver [[2 - Decisiones]]).
@@ -80,9 +77,9 @@ Rejilla completa: cuatro datasets × tres arquitecturas × dos optimizadores = *
 
 El baseline no es la métrica más simple ni la que diga el paper: es *el mejor predictor obtenible sin instrumentar el gradiente*. Lo que da valor al estudio es el coste de medir el gradiente, así que el rival a batir es lo que se obtiene gratis de la curva de loss. Tres niveles:
 
-- **Nivel 0 — sin gradiente (suelo).** TSE (suma o EMA de las train loss tempranas; coste cero, estándar en NAS) y, sobre todo, **`early-val-accuracy@f`** (val accuracy/loss medida en la misma fracción $f$). Este último es un predictor muy fuerte y casi gratis: si las métricas de gradiente no lo superan, no hay aporte que defender.
-- **Nivel 1 — gradiente barato (benchmark interno).** Normalized variance (NGV) y gradient noise scale (GNS) en variabilidad; gradient disparity en alineación (Pearson 0,957 con test error sobre 220 configuraciones en Forouzesh & Thiran). Es el rival a batir para justificar una métrica de gradiente *cara*.
-- **Nivel 2 — retadoras.** Las caras o novedosas (gradient confusion, m-coherence, stiffness, GSNR, GWA) deben superar a los niveles 0 y 1. GWA es barato y a la vez el de mayor correlación reportada en la literatura (Pearson 0,99 en Hölzl 2025): si una métrica barata domina a las caras, la conclusión sería que *no hace falta instrumentación cara*.
+- **Nivel 0, sin gradiente (suelo).** TSE (suma o EMA de las train loss tempranas; coste cero, estándar en NAS) y, sobre todo, **`early-val-accuracy@f`** (val accuracy/loss medida en la misma fracción $f$). Este último es un predictor muy fuerte y casi gratis: si las métricas de gradiente no lo superan, no hay aporte que defender.
+- **Nivel 1, gradiente barato (benchmark interno).** Normalized variance (NGV) y gradient noise scale (GNS) en variabilidad; gradient disparity en alineación (Pearson 0,957 con test error sobre 220 configuraciones en Forouzesh & Thiran). Es el rival a batir para justificar una métrica de gradiente *cara*.
+- **Nivel 2, retadoras.** Las caras o novedosas (gradient confusion, m-coherence, stiffness, GSNR, GWA) deben superar a los niveles 0 y 1. GWA es barato y a la vez el de mayor correlación reportada en la literatura (Pearson 0,99 en Hölzl 2025): si una métrica barata domina a las caras, la conclusión sería que *no hace falta instrumentación cara*.
 
 El resultado más valioso no es "quién predice mejor" sino "quién predice mejor por unidad de coste": un **frente de Pareto** de potencia predictiva frente a coste, no un único ganador.
 
@@ -101,7 +98,7 @@ flowchart LR
 
 ### Ejecución y reanudación
 
-`src/run_matrix.py` es la fuente única de verdad de la rejilla. `--init` genera los 24 YAML de celda en `experiments/` con el presupuesto por dataset y los hiperparámetros congelados; los ficheros existentes no se tocan, así sobreviven las ediciones a mano tras el pilot. LR y seed no van en los YAML: son los ejes de barrido y se inyectan por run, de modo que el nombre del run queda determinado por (modelo, dataset, optimizador, lr, seed). Un run cuenta como *hecho* si existe `reports/<run_name>/summary.json` — `train.py` lo escribe en último lugar, así que su presencia marca un run completo. El lanzador es idempotente: relanzarlo ejecuta solo los pendientes (reanudación tras caídas del cluster sin contabilidad externa), y los flags `--dataset/--model/--optimizer` permiten trocear la rejilla entre nodos.
+`src/run_matrix.py` es la fuente única de verdad de la rejilla. `--init` genera los 24 YAML de celda en `experiments/` con el presupuesto por dataset y los hiperparámetros congelados; los ficheros existentes no se tocan, así sobreviven las ediciones a mano tras el pilot. LR y seed no van en los YAML: son los ejes de barrido y se inyectan por run, de modo que el nombre del run queda determinado por (modelo, dataset, optimizador, lr, seed). Un run cuenta como *hecho* si existe `reports/<run_name>/summary.json`: `train.py` lo escribe en último lugar, así que su presencia marca un run completo. El lanzador es idempotente: relanzarlo ejecuta solo los pendientes (reanudación tras caídas del cluster sin contabilidad externa), y los flags `--dataset/--model/--optimizer` permiten trocear la rejilla entre nodos.
 
 Antes de la matriz va el pilot de calibración: `src/run_pilot.py` ejecuta un run por celda (LR centrado, seed 0, presupuesto doblado) escribiendo en `reports_pilot/` para no colisionar con la detección de reanudación de la matriz, y `--report` resume la evidencia para fijar presupuestos y umbrales definitivos. Protocolo y justificación en [[2 - Decisiones]].
 
@@ -112,7 +109,7 @@ Antes de la matriz va el pilot de calibración: `src/run_pilot.py` ejecuta un ru
 - Corrección por comparaciones múltiples (Benjamini-Hochberg / FDR).
 - Lista de métricas cerrada antes de ejecutar los experimentos para evitar p-hacking.
 - Análisis por condición (arquitectura × dataset) y agregado, para evaluar robustez cross-setting.
-- **Valor incremental sobre el baseline.** Más allá del ρ crudo, medir si la geometría del gradiente aporta algo que la curva de loss no contenga ya: correlación parcial ρ(métrica, Y | TSE, `val-loss@f`) o, mejor, ΔR² de añadir la métrica a un modelo que ya tiene el baseline de loss. Preregistrar este análisis junto a las correlaciones crudas. Ver §Baselines y H2.
+- **Valor incremental sobre el baseline.** Más allá del ρ crudo, medir si la geometría del gradiente aporta algo que la curva de loss no contenga ya: correlación parcial ρ(métrica, Y | TSE, `val-loss@f`) o, mejor, ΔR² de añadir la métrica a un modelo que ya tiene el baseline de loss. Preregistrar este análisis junto a las correlaciones crudas. La significación del ΔR² se contrasta con un test F de modelos anidados; la comparación de correlaciones entre ventanas (H4) usa el test de Steiger/Williams para correlaciones dependientes. Ver §Baselines y H2.
 
 ## Convergencia de la literatura
 
@@ -145,7 +142,7 @@ Extraído de [[Métricas]] y [[Corpus]]. Justifica el setup propuesto.
 1. **Número de runs por condición.** Correlaciones con n pequeña son inútiles. Objetivo mínimo n ≥ 30 por celda (arquitectura × dataset × optimizador). Pendiente hacer cuentas de cómputo total y recortar condiciones antes de empezar si no cuadra.
 2. **Coste computacional de métricas caras** (gradient confusion, m-coherence). Posible abandono si el overhead es inviable.
 3. **Diferenciación frente a literatura existente** (McCandlish 2018, Faghri 2020). Aporte a defender: comparativa rigurosa entre múltiples familias de métricas, barrido en fracciones tempranas, análisis de robustez cross-architecture/cross-dataset. Debe ser explícito en la intro.
-4. **Coherencia título–contenido.** El título actual enfatiza "alineación". Si el análisis acaba apoyándose más en métricas de variabilidad, revisar el título de la memoria (el de EBRON ya está comprometido).
+4. **Coherencia título-contenido.** El título actual enfatiza "alineación". Si el análisis acaba apoyándose más en métricas de variabilidad, revisar el título de la memoria (el de EBRON ya está comprometido).
 
 ## Confusores metodológicos
 

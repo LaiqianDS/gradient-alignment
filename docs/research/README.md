@@ -1,6 +1,6 @@
-# TFG — Métricas de gradiente como predictores de eficiencia
+# TFG: métricas de gradiente como predictores de eficiencia
 
-**Resumen en cinco líneas.** Estudio correlacional que responde a una pregunta: ¿pueden las métricas de variabilidad y alineación de gradientes, medidas en la fase inicial del entrenamiento, predecir la eficiencia del entrenamiento completo? Para ello se entrena una rejilla congelada de 24 celdas — {MNIST, CIFAR-10, CIFAR-100, Tiny-ImageNet} × {FC, CNN simple, ResNet-18} × {SGD, Adam} — con 8 learning rates × 5 seeds por celda (~960 runs), midiendo en todos los runs las 8 métricas de gradiente más el baseline TSE. Las ventanas tempranas (5–50% del presupuesto) se correlacionan con cuatro indicadores de eficiencia (épocas-hasta-umbral, AUC de val-loss, mejor val-loss, accuracy de test final). El protocolo de evaluación es: el train optimiza, el val monitoriza y el test certifica una única vez al final. Una métrica solo cuenta como aporte si supera al baseline de la curva de loss (hipótesis H2, la decisiva).
+**Resumen en cinco líneas.** Estudio correlacional que responde a una pregunta: ¿pueden las métricas de gradiente, medidas en la fase inicial del entrenamiento, predecir la eficiencia del entrenamiento completo? Para ello se entrena una rejilla congelada de 24 celdas ({MNIST, CIFAR-10, CIFAR-100, Tiny-ImageNet} × {FC, CNN simple, ResNet-18} × {SGD, Adam}) con 8 learning rates × 5 seeds por celda (~960 runs), midiendo en todos los runs las 8 métricas de gradiente más el baseline TSE. Las ventanas tempranas (5 a 50% del presupuesto) se correlacionan con indicadores de eficiencia que cubren tres constructos: velocidad (épocas-hasta-umbral, AUC de val-loss, mejor val-loss), rendimiento final (accuracy de test) y generalización (el gap test−train). El protocolo de evaluación es: el train optimiza, el val monitoriza y el test certifica una única vez al final. Una métrica solo cuenta como aporte si supera al baseline de la curva de loss (hipótesis H2, la decisiva).
 
 ## Dónde vive cada cosa
 
@@ -16,17 +16,17 @@
 
 ## Documentos de trabajo (leer en orden)
 
-1. **[[1 - Diseño]]** — el qué y el porqué: pregunta de investigación, hipótesis (H1–H6), diseño experimental, matriz de runs, baselines, protocolo de análisis y confusores.
-2. **[[2 - Decisiones]]** — lo que se va decidiendo: decisiones pendientes + log cronológico de las tomadas, con su justificación.
-3. **[[3 - Progreso]]** — dónde estamos: plan por fases, estado actual, pasos inmediatos y cola de lectura priorizada. *El estado vigente del proyecto se consulta aquí.*
+1. **[[1 - Diseño]]**: el qué y el porqué: pregunta de investigación, hipótesis (H1 a H6), diseño experimental, matriz de runs, baselines, protocolo de análisis y confusores.
+2. **[[2 - Decisiones]]**: lo que se va decidiendo: decisiones pendientes y log cronológico de las tomadas, con su justificación.
+3. **[[3 - Progreso]]**: dónde estamos: plan por fases, estado actual, pasos inmediatos y cola de lectura priorizada. *El estado vigente del proyecto se consulta aquí.*
 
 ## Referencia (cambia poco)
 
-- **[[Corpus]]** — datasets y modelos por paper (pares dataset → modelo), frecuencias que justifican el setup y decisiones de implementación (con la sustitución ImageNet → Tiny-ImageNet).
-- **[[Métricas]]** — la métrica de cada paper y cómo se traslada al pipeline (estimador, claves de logging, coste, señal); incluye el plan de logging consolidado y la auditoría contra los PDFs.
-- **[[Conceptos]]** — glosario: una entrada por concepto, agrupadas por tema (alineación · varianza · optimización · generalización), enlazadas a los papers que las fundamentan.
-- **[[EBRON]]** — título, resumen y palabras clave registrados (no editar: es lo entregado).
-- **[[Seminarios TFG - cosas a tener en cuenta]]** — guía de redacción, depósito y defensa (ETSINF-UPV), con lo que difiere para GCD.
+- **[[Corpus]]**: datasets y modelos por paper (pares dataset → modelo), frecuencias que justifican el setup y decisiones de implementación (con la sustitución ImageNet → Tiny-ImageNet).
+- **[[Métricas]]**: la métrica de cada paper y cómo se traslada al pipeline (estimador, claves de logging, coste, señal); incluye el plan de logging consolidado y la auditoría contra los PDFs.
+- **[[Conceptos]]**: glosario: una entrada por concepto, agrupadas por tema (alineación · varianza · optimización · generalización), enlazadas a los papers que las fundamentan.
+- **[[EBRON]]**: título, resumen y palabras clave registrados (no editar: es lo entregado).
+- **[[Seminarios TFG - cosas a tener en cuenta]]**: guía de redacción, depósito y defensa (ETSINF-UPV), con lo que difiere para GCD.
 
 ## Papers
 
@@ -34,13 +34,13 @@
 
 ## Pendiente de cerrar (carpeta `pending/` en la raíz del repo)
 
-- **[[Plan de análisis congelado]]** — borrador del preregistro estadístico; se congela y se mueve a `docs/` tras el pilot de calibración.
+- **[[Plan de análisis congelado]]**: borrador del preregistro estadístico; se congela y se mueve a `docs/` tras el pilot de calibración.
 
 ## Código (raíz del repo)
 
-- `src/train.py` — entrenamiento de un run con instrumentación de métricas; `src/run_pilot.py` y `src/run_matrix.py` — lanzadores del pilot de calibración y de la matriz (~960 runs), ambos reanudables.
-- `src/metrics/` — registro completo de métricas (se mide todo, siempre); `src/data.py` — split train/val/test estratificado fijo.
-- `tests/` — suite de verificación; `experiments/` — los 24 YAML de celda; `thesis/` — memoria LaTeX (plantilla ETSINF).
+- `src/train.py`: entrenamiento de un run con instrumentación de métricas; `src/run_pilot.py` y `src/run_matrix.py`: lanzadores del pilot de calibración y de la matriz (~960 runs), ambos reanudables.
+- `src/metrics/`: registro completo de métricas (se mide todo, siempre); `src/data.py`: split train/val/test estratificado fijo.
+- `tests/`: suite de verificación; `experiments/`: los 24 YAML de celda; `thesis/`: memoria LaTeX (plantilla ETSINF).
 
 ## Recordatorios
 

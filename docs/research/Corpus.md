@@ -40,7 +40,7 @@ Qué datasets y arquitecturas usa cada paper del corpus, fusionados como pares *
 
 ## An overview of gradient descent optimization algorithms (Ruder, 2017)
 
-Review/Slides — sin experimentos propios. Taxonomía cualitativa de optimizadores (Momentum, NAG, Adagrad, Adadelta, RMSprop, Adam, AdaMax, Nadam) y arquitecturas paralelas/distribuidas para SGD (Hogwild!, Downpour SGD, delay-tolerant, TensorFlow, Elastic Averaging SGD). Únicas ilustraciones: función de Beale y un saddle point (Figura 4 de Alec Radford).
+Review/Slides, sin experimentos propios. Taxonomía cualitativa de optimizadores (Momentum, NAG, Adagrad, Adadelta, RMSprop, Adam, AdaMax, Nadam) y arquitecturas paralelas/distribuidas para SGD (Hogwild!, Downpour SGD, delay-tolerant, TensorFlow, Elastic Averaging SGD). Únicas ilustraciones: función de Beale y un saddle point (Figura 4 de Alec Radford).
 
 ## Coherent Gradients: An Approach to Understanding Generalization in Gradient Descent-based Optimization (Chatterjee, 2019)
 
@@ -77,7 +77,7 @@ Review/Slides — sin experimentos propios. Taxonomía cualitativa de optimizado
 
 ## RMSProp - Divide the gradient by a running average of its recent magnitude (Tieleman & Hinton, 2012)
 
-Slides/Lecture deck (Coursera, Lecture 6a–6e) — sin experimentos propios sistemáticos. Recomendaciones cualitativas por familia de problemas: redes profundas (especialmente con cuellos de botella estrechos), redes recurrentes, redes anchas y poco profundas. La slide *Summary of learning methods* recomienda RMSProp (con momentum opcional) para datasets grandes y redundantes, y reserva métodos full-batch (gradiente conjugado, LBFGS, rprop) para datasets pequeños.
+Slides/Lecture deck (Coursera, Lecture 6a-6e), sin experimentos propios sistemáticos. Recomendaciones cualitativas por familia de problemas: redes profundas (especialmente con cuellos de botella estrechos), redes recurrentes, redes anchas y poco profundas. La slide *Summary of learning methods* recomienda RMSProp (con momentum opcional) para datasets grandes y redundantes, y reserva métodos full-batch (gradiente conjugado, LBFGS, rprop) para datasets pequeños.
 
 ## Speedy Performance Estimation for Neural Architecture Search (Ru et al., 2021)
 
@@ -115,17 +115,17 @@ Slides/Lecture deck (Coursera, Lecture 6a–6e) — sin experimentos propios sis
 ### Datasets (sobre los 15 papers con setup)
 
 **Reales (visión).**
-- **MNIST** — 9 papers: Faghri; Johnson & Zhang; Kingma & Ba; McCandlish; Chatterjee (Coherent Gradients); Forouzesh & Thiran; Fort et al.; Sankararaman; Liu.
-- **CIFAR-10** — 11 papers: Faghri; Johnson & Zhang; Kingma & Ba; McCandlish; Forouzesh & Thiran; Hölzl; Ru et al.; Fort et al.; Sankararaman; Liu; (cualitativo en Chatterjee & Zielinski).
-- **CIFAR-100** — 6 papers: Faghri; Forouzesh & Thiran; Ru et al.; Fort et al.; Sankararaman; (cualitativo en Chatterjee & Zielinski).
-- **ImageNet** — 4 papers: Faghri; McCandlish; Chatterjee & Zielinski; Hölzl (variante ImageNet-1k).
+- **MNIST** (9 papers): Faghri; Johnson & Zhang; Kingma & Ba; McCandlish; Chatterjee (Coherent Gradients); Forouzesh & Thiran; Fort et al.; Sankararaman; Liu.
+- **CIFAR-10** (11 papers): Faghri; Johnson & Zhang; Kingma & Ba; McCandlish; Forouzesh & Thiran; Hölzl; Ru et al.; Fort et al.; Sankararaman; Liu; (cualitativo en Chatterjee & Zielinski).
+- **CIFAR-100** (6 papers): Faghri; Forouzesh & Thiran; Ru et al.; Fort et al.; Sankararaman; (cualitativo en Chatterjee & Zielinski).
+- **ImageNet** (4 papers): Faghri; McCandlish; Chatterjee & Zielinski; Hölzl (variante ImageNet-1k).
 - Otros (visión, 1 paper cada uno): Fashion MNIST (Fort et al.; cualitativo en Chatterjee & Zielinski); SVHN (McCandlish); CIFAR-10-N, CIFAR-C, ImageNet-V2/ReaL/C, ImageNet-21k, iNat18, Places365 (Hölzl); ImageNet-16-120 (Ru, vía NAS-Bench-201); Flower102 (Ru, vía RWNN); MRNet (Forouzesh & Thiran).
 
 **Reales (otros dominios), 1 paper cada uno:** IMDB (Kingma & Ba); MNLI (Fort et al.; discutido en Chatterjee & Zielinski); Billion Word Benchmark, Atari, Dota (McCandlish); rcv1.binary, covtype.binary, protein (Johnson & Zhang).
 
 **Benchmarks NAS:** NAS-Bench-201, NAS-Bench-301 (Ru et al.).
 
-**Sintéticos / toy:** Random Features (Faghri); toy $y = x_0 x_1 + \epsilon$ (Liu). **Label noise sintético sobre datasets reales** — 6 papers: Faghri (10% CIFAR-10); Chatterjee (25/50/75/100% MNIST); Chatterjee & Zielinski (0–100% ImageNet); Forouzesh & Thiran (50% MNIST y CIFAR-100); Hölzl (0/9/17/40% CIFAR-10-N, humanas); Liu (0–50% MNIST, real vs. aleatorio en CIFAR-10/ResNet18).
+**Sintéticos / toy:** Random Features (Faghri); toy $y = x_0 x_1 + \epsilon$ (Liu). **Label noise sintético sobre datasets reales** (6 papers): Faghri (10% CIFAR-10); Chatterjee (25/50/75/100% MNIST); Chatterjee & Zielinski (0-100% ImageNet); Forouzesh & Thiran (50% MNIST y CIFAR-100); Hölzl (0/9/17/40% CIFAR-10-N, humanas); Liu (0-50% MNIST, real vs. aleatorio en CIFAR-10/ResNet18).
 
 **Sin experimentos propios:** Ruder 2017 (review); Tieleman & Hinton 2012 (slides).
 
