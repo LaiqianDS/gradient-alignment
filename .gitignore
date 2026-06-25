@@ -1,5 +1,6 @@
 data/
 reports_pilot/
+reports_validity/
 .DS_Store
 .obsidian
 PDFs/
@@ -8,3 +9,4 @@ pending/
 __pycache__/
 
 .vscode/
+CLAUDE.md
