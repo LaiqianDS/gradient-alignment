@@ -34,11 +34,11 @@ principio, de modo que una suma de las pérdidas de entrenamiento tempranas, sin
 conjunto de test ni un conjunto de validación, ya ordena bien a las candidatas. Los autores
 muestran que su estimador correlaciona fuertemente, en términos de Spearman y Kendall, con el
 ranking real de test, y que lo hace de forma más estable que los llamados proxies de coste cero,
-que se evalúan en la inicialización sin entrenar nada. Su principal virtud es el coste: la
+que se evalúan en la inicialización sin entrenar nada. Su principal ventaja es el coste: la
 pérdida de entrenamiento ya se calcula en cada paso, así que el estimador es prácticamente
 gratuito.
 
-Precisamente esa virtud es la que convierte a TSE en el rival a batir, no en un colaborador. Si
+Esa misma ventaja convierte a TSE en el rival a batir, no en un colaborador. Si
 la curva de pérdida temprana ya predice el resultado a coste nulo, cualquier métrica que exija
 instrumentar el gradiente tiene que demostrar que aporta algo por encima de ella. Este trabajo
 adopta esa exigencia como criterio central, y por eso TSE reaparece como predictor de referencia
@@ -109,7 +109,7 @@ La propuesta más reciente de la familia es la alineación gradiente-peso (GWA) 
 Hölzl~\cite{hoelzl2025gradient}, que mide el coseno entre el gradiente de cada ejemplo y los
 pesos del clasificador final. Es la métrica con la correlación reportada más alta de todo el
 corpus: Pearson de 0,99 y Spearman de 0,97 entre su valor máximo a lo largo del entrenamiento y
-la accuracy de test, y además admite una forma cerrada que la deja casi gratis cuando se calcula
+la accuracy de test, y admite una forma cerrada que la deja casi gratis cuando se calcula
 solo sobre la última capa. Sus resultados, sin embargo, se obtienen con arquitecturas modernas
 de tipo convolucional y transformador y con un protocolo orientado a la robustez frente a ruido
 de etiquetas, por lo que queda abierto si esa correlación tan alta se sostiene en arquitecturas
@@ -224,7 +224,7 @@ Varianza normalizada~\cite{faghri2020study}     & Variabilidad & baja es mejor &
 Escala de ruido GNS~\cite{mccandlish2018empirical} & Variabilidad & baja es mejor & medio \\
 GSNR~\cite{liu2020understanding}                & Variabilidad & alta es mejor & medio \\
 \midrule
-TSE (referencia)~\cite{ru2021speedy}            & ---          & baja es mejor & nulo  \\
+TSE (referencia)~\cite{ru2021speedy}            & n/a          & baja es mejor & nulo  \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -247,7 +247,7 @@ ejes que definen la aportación.}
  & \textbf{Multi-} & \textbf{Barrido} & \textbf{Robustez} & \textbf{Control por} & \textbf{Pareto} \\
 \textbf{Trabajo} & \textbf{familia} & \textbf{temporal} & \textbf{cross-setting} & \textbf{baseline} & \textbf{coste-potencia} \\
 \midrule
-Ru et al.~\cite{ru2021speedy}                   & No      & Parcial & Parcial & ---  & No \\
+Ru et al.~\cite{ru2021speedy}                   & No      & Parcial & Parcial & n/a  & No \\
 Forouzesh y Thiran~\cite{forouzesh2021disparity} & No     & Parcial & Parcial & No   & No \\
 Hölzl~\cite{hoelzl2025gradient}                 & No      & Parcial & Parcial & Parcial & No \\
 McCandlish et al.~\cite{mccandlish2018empirical} & No     & No      & Parcial & No   & No \\

@@ -4,8 +4,8 @@
 % auditada de docs/research/Métricas.md y las notas de Papers/, no Conceptos.md.
 
 Este capítulo fija las definiciones formales que el Capítulo~\ref{ch:estado-del-arte}
-maneja en su versión conceptual. Primero se establece la notación común, desde el
-descenso por gradiente estocástico hasta la geometría de los gradientes por ejemplo
+maneja en su versión conceptual. Primero se establece la notación común, el
+descenso por gradiente estocástico y la geometría de los gradientes por ejemplo
 (Secciones~\ref{sec:sgd} y~\ref{sec:geometria}). Sobre esa base se definen las dos
 familias de métricas, la de alineación y la de variabilidad
 (Secciones~\ref{sec:def-alineacion} y~\ref{sec:def-variabilidad}). La
@@ -49,7 +49,7 @@ porque cada minibatch apunta a un objetivo ligeramente distinto. Es el suelo de 
 obliga a decaer la tasa de aprendizaje para converger en lugar de orbitar el mínimo, y es
 la cantidad que cuantifica la familia de variabilidad.
 
-Dos resúmenes estadísticos del gradiente por ejemplo vertebran el resto del capítulo. El
+Dos resúmenes estadísticos del gradiente por ejemplo organizan el resto del capítulo. El
 \emph{primer momento} $\mathbb{E}[g]$ describe la dirección consistente del gradiente y es
 lo que estiman el momento y la media móvil $m_t$ de Adam~\cite{kingma2015adam}. El
 \emph{segundo momento}, a través de $\mathbb{E}[\|g\|^2]$ o de la traza de $\Sigma$,
@@ -143,7 +143,7 @@ S_{\operatorname{sign}} = \mathbb{E}_{i \neq j}\!\big[\operatorname{sign}\langle
 cada una restringida a pares de la misma clase ($y_i = y_j$, stiffness \emph{intra-clase})
 o de clases distintas ($y_i \neq y_j$, \emph{inter-clase}). Una stiffness intra-clase alta
 indica que la red ha aprendido características compartidas y que cada paso de gradiente sobre
-un ejemplo beneficia al resto de su clase; el indicador robusto es la diferencia
+un ejemplo beneficia al resto de su clase; el indicador que se emplea es la diferencia
 intra-clase menos inter-clase. La señal predictiva es más fuerte en la fase temprana,
 porque la stiffness decae hacia cero cuando comienza el sobreajuste.
 

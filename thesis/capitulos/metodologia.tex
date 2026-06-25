@@ -6,13 +6,64 @@
 
 \section{Hipótesis}
 \label{sec:hipotesis}
-% H1-H6 con criterio falsable (|rho| >= 0,3; DeltaR^2 > 0; etc.).
+
+Los seis objetivos del Capítulo~\ref{ch:introduccion} se concretan aquí en seis hipótesis
+contrastables. Cada una lleva un criterio de falsación fijado antes de observar los resultados,
+de modo que el veredicto no dependa de lo que muestren los datos. La hipótesis general de la que
+todas derivan es que la variabilidad o la alineación de los gradientes, medidas en una fracción
+inicial del entrenamiento, se asocian con la eficiencia del entrenamiento completo; se considera
+falsada si las correlaciones son débiles ($|\rho| < 0{,}3$) o inestables entre condiciones en la
+mayoría de los casos. Un resultado negativo bien establecido es también una contribución,
+porque ahorra a otros el coste de instrumentar el gradiente.
+
+\begin{enumerate}
+  \item \textbf{H1 (existencia).} Al menos una métrica temprana de gradiente correlaciona con la
+        eficiencia a $|\rho| \ge 0{,}3$ en la mayoría de las condiciones, esto es, en más de la
+        mitad de las veinticuatro celdas. Coincide con la hipótesis general. \label{hyp:existencia}
+  \item \textbf{H2 (valor incremental).} Al menos una métrica conserva poder predictivo después de
+        descontar el baseline de pérdida (TSE y \texttt{val-loss} en la misma fracción $f$): el
+        incremento $\Delta R^2$ al añadirla a un modelo que ya contiene el baseline es
+        significativo, mediante un contraste $F$ de modelos anidados, o lo es su correlación
+        parcial de Spearman tras la corrección por comparaciones múltiples. Es el contraste
+        decisivo del trabajo: si H1 se cumple pero H2 no, las métricas de gradiente resultan
+        redundantes con lo que la curva de pérdida ya ofrece sin coste, lo que es un
+        resultado negativo válido. \label{hyp:incremental}
+  \item \textbf{H3 (comparación de familias).} Una de las dos familias, la de alineación o la de
+        variabilidad, es más predictiva que la otra de forma sistemática. El criterio es que la
+        métrica de mayor $\Delta R^2$ pertenezca a la misma familia en al menos dos tercios de las
+        celdas, o que el $\Delta R^2$ agregado por familia difiera de forma significativa. Si
+        ninguna familia domina con ese criterio, la hipótesis queda sin resolver y así se informa.
+        \label{hyp:familias}
+  \item \textbf{H4 (suficiencia temprana).} El poder predictivo satura pronto: para toda métrica
+        que supere H1, la correlación medida al 10\,\% del presupuesto no difiere de forma
+        significativa de la medida al 50\,\%, según el contraste de Steiger y Williams para
+        correlaciones dependientes. La implicación práctica es que basta medir muy pronto para
+        decidir. \label{hyp:temprana}
+  \item \textbf{H5 (robustez entre optimizadores).} Como todas las métricas se calculan sobre el
+        gradiente bruto $\nabla L$ y nunca sobre el paso preacondicionado, el signo de la
+        correlación se preserva al pasar de SGD a Adam. Se contrasta por concordancia de signo en
+        las celdas emparejadas por semilla entre ambos optimizadores. \label{hyp:robustez}
+  \item \textbf{H6 (mecanismo).} Cada métrica arrastra de su trabajo de origen una predicción con
+        signo: una rigidez (\emph{stiffness}) intra-clase alta, una m-coherencia alta y una
+        confusión de gradientes baja anticipan convergencia más rápida; una varianza normalizada o
+        una escala de ruido del gradiente altas anticipan un entrenamiento más lento, o la
+        conveniencia de un lote mayor; un GWA alto anticipa mejor generalización. La hipótesis se
+        cumple, métrica a métrica, si el signo observado coincide con el predicho en la mayoría de
+        las condiciones. Coincidir en el signo es una prueba más exigente que reproducir la
+        magnitud de la correlación. \label{hyp:mecanismo}
+\end{enumerate}
+
+El Capítulo~\ref{ch:conclusiones} retoma estas seis hipótesis una a una para examinar en qué
+medida los datos las sostienen.
 
 \section{Variables}
 \label{sec:variables}
 
 \subsection{Dependientes: eficiencia del entrenamiento}
-% Épocas-a-umbral (primaria, censurado), AUC test-loss, best test-loss.
+% Tres constructos. Velocidad: VD1 épocas-a-umbral sobre val suavizada (primaria, censurado),
+% VD2 AUC de val-loss, VD3 mejor val-loss. Rendimiento final: VD4 final_test_acc (+ F1-macro).
+% Generalización: VD5 gap_loss = final_test_loss - final_train_eval_loss (primaria),
+% VD6 gap_acc = final_train_eval_acc - final_test_acc (robustez). Detalle en 1 - Diseño.md.
 
 \subsection{Independientes: métricas tempranas}
 % Las dos familias; lista cerrada antes de ejecutar (anti p-hacking).
@@ -56,10 +107,10 @@ Tiny-ImageNet  & 110.000 & 90.000 & 10.000 & 10.000 & 200 & $3{\times}64{\times}
 \end{table}
 
 La Tabla~\ref{tab:datasets} fija el tamaño del problema; conviene además situar qué exactitud cabe
-esperar de cada arquitectura en estas condiciones. La comparación honesta no se hace contra el estado
-del arte, que casi siempre usa aumento de datos, weight decay y entrenamientos largos, sino contra el
-\emph{régimen comparable}: redes entrenadas desde cero, sin aumento de datos y a resolución nativa, que
-es el de este estudio. La Tabla~\ref{tab:referencias} reúne ese régimen para las tres arquitecturas, con
+esperar de cada arquitectura en estas condiciones. La comparación se hace contra el \emph{régimen
+comparable}, redes entrenadas desde cero, sin aumento de datos y a resolución nativa, que es el de
+este estudio, y no contra el estado del arte, que casi siempre usa aumento de datos, weight decay y
+entrenamientos largos. La Tabla~\ref{tab:referencias} reúne ese régimen para las tres arquitecturas, con
 cifras tomadas de filas de ablación o de baseline de la literatura: para el MLP, Bachmann et
 al.~\cite{bachmann2023scaling}; para la CNN pequeña, Chen y Ho~\cite{chen2018deep} (cota superior, con
 activación GReLU) y Mantzaris~\cite{mantzaris2025exploring} (cota inferior, con BatchNorm); y para
@@ -104,7 +155,7 @@ del MLP llano ni de la CNN simple.
 \section{Protocolo de evaluación}
 \label{sec:protocolo-eval}
 % Split train/val/test (confirmado por tutor 2026-06-12).
-% [PROVISIONAL, pendiente OK tutor] gap de generalización como variable objetivo (ver pending/).
+% Gap de generalización como variable objetivo (confirmado por tutor 2026-06-14, implementado en src/).
 
 \section{Protocolo de análisis}
 \label{sec:protocolo-analisis}

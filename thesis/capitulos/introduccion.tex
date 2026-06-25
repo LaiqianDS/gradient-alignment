@@ -27,7 +27,7 @@ fuera posible anticipar, a partir de una fracción inicial del entrenamiento, si
 configuración va a ser eficiente, se podría decidir antes y reservar el cómputo para las
 candidatas prometedoras. La cuestión es qué señal temprana contiene esa información.
 
-Precisamente, si analizamos las diferentes partes que componen el proceso de entrenamiento de una red neural, el gradiente surge como la señal más natural para observar el progreso del aprendizaje. Es la única información que el optimizador utiliza para
+Entre las señales disponibles durante el entrenamiento de una red neuronal, el gradiente es una de las más naturales para observar el progreso del aprendizaje, porque es la fuente de información que el optimizador utiliza para
 avanzar en cada paso, de modo que su comportamiento en las primeras etapas refleja
 directamente cómo está aprendiendo la red. Dos aspectos del gradiente han recibido atención
 de forma independiente. El primero es su variabilidad estocástica, es decir, cuánto cambia el
@@ -40,20 +40,20 @@ muchos a la vez y el aprendizaje progresa de forma coherente.
 En los últimos años se han propuesto varias métricas para cuantificar estos dos aspectos. El
 problema es que cada una se ha presentado por separado, en su propio trabajo, con su propio
 conjunto de datos y su propia arquitectura, y casi siempre con un objetivo distinto: explicar
-por qué una red generaliza, elegir el tamaño de batch o decidir cuándo detener el
+por qué una red generaliza, elegir el tamaño de batch (o algún otro parámetro) o decidir cuándo detener el
 entrenamiento. Falta una comparación directa entre familias sobre un mismo banco de pruebas;
 falta saber cuán temprano basta medir para que la predicción ya sea fiable; y falta comprobar
 si la relación se mantiene al cambiar de problema, de arquitectura y de optimizador. Sobre todo,
-falta una comprobación que rara vez se hace de forma explícita: si estas métricas, que obligan a
+analizar si estas métricas, que obligan a
 instrumentar el gradiente y por tanto tienen un coste, aportan algo por encima de lo que la
 propia curva de pérdida ya ofrece sin coste alguno.
 
-Este trabajo aborda ese hueco con un estudio correlacional sistemático. Se entrena una rejilla
-amplia de configuraciones de visión por computador, se miden en todas ellas las dos familias de
+Este trabajo cubre ese hueco con un estudio correlacional sistemático. Se entrena una rejilla
+amplia de configuraciones y arquitecturas redes neuronales para diferentes problemas devisión por computador, se computan en todas ellas las dos familias de
 métricas a lo largo de distintas fracciones tempranas del entrenamiento, y se cuantifica en qué
-medida cada métrica predice indicadores de eficiencia del entrenamiento completo. El criterio
+medida cada métrica puede actuar como predictor de eficiencia del entrenamiento completo. El criterio
 de éxito no es solo que una métrica correlacione con la eficiencia, sino que lo haga mejor que
-la señal gratuita de la curva de pérdida y a un coste razonable. Un resultado negativo
+la señal \emph{baseline}, es decir la curva de pérdida, y a un coste razonable. Un resultado negativo
 sólidamente establecido, esto es, demostrar que el gradiente no aporta nada que la pérdida no
 contenga ya, sería también una contribución útil, porque ahorraría a otros el coste de
 instrumentarlo.
@@ -64,16 +64,17 @@ instrumentarlo.
 La pregunta de investigación que vertebra la memoria es la siguiente:
 
 \begin{quote}
-\itshape ¿Pueden las métricas de variabilidad y alineación de gradientes, medidas en la fase
+\itshape ¿Pueden las métricas de gradiente, medidas en la fase
 inicial del entrenamiento, predecir la eficiencia del entrenamiento completo?
 \end{quote}
 
-De esta pregunta general se desprenden cuatro sub-preguntas. La primera es de viabilidad: qué
-métrica es estable y computacionalmente asumible. La segunda es de objetivo: si lo que se
-predice es la velocidad de convergencia o el rendimiento final. La tercera es de robustez: si
-la relación se mantiene al variar la tasa de aprendizaje y el optimizador. La cuarta, y la más
-exigente, es de valor: si la métrica aporta información que la curva de pérdida no contenga ya
-sin coste.
+La eficiencia del entrenamiento no es una magnitud única. En esta memoria se entiende como tres
+constructos complementarios: la \emph{velocidad de convergencia}, esto es, cuántas épocas cuesta
+alcanzar un nivel de competencia; el \emph{rendimiento final}, la exactitud del modelo una vez
+entrenado por completo; y la \emph{generalización}, la distancia entre lo que el modelo logra
+sobre datos de entrenamiento y sobre datos que no ha visto. Cada constructo se concreta en una o
+varias variables dependientes en el Capítulo~\ref{ch:metodologia}, y la pregunta general se
+evalúa contra los tres.
 
 El objetivo general del trabajo es cuantificar en qué medida las métricas tempranas de
 gradiente predicen la eficiencia del entrenamiento completo en tareas de clasificación de
