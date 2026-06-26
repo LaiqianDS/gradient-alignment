@@ -43,14 +43,14 @@ porque ahorra a otros el coste de instrumentar el gradiente.
         gradiente bruto $\nabla L$ y nunca sobre el paso preacondicionado, el signo de la
         correlación se preserva al pasar de SGD a Adam. Se contrasta por concordancia de signo en
         las celdas emparejadas por semilla entre ambos optimizadores. \label{hyp:robustez}
-  \item \textbf{H6 (mecanismo).} Cada métrica arrastra de su trabajo de origen una predicción con
+  \item \textbf{H6 (concordancia con la literatura).} Cada métrica arrastra de su trabajo de origen una predicción con
         signo: una rigidez (\emph{stiffness}) intra-clase alta, una m-coherencia alta y una
         confusión de gradientes baja anticipan convergencia más rápida; una varianza normalizada o
         una escala de ruido del gradiente altas anticipan un entrenamiento más lento, o la
         conveniencia de un lote mayor; un GWA alto anticipa mejor generalización. La hipótesis se
         cumple, métrica a métrica, si el signo observado coincide con el predicho en la mayoría de
         las condiciones. Coincidir en el signo es una prueba más exigente que reproducir la
-        magnitud de la correlación. \label{hyp:mecanismo}
+        magnitud de la correlación. \label{hyp:concordancia}
 \end{enumerate}
 
 El Capítulo~\ref{ch:conclusiones} retoma estas seis hipótesis una a una para examinar en qué

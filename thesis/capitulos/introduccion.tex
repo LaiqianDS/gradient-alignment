@@ -83,19 +83,13 @@ objetivo general se concreta en seis objetivos específicos:
 
 \begin{enumerate}
   \item \textbf{Existencia.} Determinar si al menos una métrica temprana de gradiente se
-        relaciona de forma apreciable con la eficiencia en la mayoría de las condiciones
+        relaciona de forma consistente con la eficiencia en las condiciones
         estudiadas. \label{obj:existencia}
-  \item \textbf{Valor incremental.} Comprobar si alguna métrica conserva poder predictivo
-        después de descontar lo que la curva de pérdida ya predice sin coste. Es el contraste
-        decisivo del trabajo. \label{obj:incremental}
-  \item \textbf{Comparación de familias.} Establecer cuál de las dos familias, la de alineación
-        o la de variabilidad, es sistemáticamente más predictiva o más robusta. \label{obj:familias}
-  \item \textbf{Suficiencia temprana.} Determinar cuán temprano basta medir para que la
-        predicción no mejore de forma apreciable al esperar más. \label{obj:temprana}
-  \item \textbf{Robustez entre optimizadores.} Evaluar si el sentido de la relación se preserva
-        al cambiar de descenso por gradiente estocástico (SGD) a Adam. \label{obj:robustez}
-  \item \textbf{Mecanismo.} Verificar si el sentido de cada relación observada coincide con el
-        que predice el trabajo del que procede cada métrica. \label{obj:mecanismo}
+  \item \textbf{Valor incremental.} Comprobar si alguna métrica otorga más información de lo que la curva de pérdida ya predice sin caer en un incremento del coste injustificado. \label{obj:incremental}
+  \item \textbf{Comparación de familias.} Establecer cuál de las dos familias, la de alineación o la de variabilidad, es sistemáticamente más predictiva o más robusta. \label{obj:familias}
+  \item \textbf{Suficiencia temprana.} Determinar cuán temprano basta medir para que la predicción no mejore de forma apreciable al esperar más. \label{obj:temprana}
+  \item \textbf{Robustez entre optimizadores.} Evaluar si el sentido de la relación se preserva al cambiar de descenso por gradiente estocástico (SGD) a Adam. \label{obj:robustez}
+  \item \textbf{Concordancia con la literatura.} Comprobar si el sentido de cada relación observada coincide con el que predice la literatura de la que procede cada métrica. \label{obj:concordancia}
 \end{enumerate}
 
 Estos seis objetivos se formalizan en el Capítulo~\ref{ch:metodologia} como otras tantas
