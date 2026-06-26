@@ -86,26 +86,88 @@ Sustituye a las semanas 3-7 del plan original, obsoletas desde que la rejilla co
 - [ ] Slides defensa (10-15, ~15 min)
 - [ ] **Entregable:** memoria entregada + presentación lista
 
-## Estado actual (2026-06-22)
+## Estado actual (rev. 2026-06-26)
 
-- **Decisiones:** Fase 0 cerrada (protocolo de evaluación confirmado e implementado el 2026-06-12; gap de generalización confirmado e implementado el 2026-06-14, ver [[2 - Decisiones]]). Queda una pendiente: congelar el plan de análisis. Sus dos puertas (confirmación del tutor y calibración del pilot) están cerradas, así que está listo para congelarse y moverse a `docs/research/`; falta el paso formal.
-- **Repo:** pipeline single-run completo con el protocolo de evaluación dentro (split train/val/test estratificado fijo, monitorización por val, test único final con F1-macro, gap de generalización sobre subset fijo de train, lecturas suavizadas mediana-3), métricas en `src/metrics/` con runner integrado, launchers de matriz y pilot, timing de dos relojes. Backend de análisis en `src/analysis.py` (loaders + diagnósticos de métricas) con notebook de sanity sobre el pilot.
-- **Pilot:** ejecutado y leído; presupuestos y umbrales finales fijados en los 24 YAML y en `config.py::DATASET_BUDGET`. Falta registrar los valores con su evidencia en [[2 - Decisiones]].
-- **Matriz (~960 runs):** aún no lanzada; lista para arrancar en cuanto se congele el plan.
-- **Lectura:** 6/16 papers (`status: read`, según el último registro); pendientes los 6 de la tabla de signos, prioridad para la congelación. La tabla de signos esperados ya está redactada en [[Datos experimentales]] §5.3; queda verificarla contra esos PDFs.
-- **Memoria:** estructura propia en marcha. Redactados intro, estado del arte y fundamentos (2026-06-16); metodología arrancada (hipótesis H1-H6 y setup). Compila limpio.
-- **Lista de métricas:** cerrada con la implementación: variabilidad (normalized variance, GNS simple, GSNR) + alineación/coherencia (m-coherence, stiffness, gradient disparity, gradient confusion, GWA), más TSE como baseline obligatorio.
+- **Decisiones:**
+  Fase 0 cerrada: protocolo de evaluación confirmado e implementado el 2026-06-12 y gap de generalización confirmado e implementado el 2026-06-14 (ver [[2 - Decisiones]]).
+  Queda una pendiente: congelar el plan de análisis.
+  Sus dos puertas (confirmación del tutor y calibración del pilot) están cerradas, así que falta solo el paso formal.
+- **Repo:**
+  Pipeline single-run completo con el protocolo de evaluación dentro: split train/val/test estratificado fijo, monitorización por val, test único final con F1-macro, gap de generalización sobre subset fijo de train, y lecturas suavizadas mediana-3.
+  Métricas en `src/metrics/` con runner integrado, launchers de matriz y pilot, y timing de dos relojes.
+  Backend de análisis en `src/analysis.py` (loaders + diagnósticos de métricas) con notebook de sanity sobre el pilot.
+- **Pilot:**
+  Ejecutado y leído; la calibración se cerró el 2026-06-17.
+  El número de épocas y los umbrales se determinaron sobre `reports_pilot/` (meseta de val-loss, cruce del umbral en val y timing), datos válidos para todos los datasets incluido Tiny pese al bug de test/gap.
+  Presupuestos finales en épocas, escritos en `config.py::DATASET_BUDGET` y en los 24 YAML: mnist 20, cifar10 40, cifar100 40, tiny_imagenet 40.
+  Umbrales de accuracy: mnist 0.97, cifar10 0.65, cifar100 0.35, tiny_imagenet 0.20.
+  Criterio: cifar10 se bajó de 0.75 para recuperar a CNN, que quedaba censurada; tiny_imagenet de 0.25 para ensanchar el margen de CNN (0.007 era frágil); cifar100 y tiny_imagenet se recortaron del pico de meseta.
+  Coste proyectado de la matriz: de ~250 a ~150 GPU-h, con tiny_imagenet en ~63% del total.
+  Falta registrar estos valores con su evidencia en [[2 - Decisiones]].
+- **Bug de test de Tiny ImageNet (cerrado 2026-06-17):**
+  El split de test usaba `ImageFolder(val/)` sobre un `val/` plano, mandando las 10.000 imágenes a una sola clase (test-acc azar ~0.5%, gap inflado ~0.43 fijo en todo el dataset).
+  `data.py` ahora etiqueta el val oficial leyendo `val_annotations.txt` y mapeando cada wnid con el `class_to_idx` del train.
+  Verificado entrenando 8 épocas (test 0.251 ≈ val 0.249, gap 0.079) y con una regresión hermética en `tests/test_data.py`.
+  No hace falta re-correr el pilot de Tiny: el bug solo tocaba los campos de test/gap, y la calibración usó val y tiempos, que nunca estuvieron rotos.
+  Separación de fuentes para Tiny: las épocas y umbrales salieron de `reports_pilot/` (lado val + timing, sanos), mientras que el **test-acc/gap corregido** vive en `reports_validity/` (las 6 mismas celdas de Tiny re-corridas con el fix; gitignored, artefacto de referencia; salvedad en [[Datos experimentales]] §5.1).
+- **Coste de instrumentación (observación; decisión de diseño abierta):**
+  En las celdas caras las métricas se acercan al coste de entrenar; el peor caso medido es fc × tiny_imagenet, con 2153 s de métricas frente a 1993 s de train, es decir ~2.08x el wall-clock de entrenamiento.
+  Eso cae dentro de la cota <3-4x que el proyecto se fijó, pero la decisión de qué hacer sigue abierta y debe entrar en el preregistro antes de congelar (ver Pasos inmediatos).
+- **Matriz (~960 runs):**
+  Aún no lanzada; lista para arrancar en cuanto se congele el plan.
+- **Lectura:**
+  6/16 papers (`status: read`, según el último registro); pendientes los 6 de la tabla de signos, prioridad para la congelación.
+  La tabla de signos esperados ya está redactada en [[Datos experimentales]] §5.3; queda verificarla contra esos PDFs.
+- **Memoria:**
+  Estructura propia en marcha; redactados intro, estado del arte y fundamentos (2026-06-16) y metodología arrancada (hipótesis H1-H6 y setup).
+  Compila limpio.
+- **Lista de métricas:**
+  Cerrada con la implementación: variabilidad (normalized variance, GNS simple, GSNR) + alineación/coherencia (m-coherence, stiffness, gradient disparity, gradient confusion, GWA), más TSE como baseline obligatorio.
 
-## Pasos inmediatos (rev. 2026-06-22)
+## Pasos inmediatos (rev. 2026-06-26)
 
-**Marcapasos del calendario:** la cadena que queda es congelar el plan → lanzar la matriz (~960 runs, el tramo más largo de septiembre) → análisis. Lo que bloquea ahora es la congelación; el gap, el protocolo y la calibración del pilot ya están cerrados.
+**Marcapasos del calendario:**
+La cadena que queda es congelar el plan → lanzar la matriz (~960 runs, el tramo más largo de septiembre) → análisis.
+Lo que bloquea ahora es la congelación; el gap, el protocolo y la calibración del pilot ya están cerrados.
 
-- [ ] **Congelar el plan de análisis** (fase 3): sus dos puertas están cerradas (tutor + calibración del pilot). Para cerrarlo falta verificar la tabla de signos contra los 6 PDFs de prioridad alta, registrar en [[2 - Decisiones]] los presupuestos/umbrales finales del pilot con su evidencia, y mover [[Plan de análisis congelado]] de `pending/` a `docs/research/` con fecha. A partir de aquí no se mira ningún resultado de matriz sin plan congelado.
-- [ ] **Verificar la tabla de signos** (1.2): los 6 PDFs high-priority (GSNR, Coherent Gradients + Making Coherence, GWA, GNS, TSE) contra los signos de H6. Última dependencia de la congelación; la tabla ya está redactada en [[Datos experimentales]] §5.3.
-- [ ] **Smoke test en cluster** (1.4): 1 run real de principio a fin si no se ha hecho, antes de la matriz.
-- [x] **`reports_validity/`**: 6 celdas de Tiny del pilot re-corridas con la corrección del test-acc (sustituyen a las 6 corruptas de `reports_pilot/`). Decisión: **no se versiona en git** (gitignored como todos los `reports_*`), queda como artefacto de referencia. Salvedad en [[Datos experimentales]] §5.1.
-- [ ] **Lanzar la matriz** por tandas (troceado por dataset/nodo) una vez congelado el plan; el launcher reanuda los pendientes.
-- [ ] **Redacción en paralelo** (1.3, no depende de resultados): completar metodología y dejar listo lo que no espera datos (implementación). Intro, estado del arte y fundamentos ya redactados.
+**Ya cerrado** (hacia el arranque de la matriz; se conserva marcado, no se elimina):
+
+- [x] **Protocolo de evaluación** confirmado e implementado (2026-06-12) y **gap de generalización** (2026-06-14); detalle en el plan por fases (Fase 0 y Fase 2) y en [[2 - Decisiones]].
+- [x] **Pilot de calibración** ejecutado y leído; presupuestos/umbrales finales escritos en `config.py::DATASET_BUDGET` + los 24 YAML (2026-06-17).
+- [x] **Bug de test de Tiny ImageNet** corregido y verificado (2026-06-17): test 0.251 ≈ val 0.249, gap 0.079; regresión hermética en `tests/test_data.py`.
+- [x] **`reports_validity/`**: 6 celdas de Tiny re-corridas con el fix, fuente del **test-acc/gap** corregido de Tiny (la calibración de épocas/umbrales salió de `reports_pilot/`); gitignored, artefacto de referencia; salvedad en [[Datos experimentales]] §5.1.
+
+**Para congelar la preregistración** (la decisión de instrumentación va *dentro* del preregistro, así que precede al acto formal de congelar; lanzar la matriz va al final):
+
+- [ ] **Cerrar la decisión de coste de instrumentación** en las celdas caras (fc/resnet × tiny_imagenet).
+  Es la única tarea que aún implica una decisión de diseño, y debe quedar escrita dentro del preregistro antes de congelarlo.
+  Las palancas son mantener la medición tal cual, bajar la cadencia de ventanas, o submuestrear el probe; M=256 está congelado por comparabilidad cross-celda, así que tocar el probe introduce un confusor.
+  Evidencia para decidir: el peor caso (fc × tiny) es ~2.08x el wall-clock de entrenar, dentro de la cota <3-4x del proyecto.
+- [ ] **Cerrar el presupuesto total de cómputo:**
+  confirmar que los ~150 GPU-h entran en el cluster con el plazo de septiembre (tiny_imagenet es ~63%, donde más rinde cualquier optimización de la tarea anterior).
+- [ ] **Verificar la tabla de signos** contra los 6 PDFs de prioridad alta (GSNR, Coherent Gradients + Making Coherence, GWA, GNS, TSE) y los signos de H6.
+  Prioridad a las 3 filas extrapoladas (gradient disparity, GSNR, GWA), que aún no están fijadas contra su paper.
+  La tabla ya está redactada en [[Datos experimentales]] §5.3.
+- [ ] **Alinear el framing antiguo de "beat TSE-EMA"** que aún arrastran [[Métricas]] (bloque TSE) y el paréntesis de H2 en [[1 - Diseño]].
+- [ ] **Registrar en [[2 - Decisiones]]** los presupuestos/umbrales finales del pilot con su evidencia; los valores ya están en `config.py` y los YAML, falta el registro formal.
+- [ ] **Congelar:**
+  mover [[Plan de análisis congelado]] de `pending/` a `docs/research/` con fecha, incorporando la decisión de instrumentación.
+  A partir de aquí no se mira ningún resultado de matriz sin plan congelado.
+
+**Logística (tuya, en paralelo):**
+
+- [ ] **Smoke test en cluster:**
+  1 run real de principio a fin si no se ha hecho, antes de la matriz.
+
+**Tras congelar:**
+
+- [ ] **Lanzar la matriz** por tandas (troceado por dataset/nodo) una vez congelado el plan; el launcher reanuda los pendientes por `summary.json`.
+  El detalle posterior (QA continuo, backup incremental, ejecución del pipeline de análisis y figuras) está en el plan por fases de arriba (Fase 4 y Fase 5).
+
+**No bloqueante, desde ya:**
+
+- [ ] **Redacción en paralelo** (no depende de resultados):
+  completar metodología y dejar listo lo que no espera datos (implementación); intro, estado del arte y fundamentos ya redactados.
 
 
 ## Cola de lectura
