@@ -6,8 +6,8 @@ Este capítulo presenta el problema que motiva el trabajo y enmarca lo que sigue
 La Sección~\ref{sec:motivacion} expone por qué interesa predecir la eficiencia de un
 entrenamiento desde sus primeras épocas y dónde está el hueco que esta memoria pretende
 cubrir. La Sección~\ref{sec:objetivos} formula la pregunta de investigación y los objetivos
-que de ella se derivan. La Sección~\ref{sec:alcance} delimita el estudio, separando lo que
-entra de lo que queda fuera de forma deliberada. La Sección~\ref{sec:estructura} cierra el
+que de ella se derivan. La Sección~\ref{sec:alcance} delimita el estudio, separando de forma
+deliberada lo que entra de lo que queda fuera. La Sección~\ref{sec:estructura} cierra el
 capítulo con un recorrido por el resto de la memoria.
 
 \section{Motivación}
@@ -23,13 +23,13 @@ es enorme y rara vez se sabe de antemano cuál funcionará mejor.
 Buena parte de ese coste se gasta en entrenamientos que podrían descartarse pronto. Muchas
 configuraciones revelan en sus primeras épocas que van a converger despacio o a estancarse, y
 sin embargo se las deja correr hasta el final solo para confirmar lo que ya se intuía. Si
-fuera posible anticipar, a partir de una fracción inicial del entrenamiento, si una
+fuera posible anticipar, a partir de una fracción temprana del entrenamiento, si una
 configuración va a ser eficiente, se podría decidir antes y reservar el cómputo para las
 candidatas prometedoras. La cuestión es qué señal temprana contiene esa información.
 
-Entre las señales disponibles durante el entrenamiento de una red neuronal, el gradiente es una de las más naturales para observar el progreso del aprendizaje, porque es la fuente de información que el optimizador utiliza para
-avanzar en cada paso, de modo que su comportamiento en las primeras etapas refleja
-directamente cómo está aprendiendo la red. Dos aspectos del gradiente han recibido atención
+Entre las señales disponibles durante el entrenamiento de una red neuronal, el gradiente es una de las más naturales para observar el progreso del aprendizaje: es la información que el optimizador utiliza para
+avanzar en cada paso. Su comportamiento en las primeras etapas refleja, por tanto,
+cómo está aprendiendo la red. Dos aspectos del gradiente han recibido atención
 de forma independiente. El primero es su variabilidad estocástica, es decir, cuánto cambia el
 gradiente de un minibatch a otro: si la dispersión entre minibatches es grande, el optimizador
 recibe estimaciones ruidosas y avanza con dificultad. El segundo es su alineación direccional,
@@ -44,17 +44,19 @@ por qué una red generaliza, elegir el tamaño de batch (o algún otro parámetr
 entrenamiento. Falta una comparación directa entre familias sobre un mismo banco de pruebas;
 falta saber cuán temprano basta medir para que la predicción ya sea fiable; y falta comprobar
 si la relación se mantiene al cambiar de problema, de arquitectura y de optimizador. Sobre todo,
-analizar si estas métricas, que obligan a
+falta analizar si estas métricas, que obligan a
 instrumentar el gradiente y por tanto tienen un coste, aportan algo por encima de lo que la
 propia curva de pérdida ya ofrece sin coste alguno.
 
-Este trabajo cubre ese hueco con un estudio correlacional sistemático. Se entrena una rejilla
-amplia de configuraciones y arquitecturas redes neuronales para diferentes problemas devisión por computador, se computan en todas ellas las dos familias de
+Este trabajo cubre ese hueco con un estudio correlacional sistemático. Se entrena una matriz
+amplia de configuraciones y arquitecturas de redes neuronales para distintos problemas de
+visión por computador, se computan en todas ellas las dos familias de
 métricas a lo largo de distintas fracciones tempranas del entrenamiento, y se cuantifica en qué
 medida cada métrica puede actuar como predictor de eficiencia del entrenamiento completo. El criterio
-de éxito no es solo que una métrica correlacione con la eficiencia, sino que lo haga mejor que
-la señal \emph{baseline}, es decir la curva de pérdida, y a un coste razonable. Un resultado negativo
-sólidamente establecido, esto es, demostrar que el gradiente no aporta nada que la pérdida no
+de éxito no es solo que una métrica correlacione con la eficiencia, sino que aporte más que el
+predictor de referencia (\emph{baseline}), formado por la curva de pérdida y la validación
+temprana, ambas prácticamente gratuitas, y que lo haga a un coste razonable. Un resultado negativo
+sólidamente establecido, esto es, la demostración de que el gradiente no aporta nada que la pérdida no
 contenga ya, sería también una contribución útil, porque ahorraría a otros el coste de
 instrumentarlo.
 
@@ -69,7 +71,7 @@ inicial del entrenamiento, predecir la eficiencia del entrenamiento completo?
 \end{quote}
 
 La eficiencia del entrenamiento no es una magnitud única. En esta memoria se entiende como tres
-constructos complementarios: la \emph{velocidad de convergencia}, esto es, cuántas épocas cuesta
+constructos complementarios: la \emph{velocidad de convergencia}, el número de épocas que cuesta
 alcanzar un nivel de competencia; el \emph{rendimiento final}, la exactitud del modelo una vez
 entrenado por completo; y la \emph{generalización}, la distancia entre lo que el modelo logra
 sobre datos de entrenamiento y sobre datos que no ha visto. Cada constructo se concreta en una o
@@ -82,18 +84,21 @@ imágenes, e identificar cuáles ofrecen la mejor capacidad predictiva por unida
 objetivo general se concreta en seis objetivos específicos:
 
 \begin{enumerate}
-  \item \textbf{Existencia.} Determinar si al menos una métrica temprana de gradiente se
+  \item \textbf{OE1 (existencia).} Determinar si al menos una métrica temprana de gradiente se
         relaciona de forma consistente con la eficiencia en las condiciones
         estudiadas. \label{obj:existencia}
-  \item \textbf{Valor incremental.} Comprobar si alguna métrica otorga más información de lo que la curva de pérdida ya predice sin caer en un incremento del coste injustificado. \label{obj:incremental}
-  \item \textbf{Comparación de familias.} Establecer cuál de las dos familias, la de alineación o la de variabilidad, es sistemáticamente más predictiva o más robusta. \label{obj:familias}
-  \item \textbf{Suficiencia temprana.} Determinar cuán temprano basta medir para que la predicción no mejore de forma apreciable al esperar más. \label{obj:temprana}
-  \item \textbf{Robustez entre optimizadores.} Evaluar si el sentido de la relación se preserva al cambiar de descenso por gradiente estocástico (SGD) a Adam. \label{obj:robustez}
-  \item \textbf{Concordancia con la literatura.} Comprobar si el sentido de cada relación observada coincide con el que predice la literatura de la que procede cada métrica. \label{obj:concordancia}
+  \item \textbf{OE2 (valor incremental).} Comprobar si alguna métrica aporta capacidad predictiva
+        adicional a la que la curva de pérdida ya ofrece, a un coste justificado. Es el objetivo
+        decisivo del trabajo. \label{obj:incremental}
+  \item \textbf{OE3 (comparación de familias).} Establecer cuál de las dos familias, la de alineación o la de variabilidad, es sistemáticamente más predictiva o más robusta. \label{obj:familias}
+  \item \textbf{OE4 (suficiencia temprana).} Determinar cuán temprano basta medir para que la predicción no mejore de forma apreciable al esperar más. \label{obj:temprana}
+  \item \textbf{OE5 (robustez entre optimizadores).} Evaluar si el sentido de la relación se preserva al cambiar de descenso por gradiente estocástico (SGD) a Adam. \label{obj:robustez}
+  \item \textbf{OE6 (concordancia con la literatura).} Comprobar si el sentido de cada relación observada coincide con el que predice la literatura de la que procede cada métrica. \label{obj:concordancia}
 \end{enumerate}
 
-Estos seis objetivos se formalizan en el Capítulo~\ref{ch:metodologia} como otras tantas
-hipótesis contrastables, cada una con un criterio falsable preestablecido. El
+Estos seis objetivos se formalizan en el Capítulo~\ref{ch:metodologia} como las hipótesis H1 a
+H6, en correspondencia uno a uno con OE1 a OE6 y cada una con un criterio falsable
+preestablecido. El
 Capítulo~\ref{ch:conclusiones} retoma la lista para examinar, uno a uno, en qué medida se han
 alcanzado.
 
@@ -102,17 +107,17 @@ alcanzado.
 
 El trabajo es un estudio \emph{correlacional}. Su finalidad es medir la asociación entre las
 métricas tempranas y la eficiencia, no intervenir en el entrenamiento a partir de esa señal.
-La componente de intervención, por ejemplo detener el entrenamiento de forma anticipada o
+La vertiente de intervención, por ejemplo detener el entrenamiento de forma anticipada o
 ajustar la tasa de aprendizaje en función de la alineación medida, queda fuera del alcance y se
 recoge como línea de trabajo futuro en el Capítulo~\ref{ch:conclusiones}. Como en todo estudio correlacional, las relaciones que se
 encuentren no deben interpretarse como relaciones causales.
 
 El dominio es la visión por computador, en concreto la clasificación de imágenes. El estudio
-abarca cuatro conjuntos de datos de dificultad creciente, tres familias de arquitectura
-(una totalmente conectada, una red convolucional simple y una ResNet-18) y dos optimizadores
-(SGD y Adam). La combinación da lugar a una rejilla de configuraciones que, con varias tasas de
+abarca cuatro conjuntos de datos de dificultad creciente, tres arquitecturas
+(una red totalmente conectada, una red convolucional simple y una ResNet-18) y dos optimizadores
+(SGD y Adam). La combinación da lugar a una matriz de experimentos que, con varias tasas de
 aprendizaje y varias semillas por configuración, supera los novecientos entrenamientos. El
-detalle de esta rejilla se expone en el Capítulo~\ref{ch:metodologia}.
+detalle de esta matriz se expone en el Capítulo~\ref{ch:metodologia}.
 
 Quedan fuera del alcance, de forma deliberada, los dominios distintos de la visión, las
 arquitecturas de tipo transformador y los conjuntos de datos a gran escala. En particular, el
