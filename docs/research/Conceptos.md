@@ -2,10 +2,7 @@
 
 Glosario del TFG: una sección por concepto, agrupadas por tema. Los enlaces internos `[[#Concepto]]` apuntan a otra entrada de este mismo documento; la línea **Papers** de cada entrada apunta a las notas de `Papers/` que lo fundamentan.
 
-**Alineación direccional de gradientes:** [[#Gradientes per-sample]] · [[#Similitud coseno entre gradientes]] · [[#Coherencia de gradientes]] · [[#Gradient confusion]] · [[#Stiffness]]
-**Varianza estocástica y batch:** [[#Varianza del gradiente]] · [[#Mini-batch SGD]] · [[#Estimador insesgado del gradiente]] · [[#SNR del gradiente]] · [[#Batch size crítico]]
-**Optimización (paso, momento, adaptatividad):** [[#Momentum]] · [[#Primer y segundo momento del gradiente]] · [[#Tasa de aprendizaje adaptativa]] · [[#LR decay]]
-**Generalización y features:** [[#Sobreparametrización]] · [[#Feature learning]] · [[#Memorización vs generalización]] · [[#Gap de generalización]] · [[#Early stopping]] · [[#Proxy de generalización train-time]]
+**Alineación direccional de gradientes:** [[#Gradientes per-sample]] · [[#Similitud coseno entre gradientes]] · [[#Coherencia de gradientes]] · [[#Gradient confusion]] · [[#Stiffness]] **Varianza estocástica y batch:** [[#Varianza del gradiente]] · [[#Mini-batch SGD]] · [[#Estimador insesgado del gradiente]] · [[#SNR del gradiente]] · [[#Batch size crítico]] **Optimización (paso, momento, adaptatividad):** [[#Momentum]] · [[#Primer y segundo momento del gradiente]] · [[#Tasa de aprendizaje adaptativa]] · [[#LR decay]] **Generalización y features:** [[#Sobreparametrización]] · [[#Feature learning]] · [[#Memorización vs generalización]] · [[#Gap de generalización]] · [[#Early stopping]] · [[#Proxy de generalización train-time]]
 
 ---
 

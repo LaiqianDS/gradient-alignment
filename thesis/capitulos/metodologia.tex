@@ -4,74 +4,24 @@
 % Frontera con implementación: aquí el QUÉ y el POR QUÉ (decisiones de diseño);
 % el CÓMO (realización en software) va en el cap. \ref{ch:implementacion}.
 
-Este capítulo traduce el posicionamiento del Capítulo~\ref{ch:estado-del-arte} en un diseño
-experimental contrastable. La Sección~\ref{sec:hipotesis} formula las seis hipótesis con sus
-criterios de falsación, y la Sección~\ref{sec:variables} define las variables que las
-operacionalizan. La Sección~\ref{sec:ventana} fija la ventana temporal de medición, y las
-Secciones~\ref{sec:setup} y~\ref{sec:matriz} describen la configuración del entrenamiento y
-la matriz de experimentos. Cierran el capítulo el protocolo de evaluación
-(Sección~\ref{sec:protocolo-eval}), el protocolo de análisis
-(Sección~\ref{sec:protocolo-analisis}) y las amenazas a la validez
-(Sección~\ref{sec:confusores}).
+Este capítulo traduce el posicionamiento del Capítulo~\ref{ch:estado-del-arte} en un diseño experimental contrastable. La Sección~\ref{sec:hipotesis} formula las seis hipótesis con sus criterios de falsación, y la Sección~\ref{sec:variables} define las variables que las operacionalizan. La Sección~\ref{sec:ventana} fija la ventana temporal de medición, y las Secciones~\ref{sec:setup} y~\ref{sec:matriz} describen la configuración del entrenamiento y la matriz de experimentos. Cierran el capítulo el protocolo de evaluación (Sección~\ref{sec:protocolo-eval}), el protocolo de análisis (Sección~\ref{sec:protocolo-analisis}) y las amenazas a la validez (Sección~\ref{sec:confusores}).
 
 \section{Hipótesis}
 \label{sec:hipotesis}
 
-Los seis objetivos específicos del Capítulo~\ref{ch:introduccion} se concretan aquí en las
-hipótesis H1 a H6, en correspondencia uno a uno con OE1 a OE6. Cada una lleva un criterio de
-falsación fijado antes de observar los resultados, de modo que el criterio de decisión no
-pueda ajustarse a posteriori a lo que muestren los datos. La hipótesis general de la que
-todas derivan es que la variabilidad o la alineación de los gradientes, medidas en una fracción
-temprana del entrenamiento, se asocian con la eficiencia del entrenamiento completo; se considera
-falsada si, en la mayoría de las celdas experimentales (las combinaciones de conjunto de datos,
-arquitectura y optimizador que detalla la Sección~\ref{sec:matriz}), las correlaciones son
-débiles ($|\rho| < 0{,}3$) o cambian de signo entre condiciones. Un resultado negativo bien
-establecido es también una contribución,
-porque ahorra a otros el coste de instrumentar el gradiente.
+% Los seis objetivos específicos del Capítulo~\ref{ch:introduccion} se concretan aquí en las hipótesis H1 a H6, en correspondencia uno a uno con OE1 a OE6. Cada una lleva un criterio de falsación fijado antes de observar los resultados, de modo que el criterio de decisión no pueda ajustarse a posteriori a lo que muestren los datos. La hipótesis general de la que todas derivan es que la variabilidad o la alineación de los gradientes, medidas en una fracción temprana del entrenamiento, se asocian con la eficiencia del entrenamiento completo; se considera falsada si, en la mayoría de las celdas experimentales (las combinaciones de conjunto de datos, arquitectura y optimizador que detalla la Sección~\ref{sec:matriz}), las correlaciones son débiles ($|\rho| < 0{,}3$) o cambian de signo entre condiciones. Un resultado negativo bien establecido es también una contribución, porque ahorra a otros el coste de instrumentar el gradiente.
 
-\begin{enumerate}
-  \item \textbf{H1 (existencia).} Al menos una métrica temprana de gradiente correlaciona con la
-        eficiencia a $|\rho| \ge 0{,}3$ en la mayoría de las condiciones, esto es, en más de la
-        mitad de las veinticuatro celdas. Coincide con la hipótesis general. \label{hyp:existencia}
-  \item \textbf{H2 (valor incremental).} Al menos una métrica conserva poder predictivo después de
-        descontar el predictor de referencia, formado por el TSE y la pérdida de validación en la
-        misma fracción temprana $f$ (Sección~\ref{sec:ventana}). El criterio es doble: el
-        incremento $\Delta R^2$ al añadir la métrica a un modelo que ya contiene el predictor de
-        referencia es significativo según un contraste $F$ de modelos anidados, o lo es su
-        correlación parcial de Spearman tras la corrección por comparaciones múltiples. Es el
-        contraste decisivo del trabajo: si H1 se cumple pero H2 no, las métricas de gradiente
-        resultan redundantes con lo que la curva de pérdida ya ofrece sin coste, lo que es un
-        resultado negativo válido. \label{hyp:incremental}
-  \item \textbf{H3 (comparación de familias).} Una de las dos familias, la de alineación o la de
-        variabilidad, es más predictiva que la otra de forma sistemática. El criterio es que la
-        métrica de mayor $\Delta R^2$ pertenezca a la misma familia en al menos dos tercios de las
-        celdas, o que el $\Delta R^2$ agregado por familia difiera de forma significativa. Si
-        ninguna familia domina con ese criterio, la hipótesis queda sin resolver y así se informa.
-        \label{hyp:familias}
-  \item \textbf{H4 (suficiencia temprana).} El poder predictivo satura pronto: para toda métrica
-        que supere H1, la correlación medida al 10\,\% del presupuesto de épocas
-        (Sección~\ref{sec:ventana}) no difiere de forma
-        significativa de la medida al 50\,\%, según el contraste de Steiger y Williams para
-        correlaciones dependientes. La implicación práctica es que basta medir muy pronto para
-        decidir. \label{hyp:temprana}
-  \item \textbf{H5 (robustez entre optimizadores).} El signo de la correlación se preserva al
-        pasar de SGD a Adam. El diseño lo hace plausible porque todas las métricas se calculan
-        sobre el gradiente bruto $\nabla \ell$ y nunca sobre el paso preacondicionado por el
-        optimizador. Se contrasta por concordancia de signo en las celdas emparejadas por semilla
-        entre ambos optimizadores: la hipótesis se cumple si la concordancia supera la esperable
-        por azar según un contraste binomial. \label{hyp:robustez}
-  \item \textbf{H6 (concordancia con la literatura).} Cada métrica hereda de su trabajo de origen
-        una predicción con signo; la columna de señal asociada de la
-        Tabla~\ref{tab:sota-metricas} las resume para las ocho métricas. La hipótesis se
-        cumple, métrica a métrica, si el signo observado coincide con el predicho en la mayoría de
-        las condiciones. Se contrasta el signo y no la magnitud de la correlación: las magnitudes
-        publicadas proceden de montajes experimentales que no son comparables entre sí, mientras
-        que exigir el signo predicho pone a prueba el mecanismo que cada trabajo
-        propone. \label{hyp:concordancia}
-\end{enumerate}
+% \begin{enumerate}
+%   \item \textbf{H1 (existencia).} Al menos una métrica temprana de gradiente correlaciona con la eficiencia. Coincide con la hipótesis general. \label{hyp:existencia}
+%   \item \textbf{H2 (valor incremental).} Al menos una métrica conserva poder predictivo después de descontar el predictor de referencia, formado por el TSE y la pérdida de validación en la misma fracción temprana $f$ (Sección~\ref{sec:ventana}). El criterio es doble: el incremento $\Delta R^2$ al añadir la métrica a un modelo que ya contiene el predictor de referencia es significativo según un contraste $F$ de modelos anidados, o lo es su correlación parcial de Spearman tras la corrección por comparaciones múltiples. Es el contraste decisivo del trabajo: si H1 se cumple pero H2 no, las métricas de gradiente resultan redundantes con lo que la curva de pérdida ya ofrece sin coste, lo que es un resultado negativo válido. \label{hyp:incremental}
+%   \item \textbf{H3 (comparación de familias).} Una de las dos familias, la de alineación o la de variabilidad, es más predictiva que la otra de forma sistemática. El criterio es que la métrica de mayor $\Delta R^2$ pertenezca a la misma familia en al menos dos tercios de las celdas, o que el $\Delta R^2$ agregado por familia difiera de forma significativa. Si ninguna familia domina con ese criterio, la hipótesis queda sin resolver y así se informa.
+%         \label{hyp:familias}
+%   \item \textbf{H4 (suficiencia temprana).} El poder predictivo satura pronto: para toda métrica que supere H1, la correlación medida al 10\,\% del presupuesto de épocas (Sección~\ref{sec:ventana}) no difiere de forma significativa de la medida al 50\,\%, según el contraste de Steiger y Williams para correlaciones dependientes. La implicación práctica es que basta medir muy pronto para decidir. \label{hyp:temprana}
+%   \item \textbf{H5 (robustez entre optimizadores).} El signo de la correlación se preserva al pasar de SGD a Adam. El diseño lo hace plausible porque todas las métricas se calculan sobre el gradiente bruto $\nabla \ell$ y nunca sobre el paso preacondicionado por el optimizador. Se contrasta por concordancia de signo en las celdas emparejadas por semilla entre ambos optimizadores: la hipótesis se cumple si la concordancia supera la esperable por azar según un contraste binomial. \label{hyp:robustez}
+%   \item \textbf{H6 (concordancia con la literatura).} Cada métrica hereda de su trabajo de origen una predicción con signo; la columna de señal asociada de la Tabla~\ref{tab:sota-metricas} las resume para las ocho métricas. La hipótesis se cumple, métrica a métrica, si el signo observado coincide con el predicho en la mayoría de las condiciones. Se contrasta el signo y no la magnitud de la correlación: las magnitudes publicadas proceden de montajes experimentales que no son comparables entre sí, mientras que exigir el signo predicho pone a prueba el mecanismo que cada trabajo propone. \label{hyp:concordancia}
+% \end{enumerate}
 
-El Capítulo~\ref{ch:conclusiones} retoma estas seis hipótesis una a una para examinar en qué
-medida los datos las sostienen.
+% El Capítulo~\ref{ch:conclusiones} retoma estas seis hipótesis una a una para examinar en qué medida los datos las sostienen.
 
 \section{Variables}
 \label{sec:variables}
@@ -94,22 +44,13 @@ medida los datos las sostienen.
 % Pendiente en esta sección: arquitecturas (FC/CNN/ResNet-18), optimizadores (SGD/Adam) y
 % normalización sin augmentation.
 
-El estudio emplea cuatro conjuntos de clasificación de imágenes de dificultad creciente:
-MNIST~\cite{lecun1998gradient}, CIFAR-10 y CIFAR-100~\cite{krizhevsky2009learning} y
-Tiny-ImageNet~\cite{le2015tiny}. En todos ellos el conjunto de test oficial se mantiene intacto y
-el de validación se recorta del entrenamiento oficial mediante muestreo estratificado por clase con
-una semilla fija; en CIFAR esto reproduce la partición 45.000/5.000 de He et al.~\cite{he2015deep}. Así la
-validación conserva las proporciones de clase del entrenamiento y la partición es idéntica en los
-más de novecientos entrenamientos. La Tabla~\ref{tab:datasets} recoge los tamaños resultantes, el
-número de clases y la dimensión de entrada de cada conjunto.
+El estudio emplea cuatro conjuntos de clasificación de imágenes de dificultad creciente: MNIST~\cite{lecun1998gradient}, CIFAR-10 y CIFAR-100~\cite{krizhevsky2009learning} y Tiny-ImageNet~\cite{le2015tiny}. En todos ellos el conjunto de test oficial se mantiene intacto y el de validación se recorta del entrenamiento oficial mediante muestreo estratificado por clase con una semilla fija; en CIFAR esto reproduce la partición 45.000/5.000 de He et al.~\cite{he2015deep}. Así la validación conserva las proporciones de clase del entrenamiento y la partición es idéntica en los más de novecientos entrenamientos. La Tabla~\ref{tab:datasets} recoge los tamaños resultantes, el número de clases y la dimensión de entrada de cada conjunto.
 
 \begin{table}[ht]
 \centering
 \small
 \caption{Conjuntos de datos y particiones. El conjunto de validación se obtiene del entrenamiento
-oficial por muestreo estratificado por clase con semilla fija; el de test es el oficial. En
-Tiny-ImageNet el conjunto de validación público hace de test, porque las etiquetas del test
-oficial no son públicas; por eso el total usable es de 110.000 ejemplos y no de 120.000.}
+oficial por muestreo estratificado por clase con semilla fija; el de test es el oficial. En Tiny-ImageNet el conjunto de validación público hace de test, porque las etiquetas del test oficial no son públicas; por eso el total usable es de 110.000 ejemplos y no de 120.000.}
 \label{tab:datasets}
 \begin{tabular}{lrrrrcc}
 \toprule
@@ -123,28 +64,12 @@ Tiny-ImageNet  & 110.000 & 90.000 & 10.000 & 10.000 & 200 & $3{\times}64{\times}
 \end{tabular}
 \end{table}
 
-La Tabla~\ref{tab:datasets} fija el tamaño del problema; conviene además situar qué exactitud cabe
-esperar de cada arquitectura en estas condiciones. La comparación se hace contra el \emph{régimen
-comparable} (redes entrenadas desde cero, sin aumento de datos y a resolución nativa), que es el de
-este estudio. No se compara contra el estado del arte, que casi siempre usa aumento de datos, weight decay y
-entrenamientos largos. La Tabla~\ref{tab:referencias} reúne ese régimen para las tres arquitecturas, con
-cifras tomadas de filas de ablación o de referencia de la literatura: para la red totalmente
-conectada (un perceptrón multicapa, MLP), Bachmann et
-al.~\cite{bachmann2023scaling}; para la CNN pequeña, Chen y Ho~\cite{chen2018deep} (cota superior, con
-activación GReLU) y Mantzaris~\cite{mantzaris2025exploring} (cota inferior, con BatchNorm); y para
-ResNet-18, las filas sin aumento de Ye et al.~\cite{ye2024zeropur} y Ko et
-al.~\cite{ko2024learning}, con Larsson et al.~\cite{larsson2017fractalnet} como corroboración en
-CIFAR-100. En MNIST cualquier red pequeña satura en torno al 99\,\% (LeCun et al.~\cite{lecun1998gradient}).
+La Tabla~\ref{tab:datasets} fija el tamaño del problema; conviene además situar qué exactitud cabe esperar de cada arquitectura en estas condiciones. La comparación se hace contra el \emph{régimen comparable} (redes entrenadas desde cero, sin aumento de datos y a resolución nativa), que es el de este estudio. No se compara contra el estado del arte, que casi siempre usa aumento de datos, weight decay y entrenamientos largos. La Tabla~\ref{tab:referencias} reúne ese régimen para las tres arquitecturas, con cifras tomadas de filas de ablación o de referencia de la literatura: para la red totalmente conectada (un perceptrón multicapa, MLP), Bachmann et al.~\cite{bachmann2023scaling}; para la CNN pequeña, Chen y Ho~\cite{chen2018deep} (cota superior, con activación GReLU) y Mantzaris~\cite{mantzaris2025exploring} (cota inferior, con BatchNorm); y para ResNet-18, las filas sin aumento de Ye et al.~\cite{ye2024zeropur} y Ko et al.~\cite{ko2024learning}, con Larsson et al.~\cite{larsson2017fractalnet} como corroboración en CIFAR-100. En MNIST cualquier red pequeña satura en torno al 99\,\% (LeCun et al.~\cite{lecun1998gradient}).
 
 \begin{table}[ht]
 \centering
 \small
-\caption{Exactitud de test de referencia por arquitectura en el \emph{régimen comparable} (desde cero,
-sin aumento de datos, resolución nativa), que es el de este estudio. Son bandas esperadas, no objetivos:
-las fuentes suelen entrenar más tiempo o con redes algo mayores, de modo que acotan por arriba. Las
-entradas con $\dagger$ no tienen referencia publicada en este régimen (CNN simple y ResNet-18 desde cero,
-sin aumento, a 64$\times$64 nativo en Tiny-ImageNet); son estimaciones propias, y los resultados del
-estudio aportarán las primeras cifras en este régimen.}
+\caption{Accuracy de test de referencia por arquitectura. }
 \label{tab:referencias}
 \begin{tabular}{lcccc}
 \toprule
@@ -157,14 +82,7 @@ ResNet-18 (stem 3$\times$3) & $\sim$99,0--99,5\,\% & $\sim$84--92\,\% & $\sim$50
 \end{tabular}
 \end{table}
 
-Como cota laxa de contexto, ResNet-18 entrenada desde cero a resolución nativa pero \emph{con} aumento de
-datos alcanza 94,55\,\% (CIFAR-10), 78,07\,\% (CIFAR-100) y 50,68\,\% (Tiny-ImageNet) según
-GenURL~\cite{li2023genurl}; la distancia con la Tabla~\ref{tab:referencias} es justo lo que aportan el
-aumento de datos, el weight decay y los entrenamientos largos. Para el MLP y la CNN, los mejores
-resultados publicados exigen cambiar de clase de arquitectura (redes densas que aprenden conectividad
-local tipo convolución, Neyshabur~\cite{neyshabur2020towards}; redes totalmente convolucionales
-profundas, Springenberg et al.~\cite{springenberg2015striving}), de modo que no son techos comparables
-del MLP llano ni de la CNN simple.
+Como cota laxa de contexto, ResNet-18 entrenada desde cero a resolución nativa pero \emph{con} aumento de datos alcanza 94,55\,\% (CIFAR-10), 78,07\,\% (CIFAR-100) y 50,68\,\% (Tiny-ImageNet) según GenURL~\cite{li2023genurl}; la distancia con la Tabla~\ref{tab:referencias} es justo lo que aportan el aumento de datos, el weight decay y los entrenamientos largos. Para el MLP y la CNN, los mejores resultados publicados exigen cambiar de clase de arquitectura (redes densas que aprenden conectividad local tipo convolución, Neyshabur~\cite{neyshabur2020towards}; redes totalmente convolucionales profundas, Springenberg et al.~\cite{springenberg2015striving}), de modo que no son techos comparables del MLP llano ni de la CNN simple.
 
 \section{Matriz de experimentos}
 \label{sec:matriz}
