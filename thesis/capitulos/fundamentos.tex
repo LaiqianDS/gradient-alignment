@@ -18,7 +18,7 @@ $(x_i, y_i)$          & ejemplo de entrenamiento $i$-ésimo                & Sec
 $n$                   & número de ejemplos de entrenamiento               & Sec.~\ref{sec:sgd} \\
 $f_\theta$            & red neuronal con parámetros $\theta$              & Sec.~\ref{sec:sgd} \\
 $P$                   & número de parámetros del modelo                   & Sec.~\ref{sec:sgd} \\
-$\ell_i(\theta)$      & pérdida del ejemplo $i$                           & Sec.~\ref{sec:sgd} \\
+$\ell_i(\theta)$      & loss del ejemplo $i$                              & Sec.~\ref{sec:sgd} \\
 $\mathcal{L}(\theta)$ & riesgo empírico                                   & Sec.~\ref{sec:sgd} \\
 $\eta_t$              & tasa de aprendizaje en el paso $t$                & Sec.~\ref{sec:sgd} \\
 $B$                   & tamaño del minibatch                              & Sec.~\ref{sec:sgd} \\
@@ -31,7 +31,7 @@ $s$                   & submuestras del conjunto de medición en la disparidad &
 $\bar{g}^{(a)}$       & gradiente medio de la submuestra $a$              & Sec.~\ref{sec:def-alineacion} \\
 $K$                   & submuestras del conjunto de medición en la NGV    & Sec.~\ref{sec:def-variabilidad} \\
 $T$                   & presupuesto de épocas                             & Sec.~\ref{sec:eficiencia} \\
-$\tau$                & umbral de exactitud de validación                 & Sec.~\ref{sec:eficiencia} \\
+$\tau$                & umbral de accuracy de validación                  & Sec.~\ref{sec:eficiencia} \\
 $t^\star$             & épocas hasta el umbral                            & Sec.~\ref{sec:eficiencia} \\
 $f$                   & fracción temprana del presupuesto                 & Cap.~\ref{ch:metodologia} \\
 \bottomrule
@@ -41,7 +41,7 @@ $f$                   & fracción temprana del presupuesto                 & Cap
 \section{Descenso por gradiente estocástico}
 \label{sec:sgd}
 
-Sea un conjunto de entrenamiento de $n$ ejemplos $\{(x_i, y_i)\}_{i=1}^n$, una red $f_\theta$ con parámetros $\theta \in \mathbb{R}^P$ y una función de pérdida por ejemplo $\ell_i(\theta) = \ell(f_\theta(x_i), y_i)$. El objetivo del entrenamiento es minimizar el riesgo empírico $\mathcal{L}(\theta) = \tfrac{1}{n}\sum_{i=1}^n \ell_i(\theta)$. El descenso por gradiente estocástico con minibatch no evalúa el gradiente exacto $\nabla \mathcal{L}(\theta)$, sino una estimación sobre un subconjunto $S_t$ de $B$ ejemplos extraídos al azar en cada paso:
+Sea un conjunto de entrenamiento de $n$ ejemplos $\{(x_i, y_i)\}_{i=1}^n$, una red $f_\theta$ con parámetros $\theta \in \mathbb{R}^P$ y una función de loss por ejemplo $\ell_i(\theta) = \ell(f_\theta(x_i), y_i)$. El objetivo del entrenamiento es minimizar el riesgo empírico $\mathcal{L}(\theta) = \tfrac{1}{n}\sum_{i=1}^n \ell_i(\theta)$. El descenso por gradiente estocástico con minibatch no evalúa el gradiente exacto $\nabla \mathcal{L}(\theta)$, sino una estimación sobre un subconjunto $S_t$ de $B$ ejemplos extraídos al azar en cada paso:
 
 \begin{equation}
 \theta_{t+1} = \theta_t - \eta_t\, \hat{g}_t,
@@ -50,7 +50,7 @@ Sea un conjunto de entrenamiento de $n$ ejemplos $\{(x_i, y_i)\}_{i=1}^n$, una r
 \label{eq:sgd}
 \end{equation}
 
-donde $\eta_t$ es la tasa de aprendizaje. Cuando los ejemplos se muestrean de forma independiente, el estimador es \emph{insesgado}, $\mathbb{E}[\hat{g}_t] = \nabla \mathcal{L}(\theta_t)$, lo que garantiza que SGD optimiza la pérdida correcta y no una distorsión sistemática de ella. Su dispersión, en cambio, no es nula: para ejemplos i.i.d.
+donde $\eta_t$ es la tasa de aprendizaje. Cuando los ejemplos se muestrean de forma independiente, el estimador es \emph{insesgado}, $\mathbb{E}[\hat{g}_t] = \nabla \mathcal{L}(\theta_t)$, lo que garantiza que SGD optimiza el loss correcto y no una distorsión sistemática de él. Su dispersión, en cambio, no es nula: para ejemplos i.i.d.
 
 \begin{equation}
 \operatorname{Var}[\hat{g}_t] = \frac{1}{B}\operatorname{tr}(\Sigma),
@@ -73,7 +73,7 @@ g_i = \nabla_\theta\, \ell(f_\theta(x_i), y_i) \in \mathbb{R}^P,
 \label{eq:per-sample}
 \end{equation}
 
-el gradiente de la pérdida de un único ejemplo, antes de promediar. El gradiente del minibatch es su media $\hat{g} = \tfrac{1}{B}\sum_i g_i$, pero esa media descarta la estructura estadística que las métricas explotan: la distribución de los $g_i$ (su covarianza, su curtosis) describe el ruido, y sus productos internos por pares describen si los ejemplos cooperan o se cancelan. Para medirlos sin contaminar la dinámica de entrenamiento, las métricas se evalúan sobre un \emph{conjunto de medición} fijo de $M$ ejemplos, muestreado una sola vez y reutilizado en cada medición, de modo que la variación temporal de la métrica refleje cambios reales en el modelo y no el remuestreo.
+el gradiente del loss de un único ejemplo, antes de promediar. El gradiente del minibatch es su media $\hat{g} = \tfrac{1}{B}\sum_i g_i$, pero esa media descarta la estructura estadística que las métricas explotan: la distribución de los $g_i$ (su covarianza, su curtosis) describe el ruido, y sus productos internos por pares describen si los ejemplos cooperan o se cancelan. Para medirlos sin contaminar la dinámica de entrenamiento, las métricas se evalúan sobre un \emph{conjunto de medición} fijo de $M$ ejemplos, muestreado una sola vez y reutilizado en cada medición, de modo que la variación temporal de la métrica refleje cambios reales en el modelo y no el remuestreo.
 
 Las dos operaciones elementales son la matriz de Gram y la similitud coseno. La matriz de Gram recoge todos los productos internos por pares, $\mathbf{G}_{ij} = \langle g_i, g_j\rangle$, y la similitud coseno los normaliza por magnitud:
 
@@ -196,26 +196,26 @@ agregado por la media sobre los parámetros, nunca por la suma, que sería incom
 Las métricas anteriores son las variables predictoras; las que siguen son las variables a predecir, esto es, lo que en este trabajo se entiende por eficiencia del entrenamiento. Se leen sobre la curva de monitorización de validación a lo largo del presupuesto de épocas $T$. El protocolo concreto, incluido el suavizado de la curva, la separación entrenamiento/validación/test y el tratamiento del censurado en el análisis, se especifica en el Capítulo~\ref{ch:metodologia}.
 
 \paragraph{Épocas hasta el umbral (indicador primario).} El número de épocas que tarda la
-exactitud de validación en alcanzar un nivel objetivo $\tau$ propio de cada conjunto de datos,
+accuracy de validación en alcanzar un nivel objetivo $\tau$ propio de cada conjunto de datos,
 
 \begin{equation}
 t^\star = \min\{\, t \le T : \mathrm{acc}_{\text{val}}(t) \ge \tau \,\}.
 \label{eq:epochs-to-threshold}
 \end{equation}
 
-Si la exactitud no cruza el umbral dentro del presupuesto, el valor queda \emph{censurado}: no se descarta, sino que se trata como el peor resultado posible. Los extremos de la rejilla de tasas de aprendizaje no alcanzan el umbral por diseño, de modo que descartar esos entrenamientos sesgaría la muestra. Un $t^\star$ menor indica un entrenamiento más rápido.
+Si el accuracy no cruza el umbral dentro del presupuesto, el valor queda \emph{censurado}: no se descarta, sino que se trata como el peor resultado posible. Los extremos de la rejilla de tasas de aprendizaje no alcanzan el umbral por diseño, de modo que descartar esos entrenamientos sesgaría la muestra. Un $t^\star$ menor indica un entrenamiento más rápido.
 
-\paragraph{AUC de la pérdida de validación.} El área bajo la curva de pérdida de validación
-dentro del presupuesto, aproximada por la regla trapezoidal sobre el eje de épocas. Resume toda la trayectoria en un escalar: cuanto menor es el área, más rápido desciende la pérdida.
+\paragraph{AUC del loss de validación.} El área bajo la curva de loss de validación
+dentro del presupuesto, aproximada por la regla trapezoidal sobre el eje de épocas. Resume toda la trayectoria en un escalar: cuanto menor es el área, más rápido desciende el loss.
 
-\paragraph{Mejor pérdida de validación.} El mínimo de la pérdida de validación alcanzado
+\paragraph{Mejor loss de validación.} El mínimo del loss de validación alcanzado
 dentro del presupuesto, que mide el mejor rendimiento intermedio con independencia de la velocidad con que se alcanza.
 
-\paragraph{Rendimiento final.} La exactitud sobre el conjunto de test, evaluada una única
+\paragraph{Rendimiento final.} El accuracy sobre el conjunto de test, evaluado una única
 vez al terminar el entrenamiento. Es la variable objetivo certificada, separada de la curva de validación que se monitoriza durante el entrenamiento.
 
 \paragraph{Gap de generalización.} La diferencia final entre el rendimiento en test y en
-entrenamiento, medida sobre un subconjunto fijo del conjunto de entrenamiento del mismo tamaño que el de test. En términos de pérdida y de exactitud,
+entrenamiento, medida sobre un subconjunto fijo del conjunto de entrenamiento del mismo tamaño que el de test. En términos de loss y de accuracy,
 
 \begin{equation}
 \mathrm{gap}_{\text{loss}} = \mathcal{L}_{\text{test}} - \mathcal{L}_{\text{train}},
