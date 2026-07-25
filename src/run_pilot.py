@@ -19,8 +19,11 @@ Reading ``--report``, per dataset:
   + margin, rounded to a multiple of 20 (keeps the ``windows`` snap exact).
 * threshold_acc -- CNN/ResNet center-LR runs should cross it at ~30-60% of
   the budget: crossed in epoch 1 it cannot discriminate speed; crossed by
-  almost nobody it censors half the matrix. ``thr@`` prints the crossing as a
-  fraction of the candidate budget so the 30-60% rule reads off directly.
+  almost nobody it censors half the matrix. ``thr@`` recomputes the crossing
+  of the CURRENT threshold on the smoothed val curve (the summaries'
+  ``epochs_to_threshold`` was computed with the threshold in force when the
+  pilot ran) and prints it as a fraction of the candidate budget so the
+  30-60% rule reads off directly.
 * cost -- ``metric%`` (metric_seconds / total_seconds) is the share of
   wall-clock the instrumentation costs.
 
@@ -194,40 +197,53 @@ def print_report(runs: list[PilotRun]) -> None:
     Two narrow tables per dataset. ``results`` is the model-quality story kept
     for the thesis: best val + final test acc/F1/loss and the generalization
     gap (train_acc - test_acc). ``calib`` is the throwaway tuning evidence:
-    ``plateau@`` (val-loss knee, as a share of the 2x pilot budget), ``thr@``
-    (threshold_acc crossing, as a share of the candidate 1x budget; want
-    30-60%), ``metric%`` (instrumentation tax), wall time and parameter count.
-    The one-line roll-up proposes a 1x budget.
+    ``plateau@`` (val-loss knee, as a share of the run's recorded epochs),
+    ``thr@`` (crossing of the CURRENT threshold_acc, as a share of the
+    candidate 1x budget; want 30-60%), ``metric%`` (instrumentation tax),
+    wall time and parameter count. The one-line roll-up proposes a 1x budget.
+
+    Run facts are read from disk, not derived from today's config: the pilot
+    trained with 2x the budgets in force back then, and the calibration
+    itself edits ``DATASET_BUDGET``, so recomputing epochs or reusing the
+    stored ``epochs_to_threshold`` would silently describe runs that never
+    happened.
     """
     by_dataset: dict[str, list[PilotRun]] = {}
     for r in runs:
         by_dataset.setdefault(r.dataset, []).append(r)
 
     print(
-        f"\n[pilot] calibration report -- center-LR run per cell at {EPOCHS_FACTOR}x budget.\n"
+        "\n[pilot] calibration report -- one center-LR run per cell, doubled budget.\n"
         "  results -- best val + final test quality and the gap (train_acc - test_acc).\n"
-        "  calib   -- plateau@ (val-loss knee, % of 2x pilot) | thr@ (threshold cross,\n"
-        "             % of 1x budget, want 30-60%) | metric% (instrumentation tax)."
+        "  calib   -- plateau@ (val-loss knee, % of the run's recorded epochs) |\n"
+        "             thr@ (crossing of the CURRENT threshold, % of 1x budget,\n"
+        "             want 30-60%) | metric% (instrumentation tax)."
     )
 
     for dataset, cell_runs in by_dataset.items():
         budget = DATASET_BUDGET[dataset]
         candidate = budget["epochs"]
-        pilot_budget = cell_runs[0].epochs
 
         done = [r for r in cell_runs if r.is_done()]
         pending = [r for r in cell_runs if not r.is_done()]
 
+        # Run facts come from disk: the recorded trajectory length is the
+        # budget the pilot actually trained with, immune to the DATASET_BUDGET
+        # edits the calibration itself writes afterwards.
+        trajs = {r: pd.read_parquet(r.dir / "trajectory.parquet").sort_values("epoch")
+                 for r in done}
+        ran = sorted({len(t) for t in trajs.values()})
+        ran_label = ("/".join(str(e) for e in ran) if ran
+                     else f"{cell_runs[0].epochs} (planned)")
+
         print(f"\n{dataset}  |  budget {candidate} ep  |  thr {budget['threshold_acc']}"
-              f"  |  pilot {EPOCHS_FACTOR}x = {pilot_budget}")
+              f"  |  pilot ran {ran_label} ep")
         if not done:
             print("  (no finished runs yet)")
             continue
 
         summaries = {r: json.loads((r.dir / "summary.json").read_text()) for r in done}
-        plateaus = {r: plateau_epoch(
-            pd.read_parquet(r.dir / "trajectory.parquet").sort_values("epoch"))
-            for r in done}
+        plateaus = {r: plateau_epoch(trajs[r]) for r in done}
 
         # results -- the model-quality numbers kept for the thesis
         print(f"  {'results':<9}{'model':<9}{'opt':<4}{'test_acc':>9}{'test_f1':>9}"
@@ -247,9 +263,15 @@ def print_report(runs: list[PilotRun]) -> None:
         for r in done:
             s = summaries[r]
             plateau = plateaus[r]
-            plateau_cell = f"{plateau} ({100 * plateau / pilot_budget:.0f}%)"
+            plateau_cell = f"{plateau} ({100 * plateau / len(trajs[r]):.0f}%)"
 
-            hit = s["epochs_to_threshold"]
+            # Recompute against the CURRENT threshold on the smoothed curve
+            # (same smoothing as train.median3); the summary's stored
+            # epochs_to_threshold used the threshold in force at pilot time.
+            smooth_acc = (trajs[r]["val_acc"]
+                          .rolling(3, center=True, min_periods=1).median())
+            crossed = trajs[r][smooth_acc >= budget["threshold_acc"]]
+            hit = int(crossed["epoch"].iloc[0]) + 1 if not crossed.empty else None
             if hit is None:
                 thr_cell, censored = "--", censored + 1
             else:
