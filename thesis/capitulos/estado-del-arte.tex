@@ -50,35 +50,56 @@ Por último, los propios optimizadores del estudio guardan una relación directa
 
 El valor de este trabajo depende de una comparación honesta. Medir el gradiente cuesta, así que el rival no es la métrica más simple ni la que cada artículo proponga, sino el mejor predictor que se puede obtener sin instrumentar el gradiente en absoluto, leyendo solo lo que el entrenamiento ya produce. Ese predictor de referencia tiene dos componentes, ambos de coste prácticamente nulo.
 
-El primero es el estimador de velocidad de entrenamiento (TSE) de la Sección~\ref{sec:eda-prediccion}, que resume la curva de pérdida de entrenamiento temprana. El segundo, y probablemente el más fuerte, es la propia métrica de validación medida en la misma fracción temprana del entrenamiento, es decir, la exactitud o la pérdida de validación a una fracción dada. Es una señal casi gratuita y muy informativa: si las primeras épocas ya separan las configuraciones buenas de las malas en validación, una métrica de gradiente que no supere esa separación no añade nada que merezca su coste.
+El primero es el estimador de velocidad de entrenamiento (TSE) de la Sección~\ref{sec:eda-prediccion}, que resume la curva de loss de entrenamiento temprana. El segundo, y probablemente el más fuerte, es la propia métrica de validación medida en la misma fracción temprana del entrenamiento, es decir, el accuracy o el loss de validación a una fracción dada. Es una señal casi gratuita y muy informativa: si las primeras épocas ya separan las configuraciones buenas de las malas en validación, una métrica de gradiente que no supere esa separación no añade nada que merezca su coste.
 
-Estos dos predictores definen el suelo que las métricas de gradiente deben superar. La comparación no se hace solo en términos de correlación cruda, sino de valor incremental: cuánto añade una métrica una vez descontado lo que la curva de pérdida y la validación temprana ya predicen. Este es el contraste que el objetivo~\ref{obj:incremental} del Capítulo~\ref{ch:introduccion} señala como decisivo, y su formalización se detalla en el Capítulo~\ref{ch:metodologia}.
+Estos dos predictores definen el suelo que las métricas de gradiente deben superar. La comparación no se hace solo en términos de correlación cruda, sino de valor incremental: cuánto añade una métrica una vez descontado lo que la curva de loss y la validación temprana ya predicen. Este es el contraste que el objetivo~\ref{obj:incremental} del Capítulo~\ref{ch:introduccion} señala como decisivo, y su formalización se detalla en el Capítulo~\ref{ch:metodologia}.
 
 \section{Posicionamiento de este trabajo}
 \label{sec:sota-hueco}
 
 La revisión anterior deja ver un patrón. Cada métrica se ha propuesto y validado por separado, con un objetivo propio (explicar la generalización, elegir el tamaño de batch o decidir cuándo parar), sobre un conjunto de datos y una arquitectura concretos, y rara vez frente al predictor de referencia barato. La Tabla~\ref{tab:sota-metricas} resume las métricas revisadas en los mismos ejes, lo que hace visible esa dispersión: conviven señales de signo y coste muy distintos, evaluadas en bancos de prueba que no se solapan.
 
+Conviene precisar cómo se lee esa tabla. La columna de señal recoge el sentido que cada trabajo asocia con un entrenamiento más eficiente o una mejor generalización, con $\uparrow$ cuando lo deseable es un valor alto y $\downarrow$ cuando lo es un valor bajo. El coste se expresa en relación con el de un paso de entrenamiento y distingue tres tramos: bajo cuando la sobrecarga queda por debajo del cinco por ciento, medio cuando exige un barrido de gradientes por ejemplo sobre el conjunto de medición, y alto cuando además hay que recorrer todos los pares de ese barrido. La columna de evidencia recoge la correlación más fuerte que cada trabajo publica, y es la que pide más cautela, porque las cifras no son comparables entre sí: solo la de GWA relaciona la métrica con el accuracy de test, mientras que la de gradient disparity compara dos variantes de la propia métrica y la de GSNR contrasta los dos lados de la ecuación teórica que sus autores derivan. Los trabajos que respaldan su métrica con figuras y no con un coeficiente aparecen como evidencia cualitativa. Esa heterogeneidad, más que la magnitud de ningún coeficiente concreto, es lo que justifica someter a todas las métricas a una evaluación común.
+
 \begin{table}[ht]
 \centering
-\small
-\caption{Las métricas tempranas revisadas, situadas en ejes comunes. El coste es relativo al de
-un paso de entrenamiento. La señal indica el sentido que cada trabajo asocia con un entrenamiento más eficiente o una mejor generalización.}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\caption{Síntesis comparativa de las métricas tempranas revisadas.}
 \label{tab:sota-metricas}
-\begin{tabular}{llll}
+\begin{tabular}{>{\raggedright\arraybackslash}p{1.9cm}
+                >{\raggedright\arraybackslash}p{2.7cm}
+                >{\centering\arraybackslash}p{0.9cm}
+                >{\raggedright\arraybackslash}p{2.3cm}
+                >{\raggedright\arraybackslash}p{2.4cm}
+                >{\raggedright\arraybackslash}p{2.3cm}
+                >{\centering\arraybackslash}p{1.0cm}}
 \toprule
-\textbf{Métrica} & \textbf{Familia} & \textbf{Señal asociada} & \textbf{Coste} \\
+\textbf{Métrica} & \textbf{Qué mide} & \textbf{Señal} & \textbf{Propósito original} & \textbf{Banco de pruebas} & \textbf{Evidencia publicada} & \textbf{Coste} \\
 \midrule
-m-coherencia~\cite{chatterjee2020making}        & Alineación   & alta es mejor & medio \\
-Stiffness~\cite{fort2019stiffness}              & Alineación   & alta es mejor & medio \\
-Gradient confusion~\cite{sankararaman2020impact} & Alineación  & baja es mejor & alto  \\
-Gradient disparity~\cite{forouzesh2021disparity} & Alineación  & baja es mejor & bajo  \\
-GWA~\cite{hoelzl2025gradient}                   & Alineación   & alta es mejor & bajo  \\
-Varianza normalizada~\cite{faghri2020study}     & Variabilidad & baja es mejor & bajo  \\
-Escala de ruido GNS~\cite{mccandlish2018empirical} & Variabilidad & baja es mejor & medio \\
-GSNR~\cite{liu2020understanding}                & Variabilidad & alta es mejor & medio \\
-\midrule
-TSE (referencia)~\cite{ru2021speedy}            & -       & baja es mejor & nulo  \\
+\multicolumn{7}{l}{\itshape Familia de alineación o coherencia direccional} \\
+\addlinespace[2pt]
+m-coherencia \cite{chatterjee2020making} & Ejemplos que se benefician del paso obtenido de uno solo & $\uparrow$ & Separar aprendizaje de memorización & ImageNet; ResNet-18 & Cualitativa & Medio \\
+\addlinespace[2pt]
+Stiffness \cite{fort2019stiffness} & Coseno entre gradientes de pares, desglosado por clase & $\uparrow$ & Geometría del aprendizaje y aviso de sobreajuste & MNIST, Fashion-MNIST, CIFAR-10/100; MLP, CNN, ResNet-20 & Cualitativa & Medio \\
+\addlinespace[2pt]
+Gradient confusion \cite{sankararaman2020impact} & Coseno más negativo entre pares, el peor caso & $\downarrow$ & Efecto de la sobreparametrización & CIFAR-10/100, MNIST; redes residuales anchas & Cualitativa & Alto \\
+\addlinespace[2pt]
+Gradient disparity \cite{forouzesh2021disparity} & Distancia entre los gradientes de dos minibatches & $\downarrow$ & Criterio de parada temprana & MNIST, CIFAR-10/100; AlexNet, VGG-13, ResNet-18 & $r = 0{,}957$ entre sus dos variantes, sobre 220 configuraciones & Bajo \\
+\addlinespace[2pt]
+GWA \cite{hoelzl2025gradient} & Coseno entre el gradiente y los pesos del clasificador & $\uparrow$ & Proxy de generalización & CIFAR-10/-N/-C, ImageNet-1k/-C; ConvNeXt-F, ViT-S/16 & $r = 0{,}99$ y $\rho = 0{,}97$ frente al accuracy de test & Bajo \\
+\addlinespace[3pt]
+\multicolumn{7}{l}{\itshape Familia de variabilidad estocástica} \\
+\addlinespace[2pt]
+Varianza normalizada \cite{faghri2020study} & Varianza del gradiente relativa a su magnitud & $\downarrow$ & Caracterizar la varianza, sin fin predictivo & MNIST, CIFAR-10/100, ImageNet; MLP, ResNet & Cualitativa & Bajo \\
+\addlinespace[2pt]
+Escala de ruido (GNS) \cite{mccandlish2018empirical} & Traza de la covarianza sobre la norma del gradiente al cuadrado & $\downarrow$ & Predecir el batch size crítico & MNIST, SVHN, CIFAR-10, ImageNet, texto y aprendizaje por refuerzo & Cualitativa & Medio \\
+\addlinespace[2pt]
+GSNR \cite{liu2020understanding} & Razón señal-ruido del gradiente por parámetro & $\uparrow$ & Explicar la generalización & MNIST, CIFAR-10; CNN, ResNet-18 & $r = 0{,}907$ a $0{,}968$ entre los lados de su ecuación & Medio \\
+\addlinespace[3pt]
+\multicolumn{7}{l}{\itshape Predictor de referencia, sin instrumentar el gradiente} \\
+\addlinespace[2pt]
+TSE \cite{ru2021speedy} & Suma del loss de entrenamiento de las primeras épocas & $\downarrow$ & Ordenar arquitecturas en NAS & NAS-Bench-201/301; CIFAR-10/100, ImageNet-16-120 & Spearman y Kendall altos frente al ranking real & Nulo \\
 \bottomrule
 \end{tabular}
 \end{table}
