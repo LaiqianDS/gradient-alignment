@@ -138,7 +138,7 @@ Matiz sobre VD2 y VD3: la val-loss puede subir por **sobreconfianza** mientras l
 
 `seconds_to_threshold` queda **fuera** del análisis confirmatorio (el wall-clock en cluster compartido está confundido por la contención); solo exploratorio.
 
-**Salvedad de datos (pilot, Tiny-ImageNet).** Los runs de `reports_pilot/` para Tiny-ImageNet tienen el `final_test_acc` **mal calculado** (bug previo a la corrección), así que VD4 y, por depender del test, VD5 y VD6 no son fiables en esas celdas del pilot; las métricas del lado val (VD1-VD3) y el timing sí lo son. Para apuntar test-acc o gap de Tiny existe `reports_validity/`: las **6 celdas de Tiny del pilot re-corridas con la corrección** (FC/CNN/ResNet-18 × SGD/Adam, LR centrado, seed 0), que sustituyen a las 6 corruptas de `reports_pilot/`. Da un test-acc/gap corregido por celda, suficiente como referencia pero no para análisis (un solo LR y seed). Esa carpeta **no se versiona en git** (gitignored como todos los `reports_*`), así que no viaja con el clon; el test-acc definitivo de Tiny saldrá de la matriz completa, ya con el código corregido.
+**Salvedad de datos (pilot, Tiny-ImageNet).** Los runs de `reports_pilot/` para Tiny-ImageNet tienen el `final_test_acc` **mal calculado** (bug previo a la corrección), así que VD4 y, por depender del test, VD5 y VD6 no son fiables en esas celdas del pilot; las métricas del lado val (VD1-VD3) y el timing sí lo son. Desde el 2026-07-17 la referencia corregida vive **dentro de cada run del pilot**: `reports_pilot/<run>/testfix_40ep/` contiene la celda re-corrida con la corrección (mismo LR centrado y seed 0, pero al presupuesto calibrado de 40 épocas, no a las 160 del pilot: horizontes distintos, no intercambiables), y el `summary.json` corrupto se auto-declara con la clave `_tiny_test_note`. La antigua `reports_validity/` quedó retirada tras la fusión. La referencia sirve para apuntar test-acc/gap por celda, no para análisis (un solo LR y seed); como todos los `reports_*` está gitignored, y el test-acc definitivo de Tiny saldrá de la matriz completa, ya con el código corregido.
 
 ### 5.2 Hipótesis / objetivos de análisis
 
@@ -160,16 +160,16 @@ Inferencia en **dos etapas**: Spearman ρ por celda (descriptivo) + Wilcoxon ent
 |---|---|---|
 | gradient confusion | + | fuerte (Sankararaman et al.) |
 | stiffness (intra-clase) | − | fuerte (Fort et al.) |
-| m-coherence | − | fuerte (Chatterjee & Zielinski) |
+| m-coherence | − | fuerte vía CGH (Chatterjee 2020: más coherencia → la loss cae más rápido; medido en train). Chatterjee & Zielinski no afirma velocidad |
 | gradient disparity | + | extrapolada (predice test error, no velocidad) |
 | NGV | + | fuerte (Faghri et al.) |
-| GNS | + | fuerte (McCandlish et al.) |
-| GSNR | − | extrapolada (predice generalización; vs VD4: +) |
-| GWA | − | extrapolada (predice generalización; vs VD4: +) |
+| GNS | + | fuerte (McCandlish ec. 2.7/D.1: más pasos a batch fijo; requiere B ≲ 𝓑 y LR razonable, y el GNS medido depende del LR) |
+| GSNR | − | extrapolada (el paper solo afirma el gap; vs VD4: + también extrapolada, derivada del gap) |
+| GWA | − | extrapolada (el paper calla sobre velocidad; vs VD4: + fuerte, con matices) |
 | `val-acc@f` (baseline) | − | por construcción |
 | TSE / `val-loss@f` (baselines) | + | por construcción |
 
-GSNR y GWA llevan su predicción **fuerte** sobre VD4 (`final_test_acc`, signo +) y sobre el gap (signo −, más alto = mejor generalización = gap menor); su columna vs VD1 es extrapolación. La aparente contradicción de signos (+ vs VD4 pero − vs el gap) es solo aritmética: VD4 y el gap apuntan a sentidos opuestos de «bueno» (más test-acc es mejor, más gap es peor). Además, VD5/VD6 forman **familia FDR propia** con dos controles preregistrados: un suelo de ajuste (se excluyen runs que no aprenden lo bastante el train) y correlación parcial por `final_train_eval_loss`.
+Verificado contra los papers el 2026-07-17 (veredictos y citas en [[2 - Decisiones]]). El reparto real de predicciones fuertes: GSNR la lleva sobre el gap (signo −, vía OSGR; el gap del paper es en loss, la misma cantidad que VD5), y su + vs VD4 es derivación, no claim del paper. GWA la lleva sobre VD4 (signo +; Pearson 0,99 solo en ConvNeXt/CIFAR-10, 0,92 cross-arquitectura, medida sobre el máximo de alineamiento de la trayectoria completa, no en ventana temprana), y su − vs el gap es direccional cualitativo (el paper nunca mide test loss − train loss). m-coherence mantiene el − vs el gap con la salvedad del propio paper (conexión "complicated": con 100% label noise la coherencia también alcanza valores altos; lo informativo según la teoría es la coherencia temprana, lo que favorece la ventana del TFG). La aparente contradicción de signos (+ vs VD4 pero − vs el gap) es solo aritmética: VD4 y el gap apuntan a sentidos opuestos de «bueno» (más test-acc es mejor, más gap es peor). Además, VD5/VD6 forman **familia FDR propia** con dos controles preregistrados: un suelo de ajuste (se excluyen runs que no aprenden lo bastante el train) y correlación parcial por `final_train_eval_loss`.
 
 ---
 
