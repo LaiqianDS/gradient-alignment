@@ -44,13 +44,12 @@ Este capítulo traduce el posicionamiento del Capítulo~\ref{ch:estado-del-arte}
 % Pendiente en esta sección: arquitecturas (FC/CNN/ResNet-18), optimizadores (SGD/Adam) y
 % normalización sin augmentation.
 
-El estudio emplea cuatro conjuntos de clasificación de imágenes de dificultad creciente: MNIST~\cite{lecun1998gradient}, CIFAR-10 y CIFAR-100~\cite{krizhevsky2009learning} y Tiny-ImageNet~\cite{le2015tiny}. En todos ellos el conjunto de test oficial se mantiene intacto y el de validación se recorta del entrenamiento oficial mediante muestreo estratificado por clase con una semilla fija; en CIFAR esto reproduce la partición 45.000/5.000 de He et al.~\cite{he2015deep}. Así la validación conserva las proporciones de clase del entrenamiento y la partición es idéntica en los más de novecientos entrenamientos. La Tabla~\ref{tab:datasets} recoge los tamaños resultantes, el número de clases y la dimensión de entrada de cada conjunto.
+El estudio emplea cuatro conjuntos de clasificación de imágenes de dificultad creciente: MNIST~\cite{lecun1998gradient}, CIFAR-10 y CIFAR-100~\cite{krizhevsky2009learning} y Tiny-ImageNet~\cite{le2015tiny}. En todos ellos el conjunto de test oficial se mantiene intacto y el de validación se recorta del entrenamiento oficial mediante muestreo estratificado por clase con una semilla fija; en CIFAR esto reproduce la partición 45.000/5.000 de He et al.~\cite{he2015deep}. Así la validación conserva las proporciones de clase del entrenamiento y la partición es idéntica en los más de novecientos entrenamientos. La Tabla~\ref{tab:datasets} recoge los tamaños resultantes, el número de clases y la dimensión de entrada de cada conjunto. Tiny-ImageNet es la excepción: como las etiquetas de su conjunto de test oficial no son públicas, su conjunto de validación público se emplea como test, y por eso el total usable baja a 110.000 ejemplos en lugar de 120.000.
 
 \begin{table}[ht]
 \centering
 \small
-\caption{Conjuntos de datos y particiones. El conjunto de validación se obtiene del entrenamiento
-oficial por muestreo estratificado por clase con semilla fija; el de test es el oficial. En Tiny-ImageNet el conjunto de validación público hace de test, porque las etiquetas del test oficial no son públicas; por eso el total usable es de 110.000 ejemplos y no de 120.000.}
+\caption{Conjuntos de datos y particiones.}
 \label{tab:datasets}
 \begin{tabular}{lrrrrcc}
 \toprule
@@ -64,12 +63,14 @@ Tiny-ImageNet  & 110.000 & 90.000 & 10.000 & 10.000 & 200 & $3{\times}64{\times}
 \end{tabular}
 \end{table}
 
-La Tabla~\ref{tab:datasets} fija el tamaño del problema; conviene además situar qué exactitud cabe esperar de cada arquitectura en estas condiciones. La comparación se hace contra el \emph{régimen comparable} (redes entrenadas desde cero, sin aumento de datos y a resolución nativa), que es el de este estudio. No se compara contra el estado del arte, que casi siempre usa aumento de datos, weight decay y entrenamientos largos. La Tabla~\ref{tab:referencias} reúne ese régimen para las tres arquitecturas, con cifras tomadas de filas de ablación o de referencia de la literatura: para la red totalmente conectada (un perceptrón multicapa, MLP), Bachmann et al.~\cite{bachmann2023scaling}; para la CNN pequeña, Chen y Ho~\cite{chen2018deep} (cota superior, con activación GReLU) y Mantzaris~\cite{mantzaris2025exploring} (cota inferior, con BatchNorm); y para ResNet-18, las filas sin aumento de Ye et al.~\cite{ye2024zeropur} y Ko et al.~\cite{ko2024learning}, con Larsson et al.~\cite{larsson2017fractalnet} como corroboración en CIFAR-100. En MNIST cualquier red pequeña satura en torno al 99\,\% (LeCun et al.~\cite{lecun1998gradient}).
+La Tabla~\ref{tab:datasets} fija el tamaño del problema; conviene además situar qué accuracy cabe esperar de cada arquitectura en estas condiciones. La comparación se hace contra el \emph{régimen comparable} (redes entrenadas desde cero, sin data augmentation y a resolución nativa), que es el de este estudio. No se compara contra el estado del arte, que casi siempre usa data augmentation, weight decay y entrenamientos largos. La Tabla~\ref{tab:referencias} reúne ese régimen para las tres arquitecturas, con cifras tomadas de filas de ablación o de referencia de la literatura: para la red totalmente conectada (un perceptrón multicapa, MLP), Bachmann et al.~\cite{bachmann2023scaling}; para la CNN pequeña, Chen y Ho~\cite{chen2018deep} (cota superior, con activación GReLU) y Mantzaris~\cite{mantzaris2025exploring} (cota inferior, con batch normalization); y para ResNet-18, las filas sin data augmentation de Ye et al.~\cite{ye2024zeropur} y Ko et al.~\cite{ko2024learning}, con Larsson et al.~\cite{larsson2017fractalnet} como corroboración en CIFAR-100. En MNIST cualquier red pequeña satura en torno al 99\,\% (LeCun et al.~\cite{lecun1998gradient}).
+
+Esas cifras se leen como bandas esperadas y no como objetivos, porque las fuentes citadas suelen entrenar durante más tiempo o con redes algo mayores y por tanto acotan por arriba. Las dos entradas marcadas con $\dagger$ corresponden a la CNN simple y a la ResNet-18 en Tiny-ImageNet, para las que no existe referencia publicada en este régimen (desde cero, sin data augmentation y a resolución nativa de 64$\times$64); son estimaciones propias, y los resultados de este estudio aportarán las primeras cifras en ese régimen.
 
 \begin{table}[ht]
 \centering
 \small
-\caption{Accuracy de test de referencia por arquitectura. }
+\caption{Accuracy de test de referencia por arquitectura.}
 \label{tab:referencias}
 \begin{tabular}{lcccc}
 \toprule

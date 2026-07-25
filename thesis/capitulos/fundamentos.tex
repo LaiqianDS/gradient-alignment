@@ -3,12 +3,12 @@
 % Definiciones formales. Las cifras y la dirección de cada métrica siguen la versión
 % auditada de docs/research/Métricas.md y las notas de Papers/, no Conceptos.md.
 
-Este capítulo fija las definiciones formales que el Capítulo~\ref{ch:estado-del-arte} maneja en su versión conceptual. Primero se establece la notación común, el descenso por gradiente estocástico y la geometría de los gradientes por ejemplo (Secciones~\ref{sec:sgd} y~\ref{sec:geometria}). Sobre esa base se definen las dos familias de métricas, la de alineación y la de variabilidad (Secciones~\ref{sec:def-alineacion} y~\ref{sec:def-variabilidad}). La Sección~\ref{sec:eficiencia} define los indicadores de eficiencia que actúan como variables a predecir, y la Sección~\ref{sec:fund-conclusiones} recapitula lo establecido. La Tabla~\ref{tab:notacion} resume la notación común que se usa a lo largo de la memoria. Aquí solo se definen los objetos; el protocolo de medición (el \emph{conjunto de medición}, las ventanas, el suavizado) y las hipótesis con signo asociadas a cada métrica se detallan en el Capítulo~\ref{ch:metodologia}.
+Este capítulo fija las definiciones formales que el Capítulo~\ref{ch:estado-del-arte} maneja en su versión conceptual. Primero se establece la notación común, el descenso por gradiente estocástico y la geometría de los gradientes por ejemplo (Secciones~\ref{sec:sgd} y~\ref{sec:geometria}). Sobre esa base se definen las dos familias de métricas, la de alineación y la de variabilidad (Secciones~\ref{sec:def-alineacion} y~\ref{sec:def-variabilidad}). La Sección~\ref{sec:eficiencia} define los indicadores de eficiencia que actúan como variables a predecir, y la Sección~\ref{sec:fund-conclusiones} recapitula lo establecido. La Tabla~\ref{tab:notacion} resume la notación común que se usa a lo largo de la memoria e indica el lugar donde se introduce cada símbolo. Aquí solo se definen los objetos; el protocolo de medición (el \emph{conjunto de medición}, las ventanas, el suavizado) y las hipótesis con signo asociadas a cada métrica se detallan en el Capítulo~\ref{ch:metodologia}.
 
 \begin{table}[ht]
 \centering
 \small
-\caption{Notación común de la memoria, con el lugar donde se introduce cada símbolo.}
+\caption{Notación común de la memoria.}
 \label{tab:notacion}
 \begin{tabular}{cll}
 \toprule
