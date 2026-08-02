@@ -18,9 +18,11 @@
 % (~6e-4, libjpeg/Pillow). El detalle reproducible (entorno, versiones, hardware) va en el anexo
 % \ref{sec:determinismo}; remitir, no repetir.
 
-\section{Ejecución y reanudación en cluster}
+\section{Ejecución y reanudación}
 \label{sec:ejecucion}
 % run_matrix.py idempotente (hecho = summary.json); troceable por dataset/model/optimizer.
+% OJO: una sola GPU, no hay cluster (ver \ref{sec:motivacion}). El troceado sirve para reanudar
+% por tramos, no para repartir entre nodos.
 
 \section{Pilot de calibración}
 \label{sec:pilot}

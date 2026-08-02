@@ -13,6 +13,10 @@
 \usepackage[backend=biber,style=numeric,sorting=none]{biblatex}
 \addbibresource{references.bib}
 
+% Último recurso de justificación: solo actúa en párrafos que, si no, se saldrían del margen
+% (títulos de la bibliografía con compuestos que el silabeado español no parte).
+\emergencystretch=1em
+
 % \titulacioname se fija como caption de babel en el .cls (GII) y babel la reaplica en
 % \begin{document}; por eso se sobreescribe vía \addto\captionsspanish y no con \renewcommand.
 \addto\captionsspanish{\renewcommand{\titulacioname}{Grado en Ciencia de Datos}}
@@ -48,11 +52,27 @@
 % el resumen en inglés; NO llamar a \makeindexes aquí, duplicaría los índices.
 
 % Listado de abreviaturas: tras los índices, fuera del índice (\chapter* no entra en el TOC).
-% Esqueleto; completar con el resto de siglas cuando el cuerpo esté redactado.
+% Revisar al cerrar los capítulos pendientes (implementación, resultados, conclusiones).
 \chapter*{Listado de abreviaturas, siglas y acrónimos}
 \begin{description}
+  \item[AUC] Área bajo la curva (\textit{area under the curve}).
+  \item[CIFAR] Conjuntos de datos CIFAR-10 y CIFAR-100 (\textit{Canadian Institute for Advanced Research}).
+  \item[CNN] Red neuronal convolucional (\textit{convolutional neural network}).
+  \item[FDR] Tasa de falsos descubrimientos (\textit{false discovery rate}).
+  \item[GNS] Escala de ruido del gradiente (\textit{gradient noise scale}).
+  \item[GPU] Unidad de procesamiento gráfico (\textit{graphics processing unit}).
+  \item[GSNR] Razón señal-ruido del gradiente por parámetro (\textit{gradient signal-to-noise ratio}).
+  \item[GWA] Alineación gradiente-peso (\textit{gradient-weight alignment}).
+  \item[MLP] Perceptrón multicapa (\textit{multilayer perceptron}).
+  \item[MNIST] Conjunto de datos de dígitos manuscritos (\textit{modified NIST database}).
+  \item[NAS] Búsqueda de arquitecturas neuronales (\textit{neural architecture search}).
+  \item[NGV] Varianza normalizada del gradiente (\textit{normalized gradient variance}).
+  \item[ODS] Objetivos de Desarrollo Sostenible.
+  \item[PAC-Bayes] Marco de cotas de generalización (\textit{probably approximately correct Bayesian}).
+  \item[ResNet] Red residual (\textit{residual network}).
   \item[SGD] Descenso por gradiente estocástico (\textit{stochastic gradient descent}).
-  % completar: Adam, GSNR, FDR, AUC, TSE, ResNet, MNIST, CIFAR, Tiny-ImageNet, ...
+  \item[TFG] Trabajo de Fin de Grado.
+  \item[TSE] Estimador de velocidad de entrenamiento (\textit{training speed estimator}).
 \end{description}
 
 \mainmatter
@@ -66,8 +86,6 @@
 \include{capitulos/resultados}
 \include{capitulos/conclusiones}
 
-% \nocite{*} incluye todas las entradas aunque no se citen; quítalo cuando el cuerpo ya cite.
-\nocite{*}
 \printbibliography[heading=bibintoc]
 \cleardoublepage
 
