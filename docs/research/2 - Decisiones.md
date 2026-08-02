@@ -8,9 +8,41 @@ El *qué decidimos y por qué* vive aquí; el *estado resultante del diseño*, e
 
 Bloquean experimentos. La acción para resolverlas vive en [[3 - Progreso]] (Pasos inmediatos).
 
-- **Congelación del plan de análisis.** Sus puertas están cerradas: dependencia del tutor (2026-06-12), gap integrado (2026-06-14), calibración del pilot registrada abajo con su evidencia (2026-07-17) y tabla de signos verificada contra los PDFs (2026-07-17). Quedan dos cosas: fijar y registrar el suelo de ajuste del gap (mínimo de `final_train_eval_acc`; sin valor aún, ver el registro del pilot) y el acto formal de mover el plan a `docs/research/` incorporando la decisión de instrumentación, en espera deliberada (2026-07-17: se decide posponer la congelación de momento).
+- **Congelación del plan de análisis.** Todas sus puertas están cerradas a 2026-08-01 (ver el log de esa fecha). Queda **solo el acto formal**: mover el plan de `pending/` a `docs/research/` y commitearlo antes del primer commit de `reports/`, para que el propio historial de git certifique que el plan precede a los datos.
 
 ## Tomadas (log)
+
+### 2026-08-01
+
+#### Revisión estadística del plan de análisis, antes de congelarlo
+
+Pasada crítica sobre la cadena objetivo → hipótesis → test, con las skills de estadística y con simulación. Toda ella anterior a existir ningún dato de matriz. El detalle vive en [[Plan de análisis congelado]] §Historial; aquí queda el *qué y por qué*.
+
+**Suelo de ajuste del gap, cerrado.** Umbral absoluto por dataset reutilizando los umbrales de accuracy que VD1 ya usa sobre val, aplicados sobre train: MNIST 0,97; CIFAR-10 0,65; CIFAR-100 0,35; Tiny 0,20. No se calibra sobre el pilot porque el pilot no puede hacerlo con honestidad (un valor por celda, al LR central, a presupuesto doblado, sin cubrir el barrido de LR que es lo que puebla esa distribución en la matriz). Reutilizar un número ya congelado y ya justificado añade cero grados de libertad al investigador, y el argumento es de una frase: un run que no alcanza sobre train la accuracy que el estudio exige sobre val no aprendió. Se declara como filtro de "no aprendió" y no como calibración fina; la carga del confusor la lleva la parcial por `final_train_eval_loss`.
+
+**La nota de potencia estaba calculada al α equivocado.** Se recalculó por simulación Monte Carlo (`src/power_analysis.py`, con tests). Confirma el punto central del plan (24 celdas, mediana ρ = 0,30 → potencia 0,993) pero calculaba a α = 0,05 cuando el criterio decide a q, ignorando la multiplicidad. De paso apareció el **suelo discreto** del Wilcoxon: con menos de 9 celdas el p mínimo alcanzable supera el α corregido, así que el test no puede rechazar tenga el efecto que tenga. De ahí el mínimo de 18 celdas elegibles para la regla de matriz incompleta, que antes era un 12 puesto por analogía.
+
+**H2 gana un brazo de equivalencia y cambia de covariable.** El negativo de H2 es una contribución declarada de la tesis, pero un contraste que solo puede rechazar la nula lo convierte en "no encontramos nada", indistinguible de la falta de potencia (con una parcial real de 0,15 la detección es del 0,46). Se añade un TOST con δ = 0,15 anclado en el coste de instrumentación medido (~2,08x), no en una convención: por debajo de esa parcial, la métrica explica menos del 2,3% de varianza residual, irrelevante a ese precio. Y la parcial primaria pasa de tres covariables a **una** (`val-acc@f`): las tres son casi colineales, así que k = 3 daba casi el mismo ajuste con más varianza, gastando potencia justo en la hipótesis decisiva.
+
+**El criterio de H3 estaba sesgado y se sustituye.** Contaba en cuántas celdas la métrica de mayor ΔR² pertenecía a cada familia, exigiendo 16 de 24. Pero alineación tiene 5 métricas y variabilidad 3, así que bajo la nula el argmax cae en alineación con probabilidad 5/8: **15 celdas esperadas por azar**, y probabilidad **0,42** de superar el umbral sin efecto alguno. El criterio favorecía a la familia que el título apuesta. Se sustituye por la diferencia pareada de medianas de |ρ| por familia dentro de cada celda, insesgada respecto al tamaño de familia y sin maquinaria nueva.
+
+**H6 tenía que tener una nula y no la tenía.** Era la única hipótesis sin criterio de falsación, pese a estar descrita como "prueba más exigente que la magnitud". Se le da el binomial exacto de concordancia de signos contra 0,5, el mismo test que H5. **H5**, a su vez, se restringe a las métricas que superaron H1 (misma disciplina que H4) y declara la no independencia de sus 12 pares.
+
+**Atenuación desigual de ρ por censura.** Ningún documento la recogía: un bloque de rangos empatados comprime el |ρ| alcanzable en proporción a la censura, que está correlacionada con la dificultad de la celda, o sea el confusor que la inferencia en dos etapas existía para evitar. No se corrige el estimador; se vigila con dos comprobaciones que no cuestan cálculo nuevo (etapa 2 restringida a celdas con <25% de censura, y VD2/VD3 como control sin censura).
+
+**Descartado: validación leave-one-cell-out.** Se consideró añadir un contraste fuera de muestra, porque todo el diseño es asociación dentro de muestra. Se descarta: su información marginal sobre el Wilcoxon cross-celda y la fracción de signos consistentes es pequeña, y no compensa añadir un contraste, una familia de corrección y una salvedad de potencia. Queda como trabajo futuro y la limitación se declara en la memoria.
+
+#### Orden de ejecución de la matriz, fijado antes de lanzarla
+
+Lo exige la regla de matriz incompleta del plan: si el cómputo no llega a los 960 runs, qué celdas acaben completas tiene que estar determinado por un orden escrito de antemano y no por una elección posterior a ver resultados. Queda así:
+
+1. **`--dataset mnist --model cnn`** (40 runs, horas). Es una celda barata y completa, con sus 8 LR y sus 5 seeds, sobre la que correr los diagnósticos de adecuación del diseño el primer día. No se desperdicia nada: son 40 puntos legítimos de la rejilla.
+2. **El resto de MNIST**, luego **CIFAR-10**, luego **CIFAR-100**, y **Tiny-ImageNet al final**, que es el orden natural de `enumerate_runs` y también el de coste creciente (Tiny es ~64% del total).
+3. Dentro de cada dataset, el orden de `enumerate_runs` sin alterar.
+
+El motivo de sacar `mnist × cnn` fuera del orden natural es de diagnóstico, no de resultados: el pilot no puede decir si el barrido de LR genera rango dinámico en el predictor a f = 0,10, porque tiene un run por celda y sin variación de LR ni de seed. Si el diseño falla por ahí, conviene saberlo el día uno con la celda más barata y no el día seis con Tiny a medias. La elección es anterior a ver ningún dato y se fija aquí precisamente para que no pueda serlo después.
+
+**Reconciliación con [[1 - Diseño]].** Los criterios originales de H1, H3 y H4 quedan superseded por el plan, con una nota fechada en el propio diseño en vez de una edición silenciosa, para que el historial muestre que se interrogaron antes de existir datos. Se corrige además el enunciado de H5, que presentaba la invariancia de signo como consecuencia lógica de la decisión raw-grad: no lo es, es una afirmación empírica independiente.
 
 ### 2026-07-17
 
