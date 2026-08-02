@@ -9,6 +9,7 @@ All domain logic — window snapping, efficiency indicators — lives in
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -39,7 +40,15 @@ class RunLogger:
         return path
 
     def save_json(self, name: str, obj: dict) -> Path:
-        """Write ``obj`` to ``<name>.json`` and return its path."""
+        """Write ``obj`` to ``<name>.json`` atomically and return its path.
+
+        ``summary.json`` is the marker the launchers read as "this run
+        finished", so a half-written one would mark a dead run as done. We
+        write a sibling temp file and rename it into place: ``os.replace`` is
+        atomic, so the target is either absent or complete, never truncated.
+        """
         path = self.dir / f"{name}.json"
-        path.write_text(json.dumps(obj, indent=2))
+        tmp = path.with_name(path.name + ".tmp")
+        tmp.write_text(json.dumps(obj, indent=2))
+        os.replace(tmp, path)
         return path
