@@ -69,16 +69,66 @@ def test_save_writes_a_pdf(tmp_path, matriz):
     assert path.read_bytes().startswith(b"%PDF")
 
 
-def test_every_figure_has_the_same_width(matriz, trayectorias):
-    """El ancho fijo es lo que iguala el tamaño del texto entre figuras."""
+def test_width_follows_the_content(matriz, trayectorias):
+    """El tamaño lo marca el contenido: más columnas o más paneles, más ancho."""
+    estrecha = P.heatmap(matriz.iloc[:, :2], cbar_label="x").get_size_inches()[0]
+    ancha = P.heatmap(matriz, cbar_label="x").get_size_inches()[0]
+    assert estrecha < ancha
+
+    dos = P.trajectory_grid(trayectorias, ["a", "b"], ncols=2).get_size_inches()[0]
+    tres = P.trajectory_grid(trayectorias, ["a", "b", "c"], ncols=3).get_size_inches()[0]
+    assert dos < tres
+
+
+def test_no_figure_exceeds_the_text_block(matriz, trayectorias):
+    """Una figura más ancha que el bloque de texto la reduce LaTeX al
+    insertarla, y al reducirla encoge su tipografía respecto a las demás."""
+    grande = pd.DataFrame(np.zeros((3, 40)), columns=[f"c{i}" for i in range(40)])
     figuras = [
-        P.heatmap(matriz, cbar_label="x"),
-        P.trajectory_grid(trayectorias, ["a", "b", "c", "d"], ncols=3),
+        P.heatmap(grande, cbar_label="x"),
+        P.trajectory_grid(trayectorias, ["a", "b", "c", "d"], ncols=4),
         P.agreement_bars(matriz[["m0", "m1"]].abs(), ("m0", "m1"),
                          ("uno", "dos"), xlabel="x"),
+        P.strip(trayectorias, "a", "dataset", xlabel="x"),
     ]
-    anchos = {round(f.get_size_inches()[0], 3) for f in figuras}
-    assert anchos == {round(P.TEXT_WIDTH, 3)}
+    assert all(f.get_size_inches()[0] <= P.TEXT_WIDTH + 1e-9 for f in figuras)
+
+
+def test_width_can_be_forced(matriz):
+    assert P.heatmap(matriz, cbar_label="x", width=3.0).get_size_inches()[0] == 3.0
+
+
+def test_strip_draws_one_point_per_observation(trayectorias):
+    """Se dibujan los puntos y no un resumen: con pocas observaciones por
+    categoría, una barra afirmaría un centro que el dato no siempre tiene."""
+    fig = P.strip(trayectorias, "a", "dataset", xlabel="x")
+    ax = fig.get_axes()[0]
+    assert sum(len(l.get_xdata()) for l in ax.get_lines()) == len(trayectorias)
+
+
+def test_identity_scatter_draws_the_diagonal():
+    """La diagonal es la comprobación: un coeficiente de 1,00 sería compatible
+    con cualquier relación monótona, la recta y = x solo con la igualdad."""
+    x = np.linspace(1, 10, 20)
+    fig = P.identity_scatter(x, x * 2, xlabel="a", ylabel="b")
+    ax = fig.get_axes()[0]
+    assert "y = x" in [t.get_text() for t in ax.get_legend().get_texts()]
+
+
+def test_identity_scatter_drops_minor_tick_labels_in_log_scale():
+    """Regresión: con escala logarítmica los rótulos 2x, 3x, 4x se pisaban."""
+    import matplotlib.ticker as ticker
+    fig = P.identity_scatter(np.geomspace(1, 1000, 20), np.geomspace(1, 1000, 20),
+                             xlabel="a", ylabel="b", log=True)
+    ax = fig.get_axes()[0]
+    assert isinstance(ax.xaxis.get_minor_formatter(), ticker.NullFormatter)
+
+
+def test_aggregate_collapses_the_runs_into_one_band_per_group(trayectorias):
+    """Agregado hay una mediana por grupo, no una línea por entrenamiento."""
+    ax = P.trajectory_grid(trayectorias, ["a"], ncols=1, aggregate=True).get_axes()[0]
+    assert len(ax.get_lines()) == trayectorias["dataset"].nunique()
+    assert len(ax.collections) == trayectorias["dataset"].nunique()  # las bandas
 
 
 def test_trajectory_grid_labels_the_last_visible_panel_of_each_column(trayectorias):

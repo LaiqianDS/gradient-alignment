@@ -7,10 +7,12 @@ código no es reutilizable, no se testea y no se puede regenerar sin abrirlo.
 
 Tres decisiones de estilo que gobiernan el resto:
 
-- **Ancho fijo.** Todas las figuras miden `TEXT_WIDTH`, el ancho del bloque de
-  texto de la memoria. Solo varía la altura. Es lo que hace que la tipografía
-  se vea del mismo tamaño en todas una vez insertadas, en lugar de depender de
-  cuánto haya escalado LaTeX cada una.
+- **El tamaño lo marca el contenido.** Cada función deriva su tamaño de lo que
+  va a dibujar: una matriz de 5 columnas no necesita el ancho de una de 25.
+  El parámetro `width` fuerza el valor cuando el caso lo pida. Lo único que no
+  se negocia es el tope `TEXT_WIDTH`: una figura más ancha que el bloque de
+  texto la reduce LaTeX al insertarla, y al reducirla encoge su tipografía, así
+  que acabaría con la letra más pequeña que las demás sin haberlo decidido.
 - **Sin título dentro de la figura.** El título va en el `\\caption{}` de LaTeX.
   Un título dentro del PDF se duplica con el caption y además sale con otra
   tipografía. `title=` existe solo para explorar en notebook.
@@ -27,9 +29,11 @@ from pathlib import Path
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 
 # Ancho del bloque de texto de la memoria (15 cm, tfgetsinf.cls) en pulgadas.
+# Es un tope, no un ancho por defecto: ver el encabezado del módulo.
 TEXT_WIDTH = 5.9
 
 # Paleta Okabe-Ito: distinguible con daltonismo y también impresa en gris.
@@ -97,16 +101,22 @@ def heatmap(
     annot: bool = False,
     fmt: str = "{:.2f}",
     title: str | None = None,
+    width: float | None = None,
 ) -> plt.Figure:
     """Matriz densa como mapa de color.
+
+    El tamaño sale de la forma de la matriz: el ancho crece con las columnas y
+    la altura con las filas, de modo que las celdas salen aproximadamente
+    cuadradas y una matriz pequeña no se estira hasta el margen.
 
     `annot` es False por defecto a propósito: anotar cada celda de una matriz
     de 24x27 mete cientos de números de 6 pt que compiten con el color, que ya
     es la señal. Se activa solo en matrices pequeñas que se van a leer valor a
     valor.
     """
+    width = width or min(0.42 * df.shape[1] + 2.2, TEXT_WIDTH)
     height = min(0.20 * df.shape[0] + 1.4, 7.5)
-    fig, ax = plt.subplots(figsize=(TEXT_WIDTH, height))
+    fig, ax = plt.subplots(figsize=(width, height))
     data = df.to_numpy(dtype="float64")
 
     im = ax.imshow(data, aspect="auto", cmap=cmap, vmin=vmin, vmax=vmax)
@@ -135,25 +145,48 @@ def trajectory_grid(
     *,
     color_by: str = "dataset",
     ncols: int = 3,
+    aggregate: bool = False,
+    width: float | None = None,
 ) -> plt.Figure:
     """Una trayectoria por entrenamiento y panel por métrica, coloreada por grupo.
 
-    El eje x se etiqueta solo en la fila inferior y la leyenda aparece una sola
-    vez: repetir ambos en los doce paneles es el ruido más habitual de una
-    rejilla de subgráficas.
+    Con `aggregate=True` cada grupo se resume en su mediana por época con una
+    banda intercuartílica en lugar de dibujar cada entrenamiento. Es la versión
+    legible cuando hay muchos entrenamientos: el espagueti de líneas sueltas
+    deja de distinguirse en cuanto pasan de una decena, y la banda dice algo
+    que las líneas superpuestas no dejan ver, que es cuánto se dispersan.
+    Para inspección visual conviene la versión sin agregar, porque un único
+    entrenamiento anómalo desaparece dentro de la banda.
+
+    El tamaño lo marca la rejilla: cada panel pide algo menos de dos pulgadas
+    de ancho y algo menos de una y media de alto, así que una rejilla de dos
+    columnas sale más estrecha que una de cuatro.
+
+    El eje x se etiqueta solo en el último panel de cada columna y la leyenda
+    aparece una sola vez: repetir ambos en los doce paneles es el ruido más
+    habitual de una rejilla de subgráficas.
     """
     nrows = math.ceil(len(keys) / ncols)
     fig, axes = plt.subplots(
-        nrows, ncols, figsize=(TEXT_WIDTH, 1.45 * nrows + 0.6),
+        nrows, ncols,
+        figsize=(width or min(1.9 * ncols, TEXT_WIDTH), 1.45 * nrows + 0.6),
         squeeze=False, sharex=True,
     )
     cats = sorted(traj[color_by].unique())
     colors = {c: PALETTE[i % len(PALETTE)] for i, c in enumerate(cats)}
 
     for ax, key in zip(axes.flat, keys):
-        for _, g in traj.groupby("run_name"):
-            ax.plot(g["progress_frac"], g[key],
-                    color=colors[g[color_by].iloc[0]], alpha=0.75, lw=0.9)
+        if aggregate:
+            for cat in cats:
+                g = traj[traj[color_by] == cat].groupby("progress_frac")[key]
+                q = g.quantile([0.25, 0.5, 0.75]).unstack()
+                ax.fill_between(q.index, q[0.25], q[0.75],
+                                color=colors[cat], alpha=0.18, lw=0)
+                ax.plot(q.index, q[0.5], color=colors[cat], lw=1.1)
+        else:
+            for _, g in traj.groupby("run_name"):
+                ax.plot(g["progress_frac"], g[key],
+                        color=colors[g[color_by].iloc[0]], alpha=0.75, lw=0.9)
         ax.set_title(key)
         ax.margins(x=0.02)
 
@@ -180,8 +213,10 @@ def agreement_bars(
     labels: tuple[str, str],
     *,
     xlabel: str,
-    reference: float = 0.5,
+    reference: float | None = 0.5,
     reference_label: str = "azar",
+    xlim: tuple[float, float] | None = (0.0, 1.0),
+    width: float | None = None,
 ) -> plt.Figure:
     """Barras horizontales pareadas contra una línea de referencia.
 
@@ -194,8 +229,11 @@ def agreement_bars(
     mostrar. La línea de referencia entra en la leyenda en vez de llevar un
     texto suelto al lado, que chocaba con el eje.
     """
+    # El ancho lo marca la etiqueta más larga: la escala siempre es 0 a 1, así
+    # que lo que decide cuánto sitio hace falta es el texto del eje y.
+    etiqueta = max((len(str(i)) for i in df.index), default=10)
     height = 0.26 * len(df) + 1.4
-    fig, ax = plt.subplots(figsize=(TEXT_WIDTH, height))
+    fig, ax = plt.subplots(figsize=(width or min(0.07 * etiqueta + 3.6, TEXT_WIDTH), height))
 
     y = range(len(df))
     offset = 0.21
@@ -205,15 +243,107 @@ def agreement_bars(
             color=PALETTE[0], label=labels[0])
     ax.barh([i + offset for i in y], df[columns[1]], height=0.4,
             color=PALETTE[1], label=labels[1])
-    ax.axvline(reference, color="0.3", lw=0.8, ls="--", zorder=3,
-               label=reference_label)
+    if reference is not None:
+        ax.axvline(reference, color="0.3", lw=0.8, ls="--", zorder=3,
+                   label=reference_label)
 
     ax.set_yticks(list(y), df.index)
     ax.set_xlabel(xlabel)
-    ax.set_xlim(0, 1)
+    if xlim is not None:
+        ax.set_xlim(*xlim)
     ax.invert_yaxis()
     ax.xaxis.grid(True, color="0.9", lw=0.6)
     ax.set_axisbelow(True)
     ax.tick_params(axis="y", length=0)
     ax.legend(loc="lower center", bbox_to_anchor=(0.5, 1.0), ncol=3)
+    return fig
+
+
+def strip(
+    df: pd.DataFrame,
+    value: str,
+    by: str,
+    *,
+    xlabel: str,
+    order: list[str] | None = None,
+    reference: float | None = None,
+    reference_label: str = "referencia",
+    width: float | None = None,
+) -> plt.Figure:
+    """Distribución de `value` por categoría: un punto por observación.
+
+    Es la alternativa a resumir cada categoría en una barra. Con pocas
+    observaciones por categoría, como aquí (24 entrenamientos), enseñar los
+    puntos cuesta lo mismo que enseñar la media y dice mucho más: se ve la
+    dispersión, los casos extremos y si la categoría es bimodal. Una barra
+    afirmaría un centro que estas cantidades no siempre tienen.
+
+    Los puntos se dispersan verticalmente de forma determinista, en abanico
+    dentro de su fila, para que dos observaciones con el mismo valor no se
+    tapen. Ese desplazamiento no codifica nada.
+    """
+    cats = order or sorted(df[by].unique())
+    etiqueta = max((len(str(c)) for c in cats), default=10)
+    fig, ax = plt.subplots(figsize=(
+        width or min(0.07 * etiqueta + 3.6, TEXT_WIDTH),
+        0.26 * len(cats) + 1.0,
+    ))
+
+    for i, cat in enumerate(cats):
+        vals = df.loc[df[by] == cat, value].dropna().to_numpy()
+        n = len(vals)
+        jitter = ((np.arange(n) / max(n - 1, 1)) - 0.5) * 0.5 if n > 1 else np.zeros(1)
+        ax.plot(vals, i + jitter, "o", color=PALETTE[0], ms=3.2, alpha=0.55,
+                mec="none")
+
+    if reference is not None:
+        ax.axvline(reference, color="0.3", lw=0.8, ls="--", zorder=0,
+                   label=reference_label)
+        ax.legend(loc="lower center", bbox_to_anchor=(0.5, 1.0))
+
+    ax.set_yticks(range(len(cats)), cats)
+    ax.set_ylim(len(cats) - 0.5, -0.5)
+    ax.set_xlabel(xlabel)
+    ax.xaxis.grid(True, color="0.9", lw=0.6)
+    ax.set_axisbelow(True)
+    ax.tick_params(axis="y", length=0)
+    return fig
+
+
+def identity_scatter(
+    x,
+    y,
+    *,
+    xlabel: str,
+    ylabel: str,
+    log: bool = False,
+    width: float | None = None,
+) -> plt.Figure:
+    """Dispersión contra la recta y = x, para comprobar una igualdad exacta.
+
+    Existe para un caso concreto: cuando la sospecha es que dos columnas son
+    la misma cantidad reparametrizada, la comprobación honesta es dibujar una
+    contra la otra y ver si caen sobre la diagonal. Un coeficiente de
+    correlación de 1,00 sería compatible con cualquier relación monótona; la
+    diagonal solo la satisface la igualdad.
+    """
+    fig, ax = plt.subplots(figsize=(width or 3.3, 3.1))
+    ax.plot(x, y, "o", color=PALETTE[0], ms=2.6, alpha=0.4, mec="none")
+
+    lo = float(min(np.min(x), np.min(y)))
+    hi = float(max(np.max(x), np.max(y)))
+    ax.plot([lo, hi], [lo, hi], color="0.3", lw=0.8, ls="--", zorder=3,
+            label="y = x")
+
+    if log:
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        # Sin esto matplotlib etiqueta también las marcas menores, y en un eje
+        # estrecho los rótulos de 2x, 3x, 4x... se pisan hasta ser ilegibles.
+        for eje in (ax.xaxis, ax.yaxis):
+            eje.set_minor_formatter(mpl.ticker.NullFormatter())
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.set_aspect("equal", adjustable="datalim")
+    ax.legend(loc="upper left")
     return fig
