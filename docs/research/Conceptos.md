@@ -2,7 +2,7 @@
 
 Glosario del TFG: una sección por concepto, agrupadas por tema. Los enlaces internos `[[#Concepto]]` apuntan a otra entrada de este mismo documento; la línea **Papers** de cada entrada apunta a las notas de `Papers/` que lo fundamentan.
 
-**Alineación direccional de gradientes:** [[#Gradientes per-sample]] · [[#Similitud coseno entre gradientes]] · [[#Coherencia de gradientes]] · [[#Gradient confusion]] · [[#Stiffness]] **Varianza estocástica y batch:** [[#Varianza del gradiente]] · [[#Mini-batch SGD]] · [[#Estimador insesgado del gradiente]] · [[#SNR del gradiente]] · [[#Batch size crítico]] **Optimización (paso, momento, adaptatividad):** [[#Momentum]] · [[#Primer y segundo momento del gradiente]] · [[#Tasa de aprendizaje adaptativa]] · [[#LR decay]] **Generalización y features:** [[#Sobreparametrización]] · [[#Feature learning]] · [[#Memorización vs generalización]] · [[#Gap de generalización]] · [[#Early stopping]] · [[#Proxy de generalización train-time]]
+**Alineación direccional de gradientes:** [[#Gradientes per-sample]] · [[#Similitud coseno entre gradientes]] · [[#Coherencia de gradientes]] · [[#Gradient confusion]] · [[#Stiffness]] **Varianza estocástica y batch:** [[#Varianza del gradiente]] · [[#Mini-batch SGD]] · [[#Estimador insesgado del gradiente]] · [[#SNR del gradiente]] · [[#Batch size crítico]] **Optimización (paso, momento, adaptatividad):** [[#Momentum]] · [[#Primer y segundo momento del gradiente]] · [[#Tasa de aprendizaje adaptativa]] · [[#LR decay]] **Generalización y features:** [[#Sobreparametrización]] · [[#Feature learning]] · [[#Memorización vs generalización]] · [[#Gap de generalización]] · [[#Early stopping]] · [[#Proxy de generalización train-time]] **Inferencia estadística del análisis:** [[#Inferencia en dos etapas]] · [[#Pseudo-replicación]] · [[#Correlación de Spearman y censura por rangos]] · [[#Contraste de rangos con signo de Wilcoxon]] · [[#Pseudomediana de Hodges-Lehmann]] · [[#Tasa de falsos descubrimientos (BH y BY)]] · [[#Contrastes de equivalencia y de no-inferioridad]] · [[#Binomial exacto de concordancia]] · [[#Potencia estadística y efecto mínimo detectable]]
 
 ---
 
@@ -257,3 +257,113 @@ Un ejemplo concreto del impacto en NAS. En NAS-Bench-201, donde hay 15 625 arqui
 El criterio de evaluación estándar para comparar proxies es la correlación de Spearman o Kendall entre el ranking que induce el proxy y el ranking real de test. Un proxy útil tiene que ser barato (escalable a redes grandes y datasets grandes), robusto entre tareas (un proxy que funciona en CIFAR-10 pero falla en ImageNet sirve poco) y mejor que los llamados zero-cost proxies, que se evalúan en la inicialización sin entrenar nada (JacCov, SNIP, SynFlow, NASWOT). Los zero-cost son aún más baratos pero su correlación con el rendimiento real es inestable entre tareas, mientras que proxies basados en pocas epochs de entrenamiento son más caros pero mucho más fiables.
 
 **Papers:** [[Speedy Performance Estimation for Neural Architecture Search|Ru et al. 2021]], [[Disparity Between Batches as a Signal for Early Stopping|Forouzesh & Thiran 2021]], [[Gradient-Weight Alignment as a Train-Time Proxy for Generalization in Classification Tasks|Hölzl 2025]], [[Making Coherence Out of Nothing At All - Measuring the Evolution of Gradient Alignment|Chatterjee & Zielinski 2020]], [[Understanding Why Neural Networks Generalize Well Through GSNR of Parameters|Liu et al. 2020]]
+
+## Inferencia estadística del análisis
+
+### Inferencia en dos etapas
+
+La inferencia en dos etapas consiste en no sacar la conclusión del mismo nivel en el que se toman las medidas. Primero se resume cada grupo de datos en un único estadístico, y después se contrasta ese conjunto de resúmenes. El nombre técnico es *summary statistics* y viene del análisis de grupo en neuroimagen, donde cada sujeto se resume en un mapa y el contraste se hace entre sujetos. La analogía más útil es la de un metaanálisis: cada grupo hace de estudio individual y la conclusión sale de combinarlos, no de ninguno por separado.
+
+En este TFG el grupo es la celda experimental, es decir, una combinación concreta de dataset, arquitectura y optimizador. La etapa 1 calcula, dentro de cada celda, la [[#Correlación de Spearman y censura por rangos|correlación de Spearman]] entre la métrica temprana y el indicador de eficiencia, y produce 24 correlaciones por métrica. Esas 24 correlaciones son puramente descriptivas: dibujan el mapa, pero no deciden nada. La etapa 2 contrasta esas 24 correlaciones contra cero con el [[#Contraste de rangos con signo de Wilcoxon|Wilcoxon de rangos con signo]], y es ahí donde se decide.
+
+La razón de partirlo en dos es que el nivel de abajo está contaminado por [[#Pseudo-replicación]] y el de arriba no. Dentro de una celda, los 40 runs comparten estructura porque vienen de 8 tasas de aprendizaje con 5 semillas cada una. Entre celdas no hay ese problema, porque dos celdas no comparten ni un solo run.
+
+El diseño resuelve además, sin coste añadido, un segundo problema: la paradoja de Simpson. Supón que se juntaran los 960 runs de golpe. MNIST alcanza su umbral en pocas épocas y Tiny ImageNet en muchas, así que cualquier métrica que simplemente tenga escalas distintas en los dos datasets produciría una correlación global fuerte sin que exista ninguna relación dentro de ningún dataset. Correlacionar primero dentro de cada celda y agregar después elimina esa posibilidad por construcción.
+
+**Fuente:** [[Plan de análisis congelado]] §Estadístico; Holmes y Friston 1998.
+
+### Pseudo-replicación
+
+La pseudo-replicación es contar como observaciones independientes datos que en realidad comparten estructura. Es uno de los errores más comunes en trabajos empíricos, y su efecto es siempre el mismo: los valores $p$ salen demasiado pequeños, porque el test cree tener más información de la que hay.
+
+El caso de este estudio es directo. Una celda tiene 40 runs, pero no son 40 evidencias independientes: son 8 tasas de aprendizaje con 5 semillas cada una. Las 5 semillas de la misma tasa se parecen mucho entre sí, así que el tamaño muestral efectivo está entre 8 y 40, y desde luego no es 40.
+
+El orden de magnitud del error se ve con la fórmula del error estándar de una correlación, que va como $1/\sqrt{n-3}$. Con $n = 40$ ese error es $0{,}164$; con $n = 8$ es $0{,}447$, casi el triple. Un test que asume 40 cuando en realidad hay 8 declara significativa una correlación que no lo es, y no por poco.
+
+La respuesta del plan tiene dos partes. La primera es no usar esos valores $p$ para decidir nada, y quedarse con la correlación como estadístico descriptivo. La segunda es un análisis de sensibilidad: repetir la etapa 1 sobre las medianas por tasa de aprendizaje, lo que deja $n = 8$ por celda en lugar de 40, y comprobar que el mapa no cambia. Si cambiara, significaría que el resultado dependía de contar las semillas como observaciones independientes.
+
+**Fuente:** [[Plan de análisis congelado]] §Unidad de análisis y datos.
+
+### Correlación de Spearman y censura por rangos
+
+La correlación de Spearman mide si dos variables van juntas usando solo el **orden** de los valores, no los valores en sí. En lugar de trabajar con "este run tardó 12 épocas y su métrica valía $0{,}043$", trabaja con "este run fue el tercero más rápido y tenía la quinta métrica más alta", y pregunta si esas dos posiciones se parecen. Da un número entre $-1$ y $+1$, donde $+1$ significa que el orden coincide exactamente, $-1$ que está exactamente invertido y $0$ que no hay relación.
+
+Frente a la correlación de Pearson tiene la ventaja habitual de absorber relaciones no lineales y valores extremos, pero en este estudio la razón determinante es otra: permite meter los runs censurados en lugar de tirarlos. Un run que nunca alcanza el umbral de accuracy dentro del presupuesto no tiene un número de épocas, pero sí tiene una posición, la última, empatada con los demás censurados. Tirarlos sesgaría el estudio, porque los runs que no llegan son precisamente los extremos de la rejilla de tasas de aprendizaje, y esos extremos son parte legítima del eje de eficiencia que se quiere medir.
+
+Esta decisión tiene un efecto secundario que conviene entender, porque no es obvio: un bloque grande de rangos empatados **comprime el $|\rho|$ máximo alcanzable**. Con 40 runs de los cuales 20 están censurados y por tanto empatados en el último puesto, el orden dentro de ese bloque es indistinguible, así que ninguna métrica puede correlacionar perfectamente con él por buena que sea. El techo baja de forma continua con la tasa de censura.
+
+Eso importa porque la censura no se reparte al azar entre celdas: las celdas difíciles censuran más. Comparar correlaciones entre celdas como si fueran igual de comparables reintroduce por la puerta de atrás justo el confusor de dificultad que la [[#Inferencia en dos etapas]] existía para evitar. El plan no corrige el coeficiente, porque eso exigiría inventar un estimador sin respaldo; lo vigila reportando la tasa de censura junto a cada correlación, repitiendo la etapa 2 solo con las celdas por debajo del 25% de censura, y usando como control los indicadores de eficiencia que no tienen censura ninguna.
+
+**Fuente:** [[Plan de análisis congelado]] §Estadístico y §Censura y exclusiones.
+
+### Contraste de rangos con signo de Wilcoxon
+
+Es el test que decide en la etapa 2. La pregunta que responde es: dados $n$ números, ¿están sistemáticamente hacia un lado del cero, o se reparten al azar alrededor de él?
+
+Funciona ordenando los $n$ valores por tamaño ignorando el signo, asignándoles rangos de 1 a $n$, y sumando los rangos de los positivos. Si los valores grandes son casi todos positivos, esa suma es alta y el test rechaza. Si los signos van mezclados sin patrón, la suma queda en el centro de su rango posible. Es la versión no paramétrica del test $t$ pareado: no supone que los datos sigan una campana de Gauss, cosa que las correlaciones no van a hacer porque están acotadas en $[-1, 1]$.
+
+Lo único que necesita para ser válido es que, **bajo la hipótesis nula**, los valores se repartan simétricamente alrededor de cero. Aquí se cumple por construcción: si no hay asociación, que una celda concreta dé $+0{,}1$ o $-0{,}1$ es una moneda al aire. Fíjate en que no exige simetría bajo la alternativa, que es donde fallaría, porque una correlación centrada lejos de cero tiene distribución asimétrica al chocar con el techo de $\pm 1$.
+
+Tiene una propiedad discreta que hay que conocer antes de diseñar nada con él, y es que **su valor $p$ tiene un suelo**. Con $n$ valores solo hay $2^n$ asignaciones posibles de signos, y el caso más extremo imaginable, que los $n$ compartan signo, es una sola de ellas. El $p$ bilateral más pequeño alcanzable es por tanto $2^{1-n}$. Con 8 celdas eso da $0{,}0078$, que ya es mayor que el $0{,}00625$ que exige el criterio corregido de H1: con 8 celdas ese test **no puede rechazar nunca**, aunque las 8 apunten en la misma dirección con $\rho = 0{,}9$. No es improbable, es imposible, y ninguna curva de [[#Potencia estadística y efecto mínimo detectable|potencia]] lo enseña.
+
+**Fuente:** [[Plan de análisis congelado]] §Estadístico y §Nota de potencia; `src/power_analysis.py::min_attainable_p`.
+
+### Pseudomediana de Hodges-Lehmann
+
+Es el tamaño de efecto que acompaña al [[#Contraste de rangos con signo de Wilcoxon|Wilcoxon]]. Se calcula tomando todos los promedios por parejas de los datos, incluida cada pareja consigo misma (las llamadas medias de Walsh), y quedándose con su mediana.
+
+Se usa esta y no la mediana muestral por una razón concreta: es el estimador que el Wilcoxon localiza **de hecho**. Un test y su estimador de localización deberían apuntar a la misma cantidad, y si se reporta la mediana muestral junto a un Wilcoxon se están mezclando dos estimadores distintos. Bajo simetría los dos coinciden, pero $\rho$ está acotado en $[-1, 1]$ y su distribución se vuelve asimétrica cuanto más lejos de cero esté centrada, que es justo el caso interesante.
+
+Un ejemplo pequeño. Con los tres valores $\{0{,}1,\ 0{,}2,\ 0{,}9\}$ la mediana muestral es $0{,}2$. Las medias de Walsh son $0{,}1$, $0{,}15$, $0{,}5$, $0{,}2$, $0{,}55$ y $0{,}9$, cuya mediana es $0{,}35$. La pseudomediana recoge que hay un valor alto tirando del centro, y la mediana muestral lo ignora por completo.
+
+Su intervalo de confianza se obtiene exacto, sin aproximar por la normal: se construye la distribución nula completa de la suma de rangos y se recortan las medias de Walsh de los extremos. Ese intervalo no es sustituible por el rango intercuartílico, porque miden cosas distintas: el IQR describe cuánto varían las celdas entre sí, y el intervalo describe con cuánta precisión se conoce el centro. Sin él, el resumen cross-celda se reporta sin barra de error.
+
+**Fuente:** [[Plan de análisis congelado]] §Estadístico; `src/power_analysis.py::hodges_lehmann`.
+
+### Tasa de falsos descubrimientos (BH y BY)
+
+Cuando se corren muchos contrastes a la vez, algunos salen significativos por puro azar. Con 8 contrastes al 5% se esperan unas 0,4 falsas alarmas; con cientos, están garantizadas y no se sabe cuáles son.
+
+Benjamini-Hochberg (BH) controla la **tasa de falsos descubrimientos**, es decir, la proporción esperada de falsos positivos **entre los resultados que se declaran significativos**, y la deja en el 5%. Dicho de otro modo: de todo lo que se publique como hallazgo, se espera que como mucho uno de cada veinte sea ruido. El procedimiento es sencillo: se ordenan los $k$ valores $p$ de menor a mayor y se compara el $i$-ésimo contra $q \cdot i / k$, rechazando hasta el mayor $i$ que pase.
+
+Es distinto de Bonferroni, que controla otra cosa: la probabilidad de cometer **un solo** error en toda la familia. Esa garantía es mucho más fuerte y por eso es mucho más conservadora, hasta el punto de vaciar de resultados un estudio con cientos de contrastes. Cuál de las dos corresponde depende del objetivo: si el resultado es un mapa de qué métricas señalan algo, la garantía correcta es la FDR; si fuera una única afirmación de vida o muerte, sería la de Bonferroni.
+
+Benjamini-Yekutieli (BY) es la versión blindada. BH necesita que los contrastes no dependan entre sí de forma adversa, y hay un caso conocido en que eso falla, que es meter en la misma familia predictores correlacionados con signos esperados opuestos. BY es válida bajo **cualquier** estructura de dependencia, incluida la negativa, a cambio de dividir el nivel por $c(k) = \sum_{i=1}^{k} 1/i$. Para familias de 8 contrastes ese factor vale $2{,}718$, que es asumible, así que el plan reporta las dos y lo que sobrevive a BY es robusto pase lo que pase.
+
+**Fuente:** [[Plan de análisis congelado]] §Corrección por comparaciones múltiples; Benjamini y Hochberg 1995, Benjamini y Yekutieli 2001.
+
+### Contrastes de equivalencia y de no-inferioridad
+
+Un contraste de hipótesis normal solo sabe hacer una cosa: rechazar la nula. Puede concluir que algo es distinto de cero, pero **nunca** que es igual a cero, porque no encontrar diferencia es compatible con dos situaciones muy distintas: con que la diferencia no exista, y con que el test no tuviera [[#Potencia estadística y efecto mínimo detectable|potencia]] para verla. La frase "no se encontraron diferencias significativas" es por eso mucho más débil de lo que suele parecer.
+
+El contraste de equivalencia, o TOST por *two one-sided tests*, le da la vuelta a la pregunta. En lugar de contrastar si el efecto es distinto de cero, se fija de antemano un margen $\delta$ de relevancia práctica y se contrasta si el efecto es demostrablemente **menor** que ese margen. Rechazar esa nula sí es una afirmación positiva: el efecto, si existe, es como mucho irrelevante. La no-inferioridad es la variante unilateral de la misma idea.
+
+Lo delicado es de dónde sale $\delta$, porque es donde se cuela la arbitrariedad si uno se descuida. La respuesta correcta es que salga de la pregunta de investigación y no de una tabla de convenciones. En este TFG, $\delta_{H2} = 0{,}15$ está anclado en el coste: instrumentar el gradiente cuesta unas 2,08 veces el wall-clock de entrenamiento, y una correlación parcial cross-celda por debajo de $0{,}15$ explica menos del 2,3% de la varianza de rangos residual, que a ese precio no le compensa a nadie. El $\delta = 0{,}1$ de H4 responde a otra pregunta distinta y por eso es otro número.
+
+Este es el mecanismo que convierte el resultado negativo de H2 en una afirmación en lugar de una ausencia, y por tanto es lo que permite que la tesis lo declare como contribución.
+
+**Fuente:** [[Plan de análisis congelado]] §Estadístico (brazo de equivalencia de H2) y §Contrastes; Lakens 2017.
+
+### Binomial exacto de concordancia
+
+Es el más simple de los contrastes del plan: cuenta aciertos sobre un total y pregunta si son más de los esperables por azar. Si el signo predicho coincidiera por casualidad, se acertaría la mitad de las veces, así que la nula es una moneda justa y la probabilidad se calcula exacta con la distribución binomial, sin aproximaciones.
+
+Se usa dos veces a niveles distintos. En H5 sobre los 12 pares de celdas SGD-Adam, preguntando si el signo de la correlación se conserva al cambiar de optimizador. Y en H6 sobre las 24 celdas de cada métrica, preguntando si el signo observado coincide con el que predice la tabla congelada de la literatura.
+
+El número de observaciones cambia por completo lo que cada uso puede afirmar, y conviene tenerlo presente antes de interpretar un no-rechazo. Con 24 celdas el test detecta bien una concordancia del 85% (potencia $0{,}94$). Con 12 pares, en cambio, una concordancia real del 75% solo se detecta el 39% de las veces, así que H5 únicamente puede confirmar invariancia casi perfecta y su no-rechazo no es evidencia de no-invariancia.
+
+**Fuente:** [[Plan de análisis congelado]] §Estadístico y §Nota de potencia; `src/power_analysis.py::power_binomial_concordance`.
+
+### Potencia estadística y efecto mínimo detectable
+
+La potencia es la probabilidad de detectar un efecto **si el efecto existe de verdad**. La imagen que mejor funciona es la del detector de metales: si se barre una playa y no suena nada, no se ha aprendido nada mientras no se sepa si el detector era capaz de ver una moneda enterrada a diez centímetros. Con un detector bueno, el silencio significa que no había monedas; con uno malo, el silencio no significa nada.
+
+Solo sirve calculada **antes** del experimento, porque es entonces cuando aún se puede cambiar el diseño. Y es imprescindible en este TFG en concreto porque H2 declara el negativo como contribución: sin potencia calculada, "las métricas de gradiente no aportan nada" y "no teníamos con qué verlo" son la misma frase escrita en el papel.
+
+El **efecto mínimo detectable** es la otra cara de la misma moneda: el efecto más pequeño que el diseño detecta con una potencia dada, normalmente el 80%. Para que un criterio no esté limitado por potencia, el efecto que declara interesante tiene que quedar por encima de su MDE. Aquí se cumple con holgura: el MDE con 24 celdas es $0{,}205$ y el criterio de H1 exige $0{,}30$.
+
+Dos errores concretos que este cálculo evita, y que son fáciles de cometer. El primero es **calcular la potencia al alfa nominal y decidir al corregido**: si el criterio decide a $q < 0{,}05$ tras corregir sobre familias de 8, el nivel efectivo es $0{,}00625$, casi ocho veces más exigente que $0{,}05$, y calcular al nivel fácil sobrestima siempre la potencia. El segundo es **heredar la potencia de una hipótesis para otra**: H2 corre sobre correlaciones parciales, que son menores que las brutas, así que su potencia es sustancialmente peor que la de H1 aunque use el mismo test sobre las mismas celdas.
+
+Cuando no hay fórmula cerrada, como pasa con un Wilcoxon aplicado a coeficientes de correlación, la potencia se calcula por simulación de Monte Carlo, que es fuerza bruta honesta: se genera muchas veces un conjunto de datos coherente con la verdad supuesta, se le corre el test exacto que se va a usar de verdad, y se cuenta el porcentaje de veces que rechaza. La forma de comprobar que el simulador no tiene bugs es correrlo con efecto verdadero cero y verificar que la tasa de rechazo sale igual al alfa nominal.
+
+**Fuente:** [[Plan de análisis congelado]] §Nota de potencia; `src/power_analysis.py` y `tests/test_power_analysis.py`.
