@@ -8,9 +8,23 @@ El *qué decidimos y por qué* vive aquí; el *estado resultante del diseño*, e
 
 Bloquean experimentos. La acción para resolverlas vive en [[3 - Progreso]] (Pasos inmediatos).
 
-- **Congelación del plan de análisis.** Todas sus puertas están cerradas a 2026-08-01 (ver el log de esa fecha). Queda **solo el acto formal**: mover el plan de `pending/` a `docs/research/` y commitearlo antes del primer commit de `reports/`, para que el propio historial de git certifique que el plan precede a los datos.
+**Ninguna a 2026-08-02.** La última que quedaba, la congelación del plan de análisis, se cerró ese día (ver el log). Lo que queda hasta lanzar la matriz ya no son decisiones sino ejecución.
 
 ## Tomadas (log)
+
+### 2026-08-02
+
+#### Congelación del plan de análisis (acto formal)
+
+El plan se movió de `pending/` a `docs/research/` y se commiteó en `e433377`, con lo que queda bajo control de versiones y **anterior al primer commit de resultados**. Esto cierra la última pendiente del proyecto.
+
+**Por qué el acto importaba y no era trámite.** El plan había sido borrado de git en el commit `563d5a5` y desde entonces vivía solo en `pending/`, que está en `.gitignore`. Es decir, existía el documento pero **no existía ninguna prueba verificable de que precediera a los datos**, que es justamente lo que un preregistro tiene que poder demostrar. El commit es lo que crea esa prueba: no hay que creerse que el plan es anterior a los resultados, se comprueba en el historial.
+
+**El orden queda garantizado por construcción.** `reports/` se versiona a propósito (decisión 2026-07-25, hace además de backup incremental de la Fase 4), así que el primer commit de resultados dejará su propia marca temporal en el historial, por detrás de `e433377`. Se verificó explícitamente que `reports/` sigue **sin** estar en `.gitignore`.
+
+**Qué rige desde ahora.** No se mira ningún resultado de matriz fuera de lo que el plan prescribe. Toda modificación posterior pasa por la política de enmiendas del propio plan: se anota con fecha y motivo en su §Historial de revisiones, se marca como enmienda y se declara en la memoria, y si la enmienda es posterior a haber visto resultados degrada a exploratorio el contraste que toca.
+
+**Contexto del commit.** Fue uno de cinco commits del 2026-08-02, ordenados a propósito: la escritura atómica de `summary.json` primero (prerrequisito para lanzar), después `src/power_analysis.py` (porque el plan lo cita como su fuente de reproducibilidad y no debe referenciar código inexistente), después la congelación, y al final la redacción de la memoria y el notebook del pilot, separados por no tener relación con el acto.
 
 ### 2026-08-01
 
