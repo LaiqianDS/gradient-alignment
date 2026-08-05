@@ -182,12 +182,12 @@ Dos precisiones gobiernan el cálculo. La primera es que la potencia se calcula 
 
 La segunda es que el contraste de Wilcoxon es discreto y tiene un suelo anterior a cualquier consideración de potencia. Con $n$ celdas, el menor valor $p$ bilateral que puede producir es $2^{1-n}$, porque el caso más extremo imaginable, que las $n$ celdas compartan signo, es una sola de las $2^n$ asignaciones posibles. Con ocho celdas ese mínimo vale $0{,}0078$, ya por encima del nivel corregido de $0{,}00625$, de modo que el contraste no puede rechazar aunque las ocho celdas apunten en la misma dirección con correlaciones de $0{,}9$. El suelo duro está en nueve celdas para la corrección de Benjamini y Hochberg y en diez para la cota de Benjamini y Yekutieli. Es un modo de fallo que ninguna curva de potencia muestra y que solo aparece al corregir por multiplicidad.
 
-Con las veinticuatro celdas completas y el efecto mínimo de interés que declara H1, la potencia de la segunda etapa es de $0{,}993$ tras corregir, y el efecto mínimo detectable con potencia $0{,}80$ es una mediana de $|\rho|$ de $0{,}205$, holgadamente por debajo del umbral de $0{,}3$ que exige el criterio. La Tabla~\ref{tab:potencia} recoge la degradación de esa potencia si la matriz no llega a completarse, y de ella sale la regla de que el análisis confirmatorio no se ejecuta con menos de dieciocho celdas completas.
+Con las veinticuatro celdas completas y el efecto mínimo de interés que declara H1, la potencia de la segunda etapa es de $0{,}993$ tras corregir, y el efecto mínimo detectable con potencia $0{,}80$ es una mediana de $|\rho|$ de $0{,}205$, holgadamente por debajo del umbral de $0{,}3$ que exige el criterio. La Tabla~\ref{tab:potencia} recoge la degradación de esa potencia si la matriz no llega a completarse, suponiendo una mediana de $|\rho|$ de $0{,}3$ y una dispersión entre celdas de $0{,}25$, y de ella sale la regla de que el análisis confirmatorio no se ejecuta con menos de dieciocho celdas completas.
 
 \begin{table}[ht]
 \centering
 \small
-\caption{Potencia de la segunda etapa según el número de celdas completas, a mediana de $|\rho| = 0{,}3$ y dispersión entre celdas de $0{,}25$.}
+\caption{Potencia de la segunda etapa.}
 \label{tab:potencia}
 \begin{tabular}{lccccccc}
 \toprule
@@ -208,12 +208,13 @@ La Tabla~\ref{tab:contrastes} resume el contraste y el criterio de decisión de 
 \small
 \caption{Contraste y criterio de decisión por hipótesis.}
 \label{tab:contrastes}
-\begin{tabular}{@{}lp{3.6cm}p{7.6cm}@{}}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}l>{\raggedright\arraybackslash}p{4.4cm}>{\raggedright\arraybackslash}p{8.6cm}@{}}
 \toprule
 & \textbf{Contraste} & \textbf{Criterio de decisión} \\
 \midrule
 H1 & Wilcoxon entre celdas & Alguna métrica con mediana $|\rho| \geq 0{,}3$ y $q < 0{,}05$ \\
-H2 & Wilcoxon entre celdas sobre correlaciones parciales, más equivalencia & Ternario: aporta ($q < 0{,}05$), no aporta (se rechaza la equivalencia con $\delta_{\text{H2}} = 0{,}15$) o sin resolver \\
+H2 & Wilcoxon entre celdas sobre parciales, más equivalencia & Ternario: aporta ($q < 0{,}05$), no aporta (se rechaza la equivalencia con $\delta_{\text{H2}} = 0{,}15$) o sin resolver \\
 H3 & Wilcoxon sobre la diferencia pareada de medianas por familia & Una familia domina si la diferencia se aparta de cero con $q < 0{,}05$; si no, sin resolver \\
 H4 & No-inferioridad unilateral con margen $\delta = 0{,}1$ & Satura pronto si se rechaza que la mejora del 10 al 50\,\% alcance $\delta$ \\
 H5 & Binomial exacto sobre 12 pares SGD-Adam & Concordancia de signo por encima del azar; exige los 12 pares completos \\
