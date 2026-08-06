@@ -11,7 +11,7 @@ tables and figures:
   [0, M], ...) and do the hard cross-column identities hold (eta = -min_cos,
   min_cos <= p05 <= median, gsnr median <= p95, TSE cumulative non-decreasing)?
 * :func:`degeneracy_report` -- does each metric actually *move* inside a run, or
-  is it (near-)constant and therefore carrying no signal?
+  is its apparent movement just epoch-to-epoch jitter carrying no signal?
 * :func:`trend_report` -- does each metric drift over training in the direction
   its source paper predicts (stiffness decays to 0, NGV/GNS up, ...)? Metrics
   with no robust trajectory prediction (GSNR, gradient disparity) are reported
@@ -46,6 +46,11 @@ REPORTS_DIR = ROOT / "reports"
 # Frozen probe size M (config.probe_size / FIXED_KNOBS): the per-sample gradient
 # count, which is also the hard upper bound of m-coherence (alpha in [0, M]).
 PROBE_SIZE = 256
+
+# Signal-to-jitter of a trajectory that is white noise around a constant. For
+# such a series std(diff) = sqrt(2) * std(values), so the ratio is 1/sqrt(2).
+# It is the reference line of :func:`degeneracy_report`, not a tuned threshold.
+NOISE_RATIO = float(1.0 / np.sqrt(2.0))
 
 # Columns that identify a measurement row but are not metrics themselves.
 ID_COLS = [
@@ -302,59 +307,75 @@ def identity_report(traj: pd.DataFrame, tol: float = 1e-5) -> pd.DataFrame:
 
 def degeneracy_report(
     traj: pd.DataFrame,
-    group_cols: tuple[str, ...] = ("run_name",),
     keys: list[str] | None = None,
-    rel_threshold: float = 0.05,
 ) -> pd.DataFrame:
-    """Within-group movement of each metric, relative to its *typical* movement.
+    """Per (run, metric): does the trajectory carry signal, or only jitter?
 
-    For every (group, metric) it reports the within-group std (over epochs) and
-    ``rel_move = within_std / ref``, where ``ref`` is the RMS of the within-group
-    stds of that metric -- i.e. how much the metric usually moves *inside* a run.
-    Normalising by this within-group reference (not the global std) is deliberate:
-    the global std is inflated by between-dataset scale differences (mnist val_loss
-    ~0.05 vs tiny ~4), which would wrongly flag obviously-moving curves as flat.
-    ``rel_move ~ 0`` means the metric is effectively constant in that run and
-    carries no signal there. Default group is the run (one cell in the pilot); pass
-    ``group_cols=("dataset", "model", "optimizer")`` to reuse it across runs at a
-    fixed window for the matrix.
+    The statistic is ``signal_to_jitter = std(values) / std(first differences)``
+    over the run's epoch-ordered values. Both terms scale linearly with the
+    metric and are unaffected by an offset, so the ratio is free of units *and*
+    of scale: multiplying a metric by a million leaves it unchanged. That is the
+    property this diagnostic needs and the reason it is not a normalised
+    standard deviation -- normalising by any across-run reference makes the
+    statistic a ranking of scales, so every mnist run looks flat next to a
+    Tiny-ImageNet run measuring the same quantity in bigger units.
+
+    It also comes with a reference value rather than an arbitrary threshold. A
+    trajectory that is pure epoch-to-epoch noise around a constant satisfies
+    ``std(diff) = sqrt(2) * std(values)``, so its ratio is exactly
+    :data:`NOISE_RATIO`. Well above it the metric drifts systematically; near it,
+    what looks like movement is jitter. Two boundary cases: a constant trajectory
+    scores 0, and a perfectly linear one has no jitter and scores infinity.
+
+    ``below_noise`` records the plain comparison against that reference and is
+    deliberately *not* called degenerate. The reference is the asymptotic value,
+    so a genuinely noise-only metric scatters around it and lands on either side
+    about half the time; a boolean verdict would read as a decision the statistic
+    cannot support on a single run. Nothing in the frozen plan keys off it -- it
+    is descriptive, and what carries the reading is the whole distribution across
+    runs against the reference line.
     """
     keys = keys or [k for k in metric_columns() if k in traj.columns]
     rows = []
-    for key in keys:
-        within_by_group = {
-            gvals: float(np.nanstd(g[key].to_numpy(dtype="float64", na_value=np.nan)))
-            for gvals, g in traj.groupby(list(group_cols))
-        }
-        ref = float(np.sqrt(np.mean(np.square(list(within_by_group.values())))))
-        for gvals, within in within_by_group.items():
-            rel = within / ref if ref > 0 else 0.0
-            rec = dict(zip(group_cols, gvals if isinstance(gvals, tuple) else (gvals,)))
-            rec.update({
+    for run_name, g in traj.sort_values("epoch").groupby("run_name"):
+        meta = g.iloc[0]
+        for key in keys:
+            v = g[key].to_numpy(dtype="float64", na_value=np.nan)
+            sd = float(np.nanstd(v))
+            step = float(np.nanstd(np.diff(v)))
+            if step > 0:
+                ratio = sd / step
+            elif sd > 0:
+                ratio = np.inf  # perfectly linear: all signal, no jitter
+            else:
+                ratio = 0.0  # constant
+            rows.append({
+                "run_name": run_name,
+                "dataset": meta["dataset"], "model": meta["model"],
+                "optimizer": meta["optimizer"],
                 "key": key,
                 "family": SPEC_BY_KEY[key].family,
-                "within_std": within,
-                "ref_std": ref,
-                "rel_move": rel,
-                "degenerate": rel < rel_threshold,
+                "within_std": sd,
+                "step_std": step,
+                "signal_to_jitter": ratio,
+                "below_noise": bool(ratio <= NOISE_RATIO),
             })
-            rows.append(rec)
     return pd.DataFrame(rows)
 
 
 def degeneracy_summary(detail: pd.DataFrame) -> pd.DataFrame:
-    """Per-metric roll-up of :func:`degeneracy_report`: in how many groups the
-    metric is (near-)constant, and its typical within-group movement."""
+    """Per-metric roll-up of :func:`degeneracy_report`: its typical
+    signal-to-jitter and in how many runs it falls below the noise reference."""
     return (
         detail.groupby("key")
         .agg(
             family=("family", "first"),
-            n_groups=("rel_move", "size"),
-            n_degenerate=("degenerate", "sum"),
-            min_rel_move=("rel_move", "min"),
-            median_rel_move=("rel_move", "median"),
+            n_runs=("signal_to_jitter", "size"),
+            n_below_noise=("below_noise", "sum"),
+            min_ratio=("signal_to_jitter", "min"),
+            median_ratio=("signal_to_jitter", "median"),
         )
-        .sort_values("median_rel_move")
+        .sort_values("median_ratio")
     )
 
 
@@ -371,6 +392,11 @@ def trend_report(
     training-time prediction). ``agree`` is ``True`` when the measured monotone
     drift is non-trivial (``|rho| >= deadband``) and matches the expected sign.
     Returns one row per (run, key); see :func:`trend_summary` for the roll-up.
+
+    ``rho_signed = rho * expected`` is the column to compare *across* metrics.
+    Seven of the graded specs expect a fall and four expect a rise, so a raw rho
+    of -0.8 means "agrees" in one column and "contradicts" in the next; after the
+    sign flip, positive always means the metric behaves as its paper predicts.
 
     The paper predictions describe the *training* phase, but the pilot runs 2x
     budget deep into overfitting; pass ``progress_max`` to grade only the early
@@ -395,6 +421,7 @@ def trend_report(
                 "key": s.key, "family": s.family,
                 "expected": s.trend,
                 "rho": float(rho) if pd.notna(rho) else np.nan,
+                "rho_signed": float(rho) * s.trend if pd.notna(rho) else np.nan,
                 "agree": measured == s.trend,
             })
     return pd.DataFrame(rows)
@@ -412,6 +439,7 @@ def trend_summary(detail: pd.DataFrame) -> pd.DataFrame:
             n_agree=("agree", "sum"),
             frac_agree=("agree", "mean"),
             median_rho=("rho", "median"),
+            median_rho_signed=("rho_signed", "median"),
         )
         .sort_values("frac_agree", ascending=False)
     )

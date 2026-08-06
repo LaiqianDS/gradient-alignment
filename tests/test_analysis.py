@@ -81,9 +81,50 @@ def test_degeneracy_flags_constant_run():
     moving = _traj({"gsnr/mean": [0.1, 0.5, 0.9, 1.3]}, run_name="move")
     flat = _traj({"gsnr/mean": [0.5, 0.5, 0.5, 0.5]}, run_name="flat")
     deg = A.degeneracy_report(pd.concat([moving, flat], ignore_index=True))
-    flagged = deg.set_index("run_name").loc[deg.set_index("run_name").index == "flat"]
-    assert bool(flagged["degenerate"].iloc[0]) is True
-    assert bool(deg.set_index("run_name").loc["move", "degenerate"]) is False
+    by_run = deg.set_index("run_name")
+    assert bool(by_run.loc["flat", "below_noise"]) is True
+    assert bool(by_run.loc["move", "below_noise"]) is False
+
+
+def test_degeneracy_is_invariant_to_the_scale_of_the_metric():
+    """Regresión. La versión anterior normalizaba por una referencia calculada
+    *entre* runs, así que ordenaba por escala en vez de por movimiento: la misma
+    curva medida en unidades mil veces menores salía marcada como degenerada.
+    Es el fallo que declaraba plana la val loss de todos los runs de MNIST."""
+    curva = [1.0, 2.0, 1.5, 3.0, 2.5, 4.0]
+    pequena = _traj({"gsnr/mean": [v * 1e-3 for v in curva]}, run_name="pequena")
+    grande = _traj({"gsnr/mean": [v * 1e3 for v in curva]}, run_name="grande")
+    deg = A.degeneracy_report(pd.concat([pequena, grande], ignore_index=True))
+    ratio = deg.set_index("run_name")["signal_to_jitter"]
+    assert ratio["pequena"] == pytest.approx(ratio["grande"])
+    assert not deg["below_noise"].any()
+
+
+def test_degeneracy_reference_is_the_value_pure_noise_takes():
+    """La referencia no es un número elegido a mano: es el valor que toma el
+    estadístico cuando la trayectoria es ruido blanco alrededor de una
+    constante. Una deriva limpia queda muy por encima."""
+    rng = np.random.default_rng(0)
+    ruido = _traj({"gsnr/mean": list(rng.normal(5.0, 1.0, 200))}, run_name="ruido", n=200)
+    deriva = _traj({"gsnr/mean": list(np.linspace(0, 10, 200) + rng.normal(0, 0.1, 200))},
+                   run_name="deriva", n=200)
+    deg = A.degeneracy_report(pd.concat([ruido, deriva], ignore_index=True))
+    by_run = deg.set_index("run_name")
+    assert by_run.loc["ruido", "signal_to_jitter"] == pytest.approx(A.NOISE_RATIO, rel=0.1)
+    assert by_run.loc["deriva", "signal_to_jitter"] > 5 * A.NOISE_RATIO
+    assert bool(by_run.loc["deriva", "below_noise"]) is False
+
+
+def test_trend_signs_rho_so_metrics_are_comparable():
+    """Siete de las métricas graduadas esperan bajar y cuatro esperan subir, así
+    que un rho crudo no se puede comparar entre columnas: tras el giro de signo,
+    positivo significa siempre 'se comporta como predice su artículo'."""
+    baja = _traj({"train_loss": [0.9, 0.7, 0.4, 0.1]})   # esperado -1, concuerda
+    sube = _traj({"val_acc": [0.1, 0.4, 0.7, 0.9]})      # esperado +1, concuerda
+    rep = A.trend_report(pd.concat([baja, sube], ignore_index=True))
+    firmado = rep.set_index("key")["rho_signed"]
+    assert firmado["train_loss"] > 0 and firmado["val_acc"] > 0
+    assert rep.set_index("key").loc["train_loss", "rho"] < 0
 
 
 def test_redundancy_matrix_is_square_over_headlines():
