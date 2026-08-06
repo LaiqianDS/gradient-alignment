@@ -48,6 +48,13 @@ PALETTE = (
     "#000000",  # negro
 )
 
+# El color no puede ser la única señal. En escala de grises la paleta pierde
+# separación entre algunos pares (bermellón y verde quedan a 3,6 de diferencia
+# de luminosidad, por debajo del umbral de 10 que se suele exigir), así que un
+# grupo se distingue por color *y* por trazo, y sigue leyéndose impreso en
+# blanco y negro o con una deficiencia severa de visión del color.
+LINESTYLES = ("-", "--", ":", "-.", (0, (3, 1, 1, 1, 1, 1)))
+
 _IMG_DIR = Path(__file__).resolve().parent.parent / "thesis" / "img"
 
 
@@ -63,7 +70,13 @@ def use_thesis_style() -> None:
         "figure.dpi": 110,
         "figure.constrained_layout.use": True,
         "savefig.format": "pdf",
-        "savefig.bbox": "tight",
+        # Sin `bbox="tight"` a propósito. `constrained_layout` mete el contenido
+        # dentro de la figura; `bbox="tight"` hace lo contrario, estirar la
+        # página hasta el contenido, y al combinarlos el segundo anula la
+        # garantía del primero: una figura declarada de 5,9 pulgadas se guardaba
+        # con 6,0 de página en cuanto llevaba leyenda exterior, que es
+        # exactamente el desbordamiento que el tope pretende evitar.
+        "savefig.bbox": "standard",
         "pdf.fonttype": 42,
         "font.family": "serif",
         "font.size": 9,
@@ -100,6 +113,7 @@ def heatmap(
     vmax: float | None = None,
     annot: bool = False,
     fmt: str = "{:.2f}",
+    mask_upper: bool = False,
     title: str | None = None,
     width: float | None = None,
 ) -> plt.Figure:
@@ -113,13 +127,21 @@ def heatmap(
     de 24x27 mete cientos de números de 6 pt que compiten con el color, que ya
     es la señal. Se activa solo en matrices pequeñas que se van a leer valor a
     valor.
+
+    `mask_upper` deja en blanco la diagonal y el triángulo superior, para una
+    matriz simétrica como la de correlaciones. Quita la mitad de la tinta sin
+    quitar información, y sobre todo quita la diagonal de unos, que al ser el
+    valor máximo posible ancla la escala de color y aplana el resto.
     """
     width = width or min(0.42 * df.shape[1] + 2.2, TEXT_WIDTH)
     height = min(0.20 * df.shape[0] + 1.4, 7.5)
     fig, ax = plt.subplots(figsize=(width, height))
     data = df.to_numpy(dtype="float64")
+    if mask_upper:
+        data = np.where(np.triu(np.ones(data.shape, dtype=bool)), np.nan, data)
 
-    im = ax.imshow(data, aspect="auto", cmap=cmap, vmin=vmin, vmax=vmax)
+    im = ax.imshow(data, aspect="auto", vmin=vmin, vmax=vmax,
+                   cmap=mpl.colormaps[cmap].with_extremes(bad="white"))
     ax.set_xticks(range(df.shape[1]), df.columns, rotation=90)
     ax.set_yticks(range(df.shape[0]), df.index)
     ax.tick_params(length=0)
@@ -146,6 +168,7 @@ def trajectory_grid(
     color_by: str = "dataset",
     ncols: int = 3,
     aggregate: bool = False,
+    log_keys: set[str] | None = None,
     width: float | None = None,
 ) -> plt.Figure:
     """Una trayectoria por entrenamiento y panel por métrica, coloreada por grupo.
@@ -165,6 +188,14 @@ def trajectory_grid(
     El eje x se etiqueta solo en el último panel de cada columna y la leyenda
     aparece una sola vez: repetir ambos en los doce paneles es el ruido más
     habitual de una rejilla de subgráficas.
+
+    `log_keys` pone en escala logarítmica el eje y de los paneles que se le
+    indiquen. Hace falta cuando la magnitud vive en órdenes distintos según el
+    dataset: la val loss va de 0,02 en MNIST a 71 en Tiny-ImageNet, y en escala
+    lineal eso deja tres de los cuatro datasets pegados al cero, con lo que el
+    panel deja de decir nada sobre ellos. Solo vale para magnitudes
+    estrictamente positivas, así que quién entra en el conjunto lo decide quien
+    llama a partir del rango teórico de cada métrica.
     """
     nrows = math.ceil(len(keys) / ncols)
     fig, axes = plt.subplots(
@@ -174,6 +205,7 @@ def trajectory_grid(
     )
     cats = sorted(traj[color_by].unique())
     colors = {c: PALETTE[i % len(PALETTE)] for i, c in enumerate(cats)}
+    dashes = {c: LINESTYLES[i % len(LINESTYLES)] for i, c in enumerate(cats)}
 
     for ax, key in zip(axes.flat, keys):
         if aggregate:
@@ -182,11 +214,16 @@ def trajectory_grid(
                 q = g.quantile([0.25, 0.5, 0.75]).unstack()
                 ax.fill_between(q.index, q[0.25], q[0.75],
                                 color=colors[cat], alpha=0.18, lw=0)
-                ax.plot(q.index, q[0.5], color=colors[cat], lw=1.1)
+                ax.plot(q.index, q[0.5], color=colors[cat], lw=1.1,
+                        ls=dashes[cat])
         else:
             for _, g in traj.groupby("run_name"):
-                ax.plot(g["progress_frac"], g[key],
-                        color=colors[g[color_by].iloc[0]], alpha=0.75, lw=0.9)
+                cat = g[color_by].iloc[0]
+                ax.plot(g["progress_frac"], g[key], color=colors[cat],
+                        ls=dashes[cat], alpha=0.75, lw=0.9)
+        if log_keys and key in log_keys:
+            ax.set_yscale("log")
+            ax.yaxis.set_minor_formatter(mpl.ticker.NullFormatter())
         ax.set_title(key)
         ax.margins(x=0.02)
 
@@ -202,7 +239,8 @@ def trajectory_grid(
             visible[-1].set_xlabel("fracción del presupuesto")
             visible[-1].tick_params(labelbottom=True)
 
-    handles = [plt.Line2D([0], [0], color=colors[c], label=c) for c in cats]
+    handles = [plt.Line2D([0], [0], color=colors[c], ls=dashes[c], label=c)
+               for c in cats]
     fig.legend(handles=handles, loc="outside lower center", ncol=len(cats))
     return fig
 
@@ -268,6 +306,8 @@ def strip(
     order: list[str] | None = None,
     reference: float | None = None,
     reference_label: str = "referencia",
+    panel_by: str | None = None,
+    log: bool = False,
     width: float | None = None,
 ) -> plt.Figure:
     """Distribución de `value` por categoría: un punto por observación.
@@ -281,32 +321,55 @@ def strip(
     Los puntos se dispersan verticalmente de forma determinista, en abanico
     dentro de su fila, para que dos observaciones con el mismo valor no se
     tapen. Ese desplazamiento no codifica nada.
+
+    `panel_by` reparte los puntos en paneles contiguos que comparten el eje y,
+    para comparar la misma distribución bajo dos condiciones sin que los dos
+    enjambres de puntos se pisen. Compartir el eje y es lo que hace válida la
+    comparación: las filas quedan alineadas y la diferencia se lee horizontal.
     """
     cats = order or sorted(df[by].unique())
+    panels = sorted(df[panel_by].unique()) if panel_by else [None]
     etiqueta = max((len(str(c)) for c in cats), default=10)
-    fig, ax = plt.subplots(figsize=(
-        width or min(0.07 * etiqueta + 3.6, TEXT_WIDTH),
-        0.26 * len(cats) + 1.0,
-    ))
+    fig, axes = plt.subplots(
+        1, len(panels), squeeze=False, sharey=True,
+        figsize=(
+            width or min(0.07 * etiqueta + 1.4 + 2.0 * len(panels), TEXT_WIDTH),
+            min(0.26 * len(cats) + 1.0, 7.0),
+        ),
+    )
 
-    for i, cat in enumerate(cats):
-        vals = df.loc[df[by] == cat, value].dropna().to_numpy()
-        n = len(vals)
-        jitter = ((np.arange(n) / max(n - 1, 1)) - 0.5) * 0.5 if n > 1 else np.zeros(1)
-        ax.plot(vals, i + jitter, "o", color=PALETTE[0], ms=3.2, alpha=0.55,
-                mec="none")
+    for ax, panel in zip(axes.flat, panels):
+        sub = df if panel is None else df[df[panel_by] == panel]
+        for i, cat in enumerate(cats):
+            vals = sub.loc[sub[by] == cat, value].replace(
+                [np.inf, -np.inf], np.nan).dropna().to_numpy()
+            n = len(vals)
+            jitter = ((np.arange(n) / max(n - 1, 1)) - 0.5) * 0.5 if n > 1 else np.zeros(n)
+            ax.plot(vals, i + jitter, "o", color=PALETTE[0], ms=3.2, alpha=0.55,
+                    mec="none")
+        if reference is not None:
+            ax.axvline(reference, color="0.3", lw=0.8, ls="--", zorder=0,
+                       label=reference_label)
+        if log:
+            ax.set_xscale("log")
+            ax.xaxis.set_minor_formatter(mpl.ticker.NullFormatter())
+        if panel is not None:
+            ax.set_title(panel)
+        ax.xaxis.grid(True, color="0.9", lw=0.6)
+        ax.set_axisbelow(True)
+        ax.tick_params(axis="y", length=0)
 
+    axes[0, 0].set_yticks(range(len(cats)), cats)
+    axes[0, 0].set_ylim(len(cats) - 0.5, -0.5)
     if reference is not None:
-        ax.axvline(reference, color="0.3", lw=0.8, ls="--", zorder=0,
-                   label=reference_label)
-        ax.legend(loc="lower center", bbox_to_anchor=(0.5, 1.0))
-
-    ax.set_yticks(range(len(cats)), cats)
-    ax.set_ylim(len(cats) - 0.5, -0.5)
-    ax.set_xlabel(xlabel)
-    ax.xaxis.grid(True, color="0.9", lw=0.6)
-    ax.set_axisbelow(True)
-    ax.tick_params(axis="y", length=0)
+        # Leyenda de la figura y no del eje: sobre el eje choca con el título
+        # del panel en cuanto se facetea.
+        handles, labels = axes[0, 0].get_legend_handles_labels()
+        fig.legend(handles[:1], labels[:1], loc="outside upper center")
+    if panel_by:
+        fig.supxlabel(xlabel, fontsize=mpl.rcParams["axes.labelsize"])
+    else:
+        axes[0, 0].set_xlabel(xlabel)
     return fig
 
 

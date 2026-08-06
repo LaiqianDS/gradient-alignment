@@ -98,6 +98,33 @@ def test_width_can_be_forced(matriz):
     assert P.heatmap(matriz, cbar_label="x", width=3.0).get_size_inches()[0] == 3.0
 
 
+def test_the_saved_page_is_the_declared_size(tmp_path, trayectorias):
+    """Regresión, y la versión fuerte del tope de ancho: lo que le importa a
+    LaTeX es la página del PDF, no el tamaño que la figura diga tener. Con
+    `savefig.bbox="tight"` matplotlib estiraba la página hasta el contenido y
+    una figura con leyenda exterior se guardaba por encima del bloque de texto,
+    justo el desbordamiento que el tope existe para evitar."""
+    import re
+
+    fig = P.strip(trayectorias, "a", "dataset", xlabel="x", panel_by="run_name",
+                  reference=0.0)   # leyenda y etiqueta fuera de los ejes
+    ancho_declarado = fig.get_size_inches()[0]
+    datos = P.save(fig, "pagina", img_dir=tmp_path).read_bytes()
+    caja = re.search(rb"/MediaBox \[([\d\. ]+)\]", datos).group(1).split()
+    puntos_por_pulgada = 72
+    assert float(caja[2]) / puntos_por_pulgada == pytest.approx(ancho_declarado)
+    assert float(caja[2]) / puntos_por_pulgada <= P.TEXT_WIDTH + 1e-9
+
+
+def test_groups_are_distinguishable_without_colour(trayectorias):
+    """El color no puede ser la única señal: en escala de grises el bermellón y
+    el verde de la paleta se separan menos de lo que se suele exigir, así que
+    cada grupo lleva además su propio trazo."""
+    fig = P.trajectory_grid(trayectorias, ["a"], ncols=1)
+    trazos = {(l.get_color(), l.get_linestyle()) for l in fig.get_axes()[0].get_lines()}
+    assert len({t[1] for t in trazos}) == trayectorias["dataset"].nunique()
+
+
 def test_strip_draws_one_point_per_observation(trayectorias):
     """Se dibujan los puntos y no un resumen: con pocas observaciones por
     categoría, una barra afirmaría un centro que el dato no siempre tiene."""
@@ -161,3 +188,40 @@ def test_heatmap_annotates_only_when_asked(matriz):
     """Anotar una matriz grande compite con el color, que ya es la señal."""
     assert not P.heatmap(matriz, cbar_label="x").get_axes()[0].texts
     assert P.heatmap(matriz, cbar_label="x", annot=True).get_axes()[0].texts
+
+
+def test_heatmap_masks_the_diagonal_and_the_upper_triangle(matriz):
+    """En una matriz simétrica la diagonal de unos es el valor máximo posible,
+    así que ancla la escala de color y aplana todo lo demás."""
+    cuadrada = matriz.iloc[:5, :5]
+    cuadrada.index = cuadrada.columns
+    fig = P.heatmap(cuadrada, cbar_label="x", annot=True, mask_upper=True)
+    ax = fig.get_axes()[0]
+    # n(n-1)/2 celdas anotadas: solo el triángulo inferior estricto.
+    assert len(ax.texts) == 5 * 4 // 2
+
+
+def test_strip_facets_into_panels_that_share_the_y_axis(trayectorias):
+    """Compartir el eje y es lo que hace válida la comparación entre paneles:
+    las filas quedan alineadas y la diferencia se lee en horizontal."""
+    fig = P.strip(trayectorias, "a", "dataset", xlabel="x", panel_by="run_name")
+    ejes = fig.get_axes()
+    assert len(ejes) == trayectorias["run_name"].nunique()
+    assert all(ax.get_ylim() == ejes[0].get_ylim() for ax in ejes)
+    assert [ax.get_title() for ax in ejes] == sorted(trayectorias["run_name"].unique())
+
+
+def test_strip_height_is_capped(trayectorias):
+    """El ancho tenía tope y la altura no: con treinta categorías salía una
+    figura más alta que el bloque de texto, y LaTeX la reducía encogiendo su
+    tipografía respecto a las demás."""
+    muchas = pd.concat([trayectorias.assign(dataset=f"d{i}") for i in range(30)])
+    assert P.strip(muchas, "a", "dataset", xlabel="x").get_size_inches()[1] <= 7.0
+
+
+def test_trajectory_grid_puts_only_the_named_panels_in_log_scale(trayectorias):
+    """La val loss va de 0,02 en MNIST a 71 en Tiny-ImageNet: en escala lineal
+    tres de los cuatro datasets quedan pegados al cero."""
+    fig = P.trajectory_grid(trayectorias, ["a", "b"], ncols=2, log_keys={"a"})
+    escalas = {ax.get_title(): ax.get_yscale() for ax in fig.get_axes()}
+    assert escalas == {"a": "log", "b": "linear"}
