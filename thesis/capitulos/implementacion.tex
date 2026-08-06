@@ -35,10 +35,11 @@ La consecuencia práctica es que la suite no necesita ningún modelo real ni nin
 Métricas de gradiente y predictor de referencia & 104 \\
 Barrido compartido y primitivas de gradiente    & 46 \\
 Entrenamiento, datos, modelos y registro        & 42 \\
-Análisis y potencia                             & 25 \\
+Análisis y potencia                             & 28 \\
+Figuras                                         & 20 \\
 Lanzadores de la matriz y del piloto            & 11 \\
 \midrule
-\textbf{Total}                                  & \textbf{228} \\
+\textbf{Total}                                  & \textbf{251} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -51,7 +52,11 @@ Sobre el bucle de entrenamiento se verifican las lecturas que definen las variab
 
 Sobre los lanzadores se comprueba que la rejilla completa contenga exactamente los novecientos sesenta entrenamientos previstos, que la reanudación se decida por la existencia del fichero de resumen, y que el piloto use la tasa de aprendizaje central, duplique el presupuesto y aísle su salida de la de la matriz. Sobre el análisis se verifican los diagnósticos de sanidad: la detección de valores fuera de rango o no finitos, las identidades entre columnas que deben cumplirse de forma exacta, la concordancia de la tendencia con el signo teórico esperado y la detección de entrenamientos degenerados. Y sobre el ejecutor de métricas se comprueba que una métrica que falle quede aislada sin abortar el entrenamiento, y que el coste de la instrumentación se atribuya a su propio reloj y no al del entrenamiento.
 
-Dos pruebas fijan errores reales encontrados durante el desarrollo y se conservan como regresión. La primera es el etiquetado del conjunto de validación de Tiny-ImageNet, cuyo directorio plano mandaba las diez mil imágenes a una única clase. La segunda es la escritura de los ficheros de resumen, que no era atómica: la prueba simula la muerte del proceso a mitad de escritura, y se comprobó que falla contra la versión anterior del código. Esta segunda importa más de lo que su tamaño sugiere, porque el lanzador decide qué entrenamientos están hechos comprobando que ese fichero exista, de modo que un fichero truncado marcaba un entrenamiento como completo para siempre y con datos corruptos.
+El grupo de figuras merece una nota, porque a primera vista una figura no parece contrastable. Lo que se comprueba no es su aspecto, que es cuestión de gusto, sino las propiedades sin las cuales una figura afirma algo falso o deja de leerse. Que el tamaño de la página guardada coincida con el declarado, para que el documento no la reescale y le encoja la tipografía respecto a las demás. Que cada grupo se distinga por el trazo además de por el color, porque la paleta pierde separación al imprimirse en gris. Que en escala logarítmica no se rotulen las marcas menores, que se solapan. Y que cada eje quede etiquetado incluso cuando la rejilla de paneles queda incompleta, que es como se perdía la escala de la última columna.
+
+Tres pruebas fijan errores reales encontrados durante el desarrollo y se conservan como regresión. La primera es el etiquetado del conjunto de validación de Tiny-ImageNet, cuyo directorio plano mandaba las diez mil imágenes a una única clase. La segunda es la escritura de los ficheros de resumen, que no era atómica: la prueba simula la muerte del proceso a mitad de escritura, y se comprobó que falla contra la versión anterior del código. Esta segunda importa más de lo que su tamaño sugiere, porque el lanzador decide qué entrenamientos están hechos comprobando que ese fichero exista, de modo que un fichero truncado marcaba un entrenamiento como completo para siempre y con datos corruptos.
+
+La tercera está en los diagnósticos de sanidad. El estadístico que medía si una métrica llega a moverse dentro de un entrenamiento se normalizaba contra una referencia calculada entre entrenamientos, de modo que ordenaba por escala en lugar de por movimiento: la misma magnitud medida en unidades mil veces menores salía marcada como plana. La prueba mide la misma curva en dos sistemas de unidades separados por un factor de un millón y exige que el resultado sea idéntico. El error importaba porque el diagnóstico se lee antes de cualquier contraste, y sus conclusiones deciden qué mirar con lupa.
 
 \subsection{Cálculo de la potencia}
 
