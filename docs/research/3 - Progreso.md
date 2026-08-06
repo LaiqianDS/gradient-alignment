@@ -35,7 +35,7 @@ Sustituye a las semanas 3-7 del plan original, obsoletas desde que la rejilla co
 
 1. **Pipeline de análisis** (`src/analysis/` o equivalente): implementar el plan estadístico en código antes de congelarlo: carga de `reports/`, Spearman por celda con censura por rangos, Wilcoxon cross-celda (etapa 2), familias BH + cota BY, parciales de H2, no-inferioridad de H4, binomial de H5, figuras preespecificadas.
 	- **Verificación (dry-run del preregistro):** datos sintéticos con efecto plantado (ρ conocido) → el pipeline lo recupera; con ρ = 0 → falsos positivos ≈ nominal tras BH. Si algo del plan no es computable tal como está escrito, se descubre aquí, antes de congelar, no sobre los datos reales.
-2. **Cola de lectura, priorizada por lo que bloquea la congelación.** Primero los 6 to-read de la tabla de signos: GSNR (Liu), Coherent Gradients + Making Coherence (m-coherence), GWA (Hölzl), GNS (McCandlish), TSE (Ru); la tabla del [[Plan de análisis congelado]] exige revisar signos contra los papers al congelar. Después, las citas "de memoria" de los pending docs sin nota propia (Jiang 2020, Bouthillier 2021, Holmes & Friston, Lakens, Zou). Los de optimizadores (Adam, RMSProp) pueden esperar al estado del arte.
+2. **Cola de lectura, priorizada por lo que bloquea la congelación.** Primero los 6 to-read de la tabla de signos: GSNR (Liu), Coherent Gradients + Making Coherence (m-coherence), GWA (Hölzl), GNS (McCandlish), TSE (Ru); la tabla del [[4 - Análisis]] exige revisar signos contra los papers al congelar. Después, las citas "de memoria" de los pending docs sin nota propia (Jiang 2020, Bouthillier 2021, Holmes & Friston, Lakens, Zou). Los de optimizadores (Adam, RMSProp) pueden esperar al estado del arte.
 	- **Entregable:** tabla de signos verificada contra los papers + citas de los pending docs comprobadas.
 3. **Redacción de lo que no depende de resultados:** estructura real en `thesis/main.tex` (hoy es la plantilla de ejemplo), introducción, estado del arte (desde las notas de `Papers/`), metodología (desde [[1 - Diseño]] y [[2 - Decisiones]]; el contenido ya está escrito, es pasarlo a memoria). Target 50-80 páginas, claridad > extensión.
 4. **Logística de cluster:** entorno reproducible en nodo (uv), datasets descargados, scripts de lanzamiento (job arrays / troceado por dataset), smoke test de 1 run real en GPU.
@@ -58,7 +58,7 @@ Sustituye a las semanas 3-7 del plan original, obsoletas desde que la rejilla co
 	```
 - [x] Calibrar con los criterios preescritos (decisión 2026-06-09): presupuestos/umbrales finales escritos en los 24 YAML **y** `config.py::DATASET_BUDGET`. Registrados con su evidencia en [[2 - Decisiones]] (2026-07-17)
 - [x] Chequeos adicionales que el pilot cierra: overhead <3-4x (`metric_seconds`/`train_seconds`), ninguna métrica falla sistemáticamente, redundancia GNS ≈ B·NGV, centrado de la rejilla de LR, GPU-h proyectadas para ~960 runs, suelo de ajuste del gap (distribución de `final_train_eval_acc`)
-- [ ] **Congelar el plan de análisis:** valores del pilot + tabla de signos verificada → mover [[Plan de análisis congelado]] a `docs/research/`, registrar la congelación con fecha
+- [ ] **Congelar el plan de análisis:** valores del pilot + tabla de signos verificada → mover [[4 - Análisis]] a `docs/research/`, registrar la congelación con fecha
 - [ ] **Criterio de éxito:** presupuestos/umbrales registrados con su evidencia; plan congelado y fechado. A partir de aquí no se mira ningún resultado de matriz sin plan congelado
 
 ### Fase 4: matriz completa (~960 runs)
@@ -100,7 +100,7 @@ Sustituye a las semanas 3-7 del plan original, obsoletas desde que la rejilla co
 
 ## Pasos inmediatos (rev. 2026-08-01)
 
-**Lugar único de pendientes.** Desde el 2026-08-01 esta sección es el **único** sitio donde viven las tareas por hacer. `pending/Próximos pasos.md` quedó plegado aquí y eliminado: era una lista paralela en un directorio que está en `.gitignore`, así que no tenía historial ni existía para nadie que clonase el repo. La sección §Qué falta para congelar del [[Plan de análisis congelado]] se conserva donde está, porque es la lista de puertas del propio preregistro y muere con el acto de congelar; su contenido está espejado abajo.
+**Lugar único de pendientes.** Desde el 2026-08-01 esta sección es el **único** sitio donde viven las tareas por hacer. `pending/Próximos pasos.md` quedó plegado aquí y eliminado: era una lista paralela en un directorio que está en `.gitignore`, así que no tenía historial ni existía para nadie que clonase el repo. La sección §Qué falta para congelar del [[4 - Análisis]] se conserva donde está, porque es la lista de puertas del propio preregistro y muere con el acto de congelar; su contenido está espejado abajo.
 
 **Marcapasos del calendario:** La cadena que queda es congelar el plan → lanzar la matriz (~960 runs, el tramo más largo de septiembre, ahora en una única GPU) → análisis. Lo que bloquea es la congelación. Contexto de fecha: el 2026-08-01 quedan ~2 semanas de colchón sobre la fecha límite de arranque de mediados de agosto, no más.
 

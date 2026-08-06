@@ -21,7 +21,7 @@ tables and figures:
 
 Scope note. The calibration pilot has **one run per cell**, so there is no
 intra-cell predictor spread to correlate against efficiency: nothing here touches
-the frozen confirmatory plan (``pending/Plan de analisis congelado.md``), which
+the frozen confirmatory plan (``docs/research/4 - Análisis.md``), which
 runs on the full matrix in ``reports/``. The loaders default to ``reports_pilot/``
 but take any report directory, so the same functions serve the matrix later.
 

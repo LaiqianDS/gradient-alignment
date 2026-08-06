@@ -270,7 +270,7 @@ La razón de partirlo en dos es que el nivel de abajo está contaminado por [[#P
 
 El diseño resuelve además, sin coste añadido, un segundo problema: la paradoja de Simpson. Supón que se juntaran los 960 runs de golpe. MNIST alcanza su umbral en pocas épocas y Tiny ImageNet en muchas, así que cualquier métrica que simplemente tenga escalas distintas en los dos datasets produciría una correlación global fuerte sin que exista ninguna relación dentro de ningún dataset. Correlacionar primero dentro de cada celda y agregar después elimina esa posibilidad por construcción.
 
-**Fuente:** [[Plan de análisis congelado]] §Estadístico; Holmes y Friston 1998.
+**Fuente:** [[4 - Análisis]] §Estadístico; Holmes y Friston 1998.
 
 ### Pseudo-replicación
 
@@ -282,7 +282,7 @@ El orden de magnitud del error se ve con la fórmula del error estándar de una 
 
 La respuesta del plan tiene dos partes. La primera es no usar esos valores $p$ para decidir nada, y quedarse con la correlación como estadístico descriptivo. La segunda es un análisis de sensibilidad: repetir la etapa 1 sobre las medianas por tasa de aprendizaje, lo que deja $n = 8$ por celda en lugar de 40, y comprobar que el mapa no cambia. Si cambiara, significaría que el resultado dependía de contar las semillas como observaciones independientes.
 
-**Fuente:** [[Plan de análisis congelado]] §Unidad de análisis y datos.
+**Fuente:** [[4 - Análisis]] §Unidad de análisis y datos.
 
 ### Correlación de Spearman y censura por rangos
 
@@ -294,7 +294,7 @@ Esta decisión tiene un efecto secundario que conviene entender, porque no es ob
 
 Eso importa porque la censura no se reparte al azar entre celdas: las celdas difíciles censuran más. Comparar correlaciones entre celdas como si fueran igual de comparables reintroduce por la puerta de atrás justo el confusor de dificultad que la [[#Inferencia en dos etapas]] existía para evitar. El plan no corrige el coeficiente, porque eso exigiría inventar un estimador sin respaldo; lo vigila reportando la tasa de censura junto a cada correlación, repitiendo la etapa 2 solo con las celdas por debajo del 25% de censura, y usando como control los indicadores de eficiencia que no tienen censura ninguna.
 
-**Fuente:** [[Plan de análisis congelado]] §Estadístico y §Censura y exclusiones.
+**Fuente:** [[4 - Análisis]] §Estadístico y §Censura y exclusiones.
 
 ### Contraste de rangos con signo de Wilcoxon
 
@@ -306,7 +306,7 @@ Lo único que necesita para ser válido es que, **bajo la hipótesis nula**, los
 
 Tiene una propiedad discreta que hay que conocer antes de diseñar nada con él, y es que **su valor $p$ tiene un suelo**. Con $n$ valores solo hay $2^n$ asignaciones posibles de signos, y el caso más extremo imaginable, que los $n$ compartan signo, es una sola de ellas. El $p$ bilateral más pequeño alcanzable es por tanto $2^{1-n}$. Con 8 celdas eso da $0{,}0078$, que ya es mayor que el $0{,}00625$ que exige el criterio corregido de H1: con 8 celdas ese test **no puede rechazar nunca**, aunque las 8 apunten en la misma dirección con $\rho = 0{,}9$. No es improbable, es imposible, y ninguna curva de [[#Potencia estadística y efecto mínimo detectable|potencia]] lo enseña.
 
-**Fuente:** [[Plan de análisis congelado]] §Estadístico y §Nota de potencia; `src/power_analysis.py::min_attainable_p`.
+**Fuente:** [[4 - Análisis]] §Estadístico y §Nota de potencia; `src/power_analysis.py::min_attainable_p`.
 
 ### Pseudomediana de Hodges-Lehmann
 
@@ -318,7 +318,7 @@ Un ejemplo pequeño. Con los tres valores $\{0{,}1,\ 0{,}2,\ 0{,}9\}$ la mediana
 
 Su intervalo de confianza se obtiene exacto, sin aproximar por la normal: se construye la distribución nula completa de la suma de rangos y se recortan las medias de Walsh de los extremos. Ese intervalo no es sustituible por el rango intercuartílico, porque miden cosas distintas: el IQR describe cuánto varían las celdas entre sí, y el intervalo describe con cuánta precisión se conoce el centro. Sin él, el resumen cross-celda se reporta sin barra de error.
 
-**Fuente:** [[Plan de análisis congelado]] §Estadístico; `src/power_analysis.py::hodges_lehmann`.
+**Fuente:** [[4 - Análisis]] §Estadístico; `src/power_analysis.py::hodges_lehmann`.
 
 ### Tasa de falsos descubrimientos (BH y BY)
 
@@ -330,7 +330,7 @@ Es distinto de Bonferroni, que controla otra cosa: la probabilidad de cometer **
 
 Benjamini-Yekutieli (BY) es la versión blindada. BH necesita que los contrastes no dependan entre sí de forma adversa, y hay un caso conocido en que eso falla, que es meter en la misma familia predictores correlacionados con signos esperados opuestos. BY es válida bajo **cualquier** estructura de dependencia, incluida la negativa, a cambio de dividir el nivel por $c(k) = \sum_{i=1}^{k} 1/i$. Para familias de 8 contrastes ese factor vale $2{,}718$, que es asumible, así que el plan reporta las dos y lo que sobrevive a BY es robusto pase lo que pase.
 
-**Fuente:** [[Plan de análisis congelado]] §Corrección por comparaciones múltiples; Benjamini y Hochberg 1995, Benjamini y Yekutieli 2001.
+**Fuente:** [[4 - Análisis]] §Corrección por comparaciones múltiples; Benjamini y Hochberg 1995, Benjamini y Yekutieli 2001.
 
 ### Contrastes de equivalencia y de no-inferioridad
 
@@ -342,7 +342,7 @@ Lo delicado es de dónde sale $\delta$, porque es donde se cuela la arbitrarieda
 
 Este es el mecanismo que convierte el resultado negativo de H2 en una afirmación en lugar de una ausencia, y por tanto es lo que permite que la tesis lo declare como contribución.
 
-**Fuente:** [[Plan de análisis congelado]] §Estadístico (brazo de equivalencia de H2) y §Contrastes; Lakens 2017.
+**Fuente:** [[4 - Análisis]] §Estadístico (brazo de equivalencia de H2) y §Contrastes; Lakens 2017.
 
 ### Binomial exacto de concordancia
 
@@ -352,7 +352,7 @@ Se usa dos veces a niveles distintos. En H5 sobre los 12 pares de celdas SGD-Ada
 
 El número de observaciones cambia por completo lo que cada uso puede afirmar, y conviene tenerlo presente antes de interpretar un no-rechazo. Con 24 celdas el test detecta bien una concordancia del 85% (potencia $0{,}94$). Con 12 pares, en cambio, una concordancia real del 75% solo se detecta el 39% de las veces, así que H5 únicamente puede confirmar invariancia casi perfecta y su no-rechazo no es evidencia de no-invariancia.
 
-**Fuente:** [[Plan de análisis congelado]] §Estadístico y §Nota de potencia; `src/power_analysis.py::power_binomial_concordance`.
+**Fuente:** [[4 - Análisis]] §Estadístico y §Nota de potencia; `src/power_analysis.py::power_binomial_concordance`.
 
 ### Potencia estadística y efecto mínimo detectable
 
@@ -366,4 +366,4 @@ Dos errores concretos que este cálculo evita, y que son fáciles de cometer. El
 
 Cuando no hay fórmula cerrada, como pasa con un Wilcoxon aplicado a coeficientes de correlación, la potencia se calcula por simulación de Monte Carlo, que es fuerza bruta honesta: se genera muchas veces un conjunto de datos coherente con la verdad supuesta, se le corre el test exacto que se va a usar de verdad, y se cuenta el porcentaje de veces que rechaza. La forma de comprobar que el simulador no tiene bugs es correrlo con efecto verdadero cero y verificar que la tasa de rechazo sale igual al alfa nominal.
 
-**Fuente:** [[Plan de análisis congelado]] §Nota de potencia; `src/power_analysis.py` y `tests/test_power_analysis.py`.
+**Fuente:** [[4 - Análisis]] §Nota de potencia; `src/power_analysis.py` y `tests/test_power_analysis.py`.

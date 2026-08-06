@@ -1,6 +1,6 @@
 # Datos experimentales: datasets, métricas, variables e hipótesis
 
-**Estado: borrador de trabajo (2026-06-20). Hechos verificados contra el código y la bibliografía.** Documento para ordenar las ideas antes de redactar la metodología. Reúne tres tipos de información, cada uno con su fuente de verdad. Las *particiones, clases, arquitecturas y condiciones de entrenamiento* se derivan del código y se han cotejado línea a línea (`src/data.py`, `src/config.py`, `src/models.py`, `src/train.py`). Las *referencias bibliográficas* son anclas para situar el techo razonable de cada celda; las principales ya tienen cita firme y el resto queda en §6. Los *resúmenes de métricas, VDs e hipótesis* son punteros compactos a los documentos que mandan ([[Métricas]], [[1 - Diseño]], [[Plan de análisis congelado]]); aquí no se redefine nada, solo se reúne.
+**Estado: borrador de trabajo (2026-06-20). Hechos verificados contra el código y la bibliografía.** Documento para ordenar las ideas antes de redactar la metodología. Reúne tres tipos de información, cada uno con su fuente de verdad. Las *particiones, clases, arquitecturas y condiciones de entrenamiento* se derivan del código y se han cotejado línea a línea (`src/data.py`, `src/config.py`, `src/models.py`, `src/train.py`). Las *referencias bibliográficas* son anclas para situar el techo razonable de cada celda; las principales ya tienen cita firme y el resto queda en §6. Los *resúmenes de métricas, VDs e hipótesis* son punteros compactos a los documentos que mandan ([[Métricas]], [[1 - Diseño]], [[4 - Análisis]]); aquí no se redefine nada, solo se reúne.
 
 ---
 
@@ -23,7 +23,7 @@ Notas a la tabla:
 
 ### 1.1 Referencia por (dataset × arquitectura)
 
-Más útil que un único número por dataset, porque el estudio cruza tres arquitecturas y el régimen de cada celda depende de ello (las celdas FC sobre datasets difíciles se censuran por diseño, [[Plan de análisis congelado]] §Censura). Hay que separar **dos regímenes** que la bibliografía suele mezclar:
+Más útil que un único número por dataset, porque el estudio cruza tres arquitecturas y el régimen de cada celda depende de ello (las celdas FC sobre datasets difíciles se censuran por diseño, [[4 - Análisis]] §Censura). Hay que separar **dos regímenes** que la bibliografía suele mezclar:
 
 - **Régimen comparable** (Tabla A): sin data augmentation, desde cero y a resolución nativa, que es justo el de este estudio (§3). Es el techo honesto al que nuestros runs deberían acercarse.
 - **Techo con augmentation** (al final de la sección): el mejor resultado publicado, casi siempre con *data augmentation, weight decay, schedule de learning rate y entrenamientos largos*. Solo sirve de cota laxa; nuestros runs deben quedar **por debajo**, y esa distancia es esperada, no un fallo.
@@ -107,7 +107,7 @@ Implicación: nuestros números **no** son comparables 1:1 con el SOTA augmentad
 
 ## 4. Métricas a utilizar (predictores)
 
-Las **8 métricas de gradiente** del registro completo más los baselines. El registro incluye además un ayudante diagnóstico (`cos_sim_batches`) que **no** se analiza como predictor. Se miden **al final de cada época** sobre el probe fijo, y el análisis las lee en las ventanas `f` (fracción del presupuesto), escogidas post-hoc de la trayectoria completa. Detalle y fórmulas en [[Métricas]]; jerarquía y justificación en [[Plan de análisis congelado]] §Predictores. Se reportan **todas**, signifiquen o no; sin filtrado previo.
+Las **8 métricas de gradiente** del registro completo más los baselines. El registro incluye además un ayudante diagnóstico (`cos_sim_batches`) que **no** se analiza como predictor. Se miden **al final de cada época** sobre el probe fijo, y el análisis las lee en las ventanas `f` (fracción del presupuesto), escogidas post-hoc de la trayectoria completa. Detalle y fórmulas en [[Métricas]]; jerarquía y justificación en [[4 - Análisis]] §Predictores. Se reportan **todas**, signifiquen o no; sin filtrado previo.
 
 - **Nivel 0 (baseline, sin tocar el gradiente):** `val-acc@f` (**titular**, rival a batir de H2), `val-loss@f`, TSE-EMA@f. TSE-EMA es la media móvil exponencial de la train loss media por época (Ru et al., 2021); coste cero, porque la loss ya se computa en el forward. Comparador emparejado de VD1: épocas-hasta-umbral *predichas* invirtiendo un ajuste power-law sobre la curva de val-acc (descriptivo, fuera de las familias confirmatorias).
 - **Nivel 1 (gradiente barato):** varianza de gradiente normalizada (NGV, Faghri et al.), gradient noise scale (GNS, McCandlish et al.), gradient disparity (Forouzesh et al.).
@@ -121,7 +121,7 @@ El baseline no es la métrica más simple, es *el mejor predictor obtenible sin 
 
 ### 5.1 Variables dependientes (eficiencia y generalización)
 
-Curva de monitorización = **val**. VD1 y VD3 se leen sobre la curva suavizada (mediana móvil **centrada** de 3 épocas); VD2 integra la cruda (AUC trapezoidal). Las dos convenciones están implementadas en `efficiency_summary` (`src/train.py`); detalle en [[Plan de análisis congelado]] §Variables.
+Curva de monitorización = **val**. VD1 y VD3 se leen sobre la curva suavizada (mediana móvil **centrada** de 3 épocas); VD2 integra la cruda (AUC trapezoidal). Las dos convenciones están implementadas en `efficiency_summary` (`src/train.py`); detalle en [[4 - Análisis]] §Variables.
 
 | VD | Definición | Mide |
 |---|---|---|
@@ -142,7 +142,7 @@ Matiz sobre VD2 y VD3: la val-loss puede subir por **sobreconfianza** mientras l
 
 ### 5.2 Hipótesis / objetivos de análisis
 
-Inferencia en **dos etapas**: Spearman ρ por celda (descriptivo) + Wilcoxon entre celdas (confirmatorio). El ρ de cada celda es solo un estadístico-resumen, **no** una prueba: los 40 runs de una celda no son independientes, porque el learning rate los clusteriza. La confirmación ocurre **entre celdas**, donde los runs sí son disjuntos. Criterios completos en [[Plan de análisis congelado]] §Contrastes.
+Inferencia en **dos etapas**: Spearman ρ por celda (descriptivo) + Wilcoxon entre celdas (confirmatorio). El ρ de cada celda es solo un estadístico-resumen, **no** una prueba: los 40 runs de una celda no son independientes, porque el learning rate los clusteriza. La confirmación ocurre **entre celdas**, donde los runs sí son disjuntos. Criterios completos en [[4 - Análisis]] §Contrastes.
 
 - **H1 (existencia):** ≥1 métrica de gradiente con `|mediana ρ| ≥ 0,3` y `q < 0,05` entre celdas.
 - **H2 (valor incremental, la decisiva):** ≥1 métrica conserva poder *tras controlar por el baseline de loss* (correlación parcial). Si H1 ✓ y H2 ✗, las métricas son redundantes con la curva de loss (negativo válido).
