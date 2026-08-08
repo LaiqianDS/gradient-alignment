@@ -43,6 +43,13 @@ def test_is_done_tracks_summary_json(tmp_path, monkeypatch):
     assert run.is_done() is True  # summary.json present -> completed
 
 
+def test_fmt_duration_switches_unit_with_the_magnitude():
+    assert run_matrix.fmt_duration(45) == "45s"
+    assert run_matrix.fmt_duration(144) == "2.4m"
+    assert run_matrix.fmt_duration(2600) == "43.3m"
+    assert run_matrix.fmt_duration(4020) == "1h07m"
+
+
 def test_init_cells_writes_one_loadable_yaml_per_cell(tmp_path, monkeypatch):
     monkeypatch.setattr(run_matrix, "EXPERIMENTS_DIR", tmp_path)
     written = run_matrix.init_cells()

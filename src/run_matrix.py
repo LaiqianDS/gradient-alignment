@@ -37,6 +37,7 @@ import argparse
 import os
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -175,6 +176,15 @@ def print_status(runs: list[Run]) -> None:
     print(f"\n  TOTAL {total_done}/{len(runs)}  ({pct:.1f}% complete)")
 
 
+def fmt_duration(seconds: float) -> str:
+    """Wall-clock as one short human-readable token: ``45s``, ``2.4m``, ``1h07m``."""
+    if seconds < 60:
+        return f"{seconds:.0f}s"
+    if seconds < 3600:
+        return f"{seconds / 60:.1f}m"
+    return f"{seconds // 3600:.0f}h{(seconds % 3600) / 60:02.0f}m"
+
+
 def execute(runs: list[Run], dry_run: bool = False, limit: int | None = None) -> list[Run]:
     """Run every pending grid point sequentially; return the ones that failed."""
     done = [r for r in runs if r.is_done()]
@@ -192,19 +202,29 @@ def execute(runs: list[Run], dry_run: bool = False, limit: int | None = None) ->
     print(f"[run_matrix] {len(done)} done, {len(selected)} to run{note} "
           f"(of {len(runs)} selected)")
     failures: list[Run] = []
+    batch_started = time.monotonic()
     for i, run in enumerate(selected, 1):
         cmd = build_command(run)
         if dry_run:
             print("  DRY  " + " ".join(cmd))
             continue
         print(f"\n[run_matrix] ({i}/{len(pending)}) {run.name}")
-        if subprocess.run(cmd, env=child_env()).returncode != 0:
+        run_started = time.monotonic()
+        failed = subprocess.run(cmd, env=child_env()).returncode != 0
+        run_elapsed = time.monotonic() - run_started
+        if failed:
             print(f"[run_matrix] FAILED: {run.name} (left pending)")
             failures.append(run)
+        # No ETA on purpose: cell costs span ~35x, so an average-based estimate
+        # would be confidently wrong until the batch is deep into one cell.
+        print(f"[run_matrix] {fmt_duration(run_elapsed)} this run | "
+              f"{fmt_duration(time.monotonic() - batch_started)} elapsed, "
+              f"{i}/{len(selected)} of this batch")
 
     if not dry_run:
         ok = len(selected) - len(failures)
-        print(f"\n[run_matrix] finished: {ok} ok, {len(failures)} failed")
+        print(f"\n[run_matrix] finished: {ok} ok, {len(failures)} failed "
+              f"in {fmt_duration(time.monotonic() - batch_started)}")
         for r in failures:
             print(f"    still pending: {r.name}")
     return failures
