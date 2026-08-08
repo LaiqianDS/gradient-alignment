@@ -12,6 +12,44 @@ Bloquean experimentos. La acción para resolverlas vive en [[3 - Progreso]] (Pas
 
 ## Tomadas (log)
 
+### 2026-08-08
+
+Las tres entradas de esta fecha salen de la primera revisión de la matriz en marcha (268 runs terminados: MNIST completo, el smoke de Tiny y media celda de `fc × cifar10 × sgd`). Ninguna se ha tomado habiendo calculado ninguna correlación entre métrica y VD, que a esta fecha siguen sin existir. Ninguna toca `src/`: la matriz corre lanzando un proceso nuevo por run (`run_matrix.py:201`), así que cualquier edición del código entraría en vigor en el run siguiente y partiría la matriz en dos versiones, que es una contaminación que no se repara después.
+
+#### El coste de instrumentación documentado era anterior al barrido compartido
+
+La cifra de 3,21x que este log y [[4 - Análisis]] venían citando como peor caso procede del pilot, que se ejecutó el 2026-06-15. El barrido compartido entró dos días después (commit `8566fc3`, `perf(metrics): share one per-sample gradient sweep per probe`). **Todas las cifras de coste del vault eran, por tanto, de una versión del código que ya no es la que corre la matriz.**
+
+Medido ahora celda a celda contra el pilot, el sobrecoste baja de 3,09x a 2,04x en `fc × cifar10 × sgd`, de 2,40x a 1,65x en `resnet18 × mnist`, de 1,77x a 1,40x en `fc × mnist` y de 1,05x a 1,02x en `cnn × mnist`. El peor caso medido sobre la matriz es **2,04x**. Las dos celdas que encabezaban el pilot (`fc × cifar100` y `fc × tiny_imagenet`) todavía no han corrido; escalando el factor observado quedarían alrededor de 2,1x, dentro de la cota <3-4x con bastante más holgura que antes.
+
+Que la causa es la optimización y no otra cosa se comprueba con tres hechos: el tiempo de entrenamiento por época es el mismo (1,671 s en el pilot frente a 1,638 s en la matriz), el de medición se reduce a la mitad, y las trayectorias de la misma configuración salen **idénticas bit a bit** durante las 40 épocas. Eso último es exactamente lo que promete el invariante de que la ruta compartida y la independiente coincidan hasta el último bit, así que el hallazgo confirma la optimización además de corregir el número.
+
+**δ_H2 se queda en 0,15.** El plan usa el coste como justificación del margen, no como fórmula que lo calcule, y 2x sigue siendo un coste que justifica exigir esa parcial. Bajarlo solo restaría potencia a la hipótesis decisiva. La corrección se declara igualmente como enmienda en [[4 - Análisis]] por ser factual y afectar a dos secciones del preregistro.
+
+#### `fc × cifar10` degenera en VD1, y la proyección deja VD1 justo en el suelo de 18 celdas
+
+Los 26 runs terminados de `fc × cifar10 × sgd` están **censurados los 26**: el umbral de CIFAR-10 es 0,65 de val-acc y el mejor run llega a 0,584. Por la regla de celda degenerada, una celda con más del 80% de censura sale de VD1 para todas las métricas.
+
+No es falta de presupuesto. El pilot corrió esa configuración al presupuesto doblado, 80 épocas, y tocó techo en 0,584 justo en la época 40 para quedarse plano el resto. Una red totalmente conectada no llega a 0,65 en CIFAR-10; es el techo de la arquitectura, y por eso `fc × cifar10 × adam` caerá igual.
+
+[[4 - Análisis]] anticipaba que esto pasaría con FC sobre CIFAR-100 y Tiny-ImageNet, es decir 4 celdas. Con CIFAR-10 dentro son **6**, y la proyección deja VD1 con **18 celdas elegibles**, que es exactamente el suelo por debajo del cual el propio plan manda declarar el estudio incompleto y pasar todo a exploratorio. Margen cero. Quedan además dos celdas en riesgo razonable de degenerar también, `cnn × cifar100` contra 0,35 y `cnn × tiny_imagenet` contra 0,20.
+
+**No se toca el umbral de CIFAR-10.** Sería mover un criterio congelado después de ver que una celda no lo alcanza, y el propio plan degradaría VD1 a exploratoria. Conviene dejar anotado que la restricción es del preregistro y no del dato: recalculando `epochs_to_threshold` desde `trajectory.parquet` con la misma mediana móvil de tres épocas sale idéntico al de `summary.json` en **268 de 268** runs, así que un cambio de umbral no costaría cómputo. Si el tutor decidiera que la calibración estuvo mal hecha, es corregible a coste cero, pero como enmienda declarada y con esa consecuencia asumida.
+
+#### Runs colapsados: la regla de divergencia no los cubría, y solo afectan a GWA
+
+De los 268 runs, 11 divergen con NaN, que es lo previsto. Pero hay **26 que colapsan sin divergir**: se quedan finitos, con la loss de entrenamiento clavada en 2,30 que es ln(10), y la accuracy en el 10% que es el azar. Están en `cnn × mnist` (21) y `fc × mnist × adam` (5), todos en las tasas de aprendizaje altas.
+
+Lo que les pasa es que las ReLU mueren, la última capa recibe un vector de entrada exactamente nulo y el clasificador solo emite su sesgo. Importa porque la regla de divergencia del lado predictor (2026-07-25) decide con la finitud de la fila, y estas filas son perfectamente finitas: el caso se le escapa. Y como se concentra en las tasas altas, que son también las lentas y las censuradas, es la misma estructura de confusión que aquella regla existía para impedir.
+
+**El alcance real es mucho más estrecho de lo que parecía, y conviene ser preciso sobre por qué.** Los gradientes por muestra no son nulos (`var/avg` = 1,9·10⁻⁶ > 0 en todas las épocas), así que la mayoría de columnas son mediciones reales de una geometría degenerada: `gsnr/mean`, `mcoh/global` y los cosenos de confusión salen con valores ordinarios. Incluso `stiffness/cos_within` = 1,0 exacto es real, porque con la entrada de la última capa a cero el único gradiente no nulo es el del sesgo, que es literalmente el mismo vector para todas las muestras de una clase.
+
+La única cantidad fabricada es **`gwa/score_mean`**. GWA usa el gradiente del peso de la última capa, que aquí sí es exactamente cero, y su norma se protege con `clamp_min(EPS)`, de modo que el coseno sale 0/EPS = 0,0 exacto. El coseno de un vector nulo no existe; ese 0,0 es un relleno, y es justo "un valor que parece medido y no lo es". `gwa/kurt` y `gwa/value` ya salen NaN por la rama documentada de varianza nula.
+
+**Regla, y se aplica en el análisis, no en el entrenamiento.** Un `gwa/score_mean` exactamente igual a 0,0 se marca como faltante para GWA en ese (run, época), igual que hace la regla de 2026-07-25 con las columnas de signo. Discrimina sin ambigüedad: los 22 runs que lo cumplen están colapsados y ninguno de los 242 sanos lo cumple. Los runs colapsados **siguen dentro** del estudio para todo lo demás, porque un run que colapsa es genuinamente ineficiente y una métrica que lo anticipe temprano es genuinamente útil, que es la misma lógica por la que los censurados entran con el peor rango en vez de tirarse.
+
+Como el valor 0,0 es detectable a posteriori sobre lo ya registrado, esto **no obliga a re-correr nada ni a tocar `src/` mientras la matriz corre**. Arreglar `gwa.py` para que devuelva NaN en vez de 0,0 queda pendiente para cuando la matriz termine, y es cosmético una vez la regla está escrita.
+
 ### 2026-08-05
 
 #### Renombrado del plan congelado a `4 - Análisis.md`
