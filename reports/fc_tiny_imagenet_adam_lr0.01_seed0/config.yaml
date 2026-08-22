@@ -1,0 +1,21 @@
+dataset: tiny_imagenet
+model: fc
+optimizer: adam
+lr: 0.01
+batch_size: 128
+epochs: 40
+momentum: 0.9
+weight_decay: 0.0
+seed: 0
+probe_size: 256
+chunk_size: 32
+threshold_acc: 0.2
+out_dir: /home/lai/Documents/lq/gradient-alignment/reports
+run_name: fc_tiny_imagenet_adam_lr0.01_seed0
+device: auto
+windows:
+- 0.05
+- 0.1
+- 0.25
+- 0.5
+- 1.0
