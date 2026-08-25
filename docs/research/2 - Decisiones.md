@@ -6,7 +6,7 @@ El *qué decidimos y por qué* vive aquí; el *estado resultante del diseño*, e
 
 ## Pendientes (sin cerrar)
 
-Bloquean experimentos. La acción para resolverlas vive en [[3 - Progreso]] (Pasos inmediatos).
+Bloquean experimentos. La acción para resolverlas vive en [[3 - Progreso]] (Plan hasta la entrega).
 
 **El método de análisis, entero (abierto el 2026-08-25).** Los 960 entrenamientos están hechos y sus datos versionados en `reports/`. No hay método definido para analizarlos: el plan anterior se retiró (ver el log de hoy). Lo que queda por decidir es, hipótesis por hipótesis, con qué cuenta concreta se responde. Es la única pendiente, y bloquea el capítulo de resultados.
 
@@ -52,7 +52,7 @@ Verificado sobre los 960 runs (2026-08-25). En las tasas de aprendizaje altas ha
 
 **Lo que NO se sostiene.** La versión anterior de esta entrada, escrita con 268 runs, decía que el cero exacto "discrimina sin ambigüedad". Sobre los 960 no es así: de los 124 runs con cero exacto, 115 acaban clavados y **9 no**. La firma es fuerte, no infalible.
 
-Qué se hace con estos runs al analizar está **por decidir**, como el resto del análisis.
+Qué se hace con estos runs al analizar está **por decidir**, como el resto del análisis. Matiz medido el 2026-08-25: en la variable de velocidad no hay nada que decidir, porque todo run clavado es además un run que nunca cruza el umbral, y la cuenta de runs con velocidad medida sale idéntica con ellos y sin ellos en las 24 celdas. La decisión solo afecta a las otras cinco variables dependientes, donde los clavados sí tienen valor (ver [[3 - Progreso]] §Estado actual).
 
 ### 2026-08-05
 
@@ -90,7 +90,7 @@ El motivo de sacar `mnist × cnn` fuera del orden natural es de diagnóstico, no
 
 #### Coste de instrumentación: se mantiene la medición completa
 
-Cierra la decisión abierta desde el pilot ([[3 - Progreso]], Pasos inmediatos). Se mantiene la medición tal cual: registro completo de las 8 métricas + baseline al final de cada época, sobre la probe fija de M=256, en toda la rejilla. La prioridad declarada es disponer de datos suficientes: la serie temporal completa por época.
+Cierra la decisión abierta desde el pilot ([[3 - Progreso]]). Se mantiene la medición tal cual: registro completo de las 8 métricas + baseline al final de cada época, sobre la probe fija de M=256, en toda la rejilla. La prioridad declarada es disponer de datos suficientes: la serie temporal completa por época.
 
 - **Por qué.** El peor caso, ya medido sobre la matriz completa, es **2,048x** el wall-clock de un run sin instrumentar, en `fc × cifar100 × sgd`, dentro de la cota <3-4x fijada. Cifra corregida el 2026-08-08: las lecturas anteriores salían del pilot, anterior al barrido compartido, y sobrestimaban. La conclusión de mantener la medición completa no cambia. Conservar la serie completa preserva la elección de ventanas a posteriori y la línea exploratoria post-meseta anotada como trabajo futuro.
 - **Alternativas descartadas.** Bajar la cadencia de medición (pierde resolución de trayectoria y complica el snap exacto de ventanas); submuestrear la probe (M=256 está congelado por comparabilidad cross-celda: tocarlo introduce un confusor); fusionar las 2 batch-sweeps restantes (NGV, gradient disparity) en el sweep compartido (palanca válida de ingeniería, pero no bit-idéntica, cambios ~1e-6 frente a los valores que los tests pinean; queda como optimización futura si el coste apretara).
@@ -110,7 +110,7 @@ Cierra el "registrar aquí los valores finales con su evidencia" de la decisión
 
 #### Tabla de signos de H6 verificada contra los papers
 
-Verificación previa a la congelación ([[3 - Progreso]], Pasos inmediatos), realizada con 6 subagentes de lectura sobre los PDFs del vault (GSNR/Liu, Coherent Gradients/Chatterjee, Making Coherence/Chatterjee & Zielinski, GWA/Hölzl, GNS/McCandlish, TSE/Ru). La tabla corregida vive en [[Datos experimentales]] §5.3; cambios y evidencia clave:
+Verificación previa a la congelación ([[3 - Progreso]]), realizada con 6 subagentes de lectura sobre los PDFs del vault (GSNR/Liu, Coherent Gradients/Chatterjee, Making Coherence/Chatterjee & Zielinski, GWA/Hölzl, GNS/McCandlish, TSE/Ru). La tabla corregida vive en [[Datos experimentales]] §5.3; cambios y evidencia clave:
 
 - **m-coherence vs VD1: sigue −, pero la base fuerte cambia de paper.** Chatterjee & Zielinski no afirma velocidad (su α es eficiencia por paso, definicional; las menciones de velocidad son citas a terceros). El claim explícito es de Chatterjee 2020 (CGH): "we expect that greater the agreement in per-example gradients, the faster loss should decrease" (§2.2) y "as noise increases, the time taken to reach a given level of accuracy (i.e., realized learning rate) increases" (§2.3). Matiz: medido sobre train accuracy; la extensión a val es razonada.
 - **GSNR vs VD4: de fuerte a extrapolada.** El paper solo afirma el gap ("larger GSNR during training process leads to better generalization performance", vía OSGR, ec. 22; el gap es en loss, la misma cantidad que VD5); no hay claim de test accuracy. Su predicción fuerte es − vs el gap. Matices: la teoría se deriva en fase temprana (favorece la ventana del TFG) pero con full-batch GD, no SGD.
