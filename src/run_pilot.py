@@ -191,23 +191,117 @@ def fmt_params(n: int) -> str:
     return str(n)
 
 
+def calibration_table(runs: list[PilotRun]) -> pd.DataFrame:
+    """The pilot's calibration evidence as data: one row per finished run.
+
+    This is the evidence behind the frozen budgets and thresholds, so it has to
+    be reachable as a table and not only as printed text. :func:`print_report`
+    formats this frame and adds nothing to it.
+
+    Run facts are read from disk, never derived from today's config: the pilot
+    trained with 2x the budgets in force back then, and the calibration itself
+    edits ``DATASET_BUDGET``, so recomputing epochs or reusing the stored
+    ``epochs_to_threshold`` would describe runs that never happened.
+    ``threshold_epoch`` recomputes the crossing of the **current** threshold on
+    the smoothed val curve (same 3-epoch centred median as ``train.median3``).
+
+    ``test_fields_valid`` is False for the Tiny-ImageNet runs, whose summaries
+    self-declare via ``_tiny_test_note`` that their test/gap fields predate the
+    val-as-test labelling fix. Their val-side and timing fields are sound, which
+    is what the calibration used.
+    """
+    rows = []
+    for r in runs:
+        if not r.is_done():
+            continue
+        traj = pd.read_parquet(r.dir / "trajectory.parquet").sort_values("epoch")
+        s = json.loads((r.dir / "summary.json").read_text())
+        budget = DATASET_BUDGET[r.dataset]
+        candidate = budget["epochs"]
+
+        plateau = plateau_epoch(traj)
+        smooth_acc = traj["val_acc"].rolling(3, center=True, min_periods=1).median()
+        crossed = traj[smooth_acc >= budget["threshold_acc"]]
+        hit = int(crossed["epoch"].iloc[0]) + 1 if not crossed.empty else None
+
+        total, metric = s.get("total_seconds"), s.get("metric_seconds")
+        rows.append({
+            "dataset": r.dataset, "model": r.model, "optimizer": r.optimizer,
+            "run_name": r.name,
+            "ran_epochs": len(traj),
+            "candidate_epochs": candidate,
+            "threshold_acc": budget["threshold_acc"],
+            "plateau_epoch": plateau,
+            "plateau_frac": plateau / len(traj),
+            "threshold_epoch": hit,
+            "threshold_frac": hit / candidate if hit is not None else math.nan,
+            # never crosses, or crosses only past the real 1x budget
+            "censored": hit is None or hit > candidate,
+            "total_seconds": total, "metric_seconds": metric,
+            "metric_frac": (metric / total
+                            if total and metric is not None else math.nan),
+            "num_params": s["num_params"],
+            "best_val_acc": s["best_val_acc"],
+            "final_test_acc": s["final_test_acc"],
+            "final_test_f1_macro": s["final_test_f1_macro"],
+            "final_test_loss": s["final_test_loss"],
+            "final_gap_acc": s["final_gap_acc"],
+            "test_fields_valid": "_tiny_test_note" not in s,
+        })
+    return pd.DataFrame(rows)
+
+
+TESTFIX_DIR = "testfix_40ep"
+
+
+def testfix_table(runs: list[PilotRun]) -> pd.DataFrame:
+    """The sound test/gap reference that lives inside each affected run dir.
+
+    A *different* run, not a repair of the row beside it: same cell, center LR
+    and seed, but trained to the calibrated budget instead of the pilot's
+    doubled one, and after the val-as-test labelling fix. It gets its own frame
+    precisely so nothing can join it onto :func:`calibration_table` as though
+    the two horizons were the same run.
+
+    Only the test-side fields are carried. The pilot row's own val and timing
+    were never broken, so a second val column would only invite the reader to
+    treat this as a replacement.
+    """
+    rows = []
+    for r in runs:
+        d = r.dir / TESTFIX_DIR
+        if not (d / "summary.json").exists():
+            continue
+        s = json.loads((d / "summary.json").read_text())
+        rows.append({
+            "dataset": r.dataset, "model": r.model, "optimizer": r.optimizer,
+            "run_name": r.name,
+            "ran_epochs": len(pd.read_parquet(d / "trajectory.parquet")),
+            "final_test_acc": s["final_test_acc"],
+            "final_test_f1_macro": s["final_test_f1_macro"],
+            "final_test_loss": s["final_test_loss"],
+            "final_gap_acc": s["final_gap_acc"],
+        })
+    return pd.DataFrame(rows)
+
+
 def print_report(runs: list[PilotRun]) -> None:
     """Per-dataset results + calibration tables, then the one-line roll-up.
 
-    Two narrow tables per dataset. ``results`` is the model-quality story kept
-    for the thesis: best val + final test acc/F1/loss and the generalization
-    gap (train_acc - test_acc). ``calib`` is the throwaway tuning evidence:
-    ``plateau@`` (val-loss knee, as a share of the run's recorded epochs),
-    ``thr@`` (crossing of the CURRENT threshold_acc, as a share of the
-    candidate 1x budget; want 30-60%), ``metric%`` (instrumentation tax),
-    wall time and parameter count. The one-line roll-up proposes a 1x budget.
-
-    Run facts are read from disk, not derived from today's config: the pilot
-    trained with 2x the budgets in force back then, and the calibration
-    itself edits ``DATASET_BUDGET``, so recomputing epochs or reusing the
-    stored ``epochs_to_threshold`` would silently describe runs that never
-    happened.
+    Two narrow tables per dataset, both formatted from :func:`calibration_table`.
+    ``results`` is the model-quality story kept for the thesis: best val + final
+    test acc/F1/loss and the generalization gap (train_acc - test_acc).
+    ``calib`` is the throwaway tuning evidence: ``plateau@`` (val-loss knee, as
+    a share of the run's recorded epochs), ``thr@`` (crossing of the CURRENT
+    threshold_acc, as a share of the candidate 1x budget; want 30-60%),
+    ``metric%`` (instrumentation tax), wall time and parameter count. The
+    one-line roll-up proposes a 1x budget. A ``*`` on a ``results`` row carries
+    :func:`calibration_table`'s ``test_fields_valid`` into the printed text,
+    which is where a reader would otherwise cite those numbers as sound, and
+    the ``testfix`` block below it prints :func:`testfix_table` when a sound
+    reference exists, each row labelled with the budget it actually ran.
     """
+    table = calibration_table(runs)
     by_dataset: dict[str, list[PilotRun]] = {}
     for r in runs:
         by_dataset.setdefault(r.dataset, []).append(r)
@@ -224,79 +318,72 @@ def print_report(runs: list[PilotRun]) -> None:
         budget = DATASET_BUDGET[dataset]
         candidate = budget["epochs"]
 
-        done = [r for r in cell_runs if r.is_done()]
+        sub = table[table["dataset"] == dataset] if len(table) else table
         pending = [r for r in cell_runs if not r.is_done()]
 
-        # Run facts come from disk: the recorded trajectory length is the
-        # budget the pilot actually trained with, immune to the DATASET_BUDGET
-        # edits the calibration itself writes afterwards.
-        trajs = {r: pd.read_parquet(r.dir / "trajectory.parquet").sort_values("epoch")
-                 for r in done}
-        ran = sorted({len(t) for t in trajs.values()})
+        ran = sorted(set(sub["ran_epochs"])) if len(sub) else []
         ran_label = ("/".join(str(e) for e in ran) if ran
                      else f"{cell_runs[0].epochs} (planned)")
 
         print(f"\n{dataset}  |  budget {candidate} ep  |  thr {budget['threshold_acc']}"
               f"  |  pilot ran {ran_label} ep")
-        if not done:
+        if not len(sub):
             print("  (no finished runs yet)")
             continue
-
-        summaries = {r: json.loads((r.dir / "summary.json").read_text()) for r in done}
-        plateaus = {r: plateau_epoch(trajs[r]) for r in done}
 
         # results -- the model-quality numbers kept for the thesis
         print(f"  {'results':<9}{'model':<9}{'opt':<4}{'test_acc':>9}{'test_f1':>9}"
               f"{'test_loss':>10}{'val_acc':>9}{'gap_acc':>9}")
-        for r in done:
-            s = summaries[r]
-            print(f"  {'':<9}{r.model:<9}{r.optimizer:<4}"
-                  f"{s['final_test_acc']:>9.4f}{s['final_test_f1_macro']:>9.4f}"
-                  f"{s['final_test_loss']:>10.3f}{s['best_val_acc']:>9.4f}"
-                  f"{s['final_gap_acc']:>9.4f}")
+        for row in sub.itertuples():
+            print(f"  {'':<9}{row.model:<9}{row.optimizer:<4}"
+                  f"{row.final_test_acc:>9.4f}{row.final_test_f1_macro:>9.4f}"
+                  f"{row.final_test_loss:>10.3f}{row.best_val_acc:>9.4f}"
+                  f"{row.final_gap_acc:>9.4f}"
+                  f"{'' if row.test_fields_valid else ' *'}")
+        if not sub["test_fields_valid"].all():
+            print("  * test_acc/test_f1/test_loss/gap_acc are NOT valid: that "
+                  "summary predates the val-as-test labelling fix. Its val_acc "
+                  "and its calib row below are sound.")
+
+        # testfix -- the post-fix test/gap reference, kept visibly apart
+        fix = testfix_table(cell_runs)
+        if len(fix):
+            print("  testfix: the same cells re-run after the fix, each at its "
+                  "own budget. Sound test/gap, but a different horizon, so NOT "
+                  "a swap-in for the rows above.")
+            print(f"  {'testfix':<9}{'model':<9}{'opt':<4}{'test_acc':>9}"
+                  f"{'test_f1':>9}{'test_loss':>10}{'val_acc':>9}{'gap_acc':>9}")
+            for row in fix.itertuples():
+                print(f"  {f'({row.ran_epochs} ep)':<9}"
+                      f"{row.model:<9}{row.optimizer:<4}"
+                      f"{row.final_test_acc:>9.4f}{row.final_test_f1_macro:>9.4f}"
+                      f"{row.final_test_loss:>10.3f}{'':>9}"
+                      f"{row.final_gap_acc:>9.4f}")
 
         # calib -- the throwaway tuning evidence (budget / threshold / cost)
         print(f"  {'calib':<9}{'model':<9}{'opt':<4}{'plateau@':>11}{'thr@':>11}"
               f"{'metric%':>9}{'time':>8}{'params':>8}")
-        thr_pcts: list[float] = []   # crossings WITHIN the 1x budget only
-        censored = 0                 # never crosses, or crosses past the 1x budget
-        for r in done:
-            s = summaries[r]
-            plateau = plateaus[r]
-            plateau_cell = f"{plateau} ({100 * plateau / len(trajs[r]):.0f}%)"
+        for row in sub.itertuples():
+            plateau_cell = f"{row.plateau_epoch} ({100 * row.plateau_frac:.0f}%)"
+            thr_cell = ("--" if pd.isna(row.threshold_epoch)
+                        else f"{int(row.threshold_epoch)} ({100 * row.threshold_frac:.0f}%)")
+            metric_cell = (f"{100 * row.metric_frac:.1f}%"
+                           if pd.notna(row.metric_frac) else "--")
+            time_cell = (f"{row.total_seconds / 60:.1f}m"
+                         if pd.notna(row.total_seconds) else "--")
 
-            # Recompute against the CURRENT threshold on the smoothed curve
-            # (same smoothing as train.median3); the summary's stored
-            # epochs_to_threshold used the threshold in force at pilot time.
-            smooth_acc = (trajs[r]["val_acc"]
-                          .rolling(3, center=True, min_periods=1).median())
-            crossed = trajs[r][smooth_acc >= budget["threshold_acc"]]
-            hit = int(crossed["epoch"].iloc[0]) + 1 if not crossed.empty else None
-            if hit is None:
-                thr_cell, censored = "--", censored + 1
-            else:
-                pct = 100 * hit / candidate
-                if pct <= 100:
-                    thr_pcts.append(pct)
-                else:
-                    censored += 1   # crosses, but only past the real 1x budget
-                thr_cell = f"{hit} ({pct:.0f}%)"
-
-            total = s.get("total_seconds")    # absent in pre-timing summaries
-            metric = s.get("metric_seconds")
-            metric_cell = (f"{100 * metric / total:.1f}%"
-                           if total and metric is not None else "--")
-            time_cell = f"{total / 60:.1f}m" if total is not None else "--"
-
-            print(f"  {'':<9}{r.model:<9}{r.optimizer:<4}{plateau_cell:>11}"
+            print(f"  {'':<9}{row.model:<9}{row.optimizer:<4}{plateau_cell:>11}"
                   f"{thr_cell:>11}{metric_cell:>9}{time_cell:>8}"
-                  f"{fmt_params(s['num_params']):>8}")
+                  f"{fmt_params(row.num_params):>8}")
 
         if pending:
             print("  pending: " + ", ".join(f"{p.model}/{p.optimizer}" for p in pending))
 
         # one-line roll-up: budget proposal | threshold window
-        rec = recommend_budget(max(plateaus.values()))
+        thr_pcts = [100 * f for f, c in zip(sub["threshold_frac"], sub["censored"])
+                    if not c]
+        censored = int(sub["censored"].sum())
+        rec = recommend_budget(int(sub["plateau_epoch"].max()))
         bits = [f"RECO {candidate} -> {rec} ep"]
         if thr_pcts:
             lo, hi = min(thr_pcts), max(thr_pcts)
