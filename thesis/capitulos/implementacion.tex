@@ -35,11 +35,11 @@ La consecuencia práctica es que la suite no necesita ningún modelo real ni nin
 Métricas de gradiente y predictor de referencia & 104 \\
 Barrido compartido y primitivas de gradiente    & 46 \\
 Entrenamiento, datos, modelos y registro        & 42 \\
-Análisis y potencia                             & 28 \\
+Análisis                                        & 12 \\
 Figuras                                         & 20 \\
 Lanzadores de la matriz y del piloto            & 17 \\
 \midrule
-\textbf{Total}                                  & \textbf{257} \\
+\textbf{Total}                                  & \textbf{241} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -57,16 +57,6 @@ El grupo de figuras merece una nota, porque a primera vista una figura no parece
 Tres pruebas fijan errores reales encontrados durante el desarrollo y se conservan como regresión. La primera es el etiquetado del conjunto de validación de Tiny-ImageNet, cuyo directorio plano mandaba las diez mil imágenes a una única clase. La segunda es la escritura de los ficheros de resumen, que no era atómica: la prueba simula la muerte del proceso a mitad de escritura, y se comprobó que falla contra la versión anterior del código. Esta segunda importa más de lo que su tamaño sugiere, porque el lanzador decide qué entrenamientos están hechos comprobando que ese fichero exista, de modo que un fichero truncado marcaba un entrenamiento como completo para siempre y con datos corruptos.
 
 La tercera está en los diagnósticos de sanidad. El estadístico que medía si una métrica llega a moverse dentro de un entrenamiento se normalizaba contra una referencia calculada entre entrenamientos, de modo que ordenaba por escala en lugar de por movimiento: la misma magnitud medida en unidades mil veces menores salía marcada como plana. La prueba mide la misma curva en dos sistemas de unidades separados por un factor de un millón y exige que el resultado sea idéntico. El error importaba porque el diagnóstico se lee antes de cualquier contraste, y sus conclusiones deciden qué mirar con lupa.
-
-\subsection{Cálculo de la potencia}
-
-El análisis de potencia de la Sección~\ref{sec:potencia} se implementa como un módulo independiente del repositorio, en lugar de haberse calculado una vez y transcrito al texto. El motivo es que el plan pre-registrado cita cifras concretas, y una cifra que nadie puede recomputar es una afirmación y no una evidencia: ejecutar el módulo reimprime las tablas que el plan y esta memoria citan.
-
-El módulo combina tres vías según lo que admita cada contraste. Los contrastes binomiales se resuelven de forma exacta, sumando la masa de probabilidad sobre los recuentos que rechazan. La potencia del contraste de correlación se obtiene en forma cerrada mediante la transformación de Fisher. Y la potencia de la segunda etapa, para la que no existe fórmula cerrada, se estima por simulación de Monte Carlo con semilla fija: se generan veinte mil conjuntos de correlaciones coherentes con la verdad supuesta, se les aplica el mismo contraste exacto que se aplicará a los datos reales, y se cuenta la proporción de rechazos, acompañada de su intervalo de confianza para que el error de simulación quede visible.
-
-El módulo calcula además dos cantidades que no son potencia pero que el plan necesita: el valor $p$ mínimo alcanzable por el contraste de rangos con signo, del que sale el suelo discreto descrito en la Sección~\ref{sec:potencia}, y la pseudomediana de Hodges-Lehmann con su intervalo exacto, que es el tamaño de efecto que se informará.
-
-Sus dieciséis pruebas incluyen una que no comprueba ninguna cifra de potencia sino el propio simulador: se ejecuta con un efecto verdadero de cero y se verifica que la tasa de rechazo coincide con el nivel de significación nominal. Sin esa comprobación, todas las cifras de potencia serían incontrastables, porque no habría ningún caso de referencia con el que compararlas.
 
 \section{Reproducibilidad}
 \label{sec:reproducibilidad}

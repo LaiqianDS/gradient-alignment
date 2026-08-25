@@ -1,6 +1,8 @@
-# Datos experimentales: datasets, métricas, variables e hipótesis
+# Datos experimentales: datasets, particiones, arquitecturas y referencias
 
-**Estado: borrador de trabajo (2026-06-20). Hechos verificados contra el código y la bibliografía.** Documento para ordenar las ideas antes de redactar la metodología. Reúne tres tipos de información, cada uno con su fuente de verdad. Las *particiones, clases, arquitecturas y condiciones de entrenamiento* se derivan del código y se han cotejado línea a línea (`src/data.py`, `src/config.py`, `src/models.py`, `src/train.py`). Las *referencias bibliográficas* son anclas para situar el techo razonable de cada celda; las principales ya tienen cita firme y el resto queda en §6. Los *resúmenes de métricas, VDs e hipótesis* son punteros compactos a los documentos que mandan ([[Métricas]], [[1 - Diseño]], [[4 - Análisis]]); aquí no se redefine nada, solo se reúne.
+**Estado: borrador de trabajo (2026-06-20, depurado el 2026-08-25). Hechos verificados contra el código y la bibliografía.** Documento para ordenar las ideas antes de redactar la metodología. Su tema propio son los **datos experimentales**: datasets, particiones, arquitecturas, condiciones de entrenamiento, normalización y las anclas bibliográficas con las que se sitúa el techo razonable de cada celda. Las particiones, clases, arquitecturas y condiciones se derivan del código y se han cotejado línea a línea (`src/data.py`, `src/config.py`, `src/models.py`, `src/train.py`). Las referencias tienen cita firme en su mayoría; lo que queda abierto está en §6.
+
+**Aquí no se redefine nada que sea de otro documento.** Las variables dependientes, las hipótesis H1-H6, los baselines y la matriz de runs viven en [[1 - Diseño]]; la semántica de cada métrica, en [[Métricas]]. Las secciones §4 y §5 de este fichero son punteros a ellos, con una excepción: la tabla de signos esperados de §5.3 vive aquí, porque es lectura de artículos y no método.
 
 ---
 
@@ -23,7 +25,7 @@ Notas a la tabla:
 
 ### 1.1 Referencia por (dataset × arquitectura)
 
-Más útil que un único número por dataset, porque el estudio cruza tres arquitecturas y el régimen de cada celda depende de ello (las celdas FC sobre datasets difíciles se censuran por diseño, [[4 - Análisis]] §Censura). Hay que separar **dos regímenes** que la bibliografía suele mezclar:
+Más útil que un único número por dataset, porque el estudio cruza tres arquitecturas y el régimen de cada celda depende de ello (las celdas FC sobre datasets difíciles no alcanzan nunca su umbral, verificado en [[2 - Decisiones]]). Hay que separar **dos regímenes** que la bibliografía suele mezclar:
 
 - **Régimen comparable** (Tabla A): sin data augmentation, desde cero y a resolución nativa, que es justo el de este estudio (§3). Es el techo honesto al que nuestros runs deberían acercarse.
 - **Techo con augmentation** (al final de la sección): el mejor resultado publicado, casi siempre con *data augmentation, weight decay, schedule de learning rate y entrenamientos largos*. Solo sirve de cota laxa; nuestros runs deben quedar **por debajo**, y esa distancia es esperada, no un fallo.
@@ -107,54 +109,33 @@ Implicación: nuestros números **no** son comparables 1:1 con el SOTA augmentad
 
 ## 4. Métricas a utilizar (predictores)
 
-Las **8 métricas de gradiente** del registro completo más los baselines. El registro incluye además un ayudante diagnóstico (`cos_sim_batches`) que **no** se analiza como predictor. Se miden **al final de cada época** sobre el probe fijo, y el análisis las lee en las ventanas `f` (fracción del presupuesto), escogidas post-hoc de la trayectoria completa. Detalle y fórmulas en [[Métricas]]; jerarquía y justificación en [[4 - Análisis]] §Predictores. Se reportan **todas**, signifiquen o no; sin filtrado previo.
+Los predictores del estudio son las **8 métricas de gradiente** del registro completo (`REGISTRY` en `src/metrics/__init__.py`) más los baselines que no tocan el gradiente. Se miden al final de cada época sobre el probe fijo descrito en §3, y el análisis las lee en las ventanas `f`, la fracción del presupuesto de épocas.
 
-- **Nivel 0 (baseline, sin tocar el gradiente):** `val-acc@f` (**titular**, rival a batir de H2), `val-loss@f`, TSE-EMA@f. TSE-EMA es la media móvil exponencial de la train loss media por época (Ru et al., 2021); coste cero, porque la loss ya se computa en el forward. Comparador emparejado de VD1: épocas-hasta-umbral *predichas* invirtiendo un ajuste power-law sobre la curva de val-acc (descriptivo, fuera de las familias confirmatorias).
-- **Nivel 1 (gradiente barato):** varianza de gradiente normalizada (NGV, Faghri et al.), gradient noise scale (GNS, McCandlish et al.), gradient disparity (Forouzesh et al.).
-- **Nivel 2 (retadoras):** gradient confusion (Sankararaman et al.), stiffness (Fort et al.), m-coherence (Chatterjee & Zielinski), GSNR (Liu et al.), GWA (Hölzl et al.).
-
-El baseline no es la métrica más simple, es *el mejor predictor obtenible sin instrumentar el gradiente*: lo que da valor al estudio es el coste de medir el gradiente, así que el rival es lo que la curva de loss da gratis.
+La semántica de cada métrica, sus fórmulas y los nombres de columna que emite viven en [[Métricas]]. Los baselines sin gradiente están en [[1 - Diseño]] §Baselines: son lo que la curva de loss ya da sin coste, y son el rival que las métricas de gradiente tienen que batir para que H2 se sostenga.
 
 ---
 
 ## 5. Variables dependientes e hipótesis
 
-### 5.1 Variables dependientes (eficiencia y generalización)
+Las seis variables dependientes (VD1-VD6), con su definición exacta, la curva sobre la que se lee cada una y el nombre de la clave que emite, viven en [[1 - Diseño]] §Variables dependientes. Las convenciones de lectura están implementadas en `efficiency_summary` (`src/train.py`), y los valores calculados están en el `summary.json` de cada uno de los 960 runs.
 
-Curva de monitorización = **val**. VD1 y VD3 se leen sobre la curva suavizada (mediana móvil **centrada** de 3 épocas); VD2 integra la cruda (AUC trapezoidal). Las dos convenciones están implementadas en `efficiency_summary` (`src/train.py`); detalle en [[4 - Análisis]] §Variables.
+Aquí no se copian, para que no haya dos versiones que puedan divergir.
 
-| VD | Definición | Mide |
-|---|---|---|
-| **VD1 (primaria)** | épocas hasta cruzar el umbral de val-acc | velocidad |
-| **VD2** | AUC de la val-loss dentro del presupuesto | velocidad |
-| **VD3** | mejor val-loss dentro del presupuesto | velocidad |
-| **VD4** | `final_test_acc` (una sola medición al final) | rendimiento final |
-| **VD5 (gap, primaria de generalización)** | `final_test_loss − final_train_eval_loss` | sobreajuste |
-| **VD6** | `final_train_eval_acc − final_test_acc` | sobreajuste (robustez) |
+`seconds_to_threshold` se mide y se registra, pero conviene no leerlo como indicador de eficiencia: el wall-clock de un run mezcla lo rápido que aprende el modelo con la carga que tuviera la máquina y con el coste de la propia instrumentación, que es de algo más de 2x. Las épocas no tienen ese problema.
 
-El término de train del gap (`final_train_eval_*`) se evalúa sobre un **subconjunto fijo del train**, estratificado por clase y del tamaño del test, recortado con `SPLIT_SEED` (idéntico en todos los runs). Así el gap compara el test contra una porción de train comparable en tamaño y composición, no contra el train entero.
+### 5.1 Salvedad de datos (pilot, Tiny-ImageNet)
 
-Matiz sobre VD2 y VD3: la val-loss puede subir por **sobreconfianza** mientras la val-accuracy sigue mejorando (Ru et al., 2020, arXiv:2006.04492, Ap. C.1–C.2), lo que sesga el AUC y la mejor loss como proxies de velocidad. Por eso VD1, basada en accuracy, es la primaria también por esto.
+Los runs de `reports_pilot/` para Tiny-ImageNet tienen el `final_test_acc` **mal calculado** (bug previo a la corrección), así que VD4 y, por depender del test, VD5 y VD6 no son fiables en esas celdas del pilot; las métricas del lado val (VD1-VD3) y el timing sí lo son. Desde el 2026-07-17 la referencia corregida vive **dentro de cada run del pilot**: `reports_pilot/<run>/testfix_40ep/` contiene la celda re-corrida con la corrección (mismo LR centrado y seed 0, pero al presupuesto calibrado de 40 épocas, no a las 160 del pilot: horizontes distintos, no intercambiables), y el `summary.json` corrupto se auto-declara con la clave `_tiny_test_note`. La antigua `reports_validity/` quedó retirada tras la fusión. La referencia sirve para apuntar test-acc/gap por celda, no para análisis (un solo LR y seed); como todos los `reports_*` está gitignored, y el test-acc definitivo de Tiny saldrá de la matriz completa, ya con el código corregido.
 
-`seconds_to_threshold` queda **fuera** del análisis confirmatorio (el wall-clock en cluster compartido está confundido por la contención); solo exploratorio.
+### 5.2 Hipótesis y contrastes
 
-**Salvedad de datos (pilot, Tiny-ImageNet).** Los runs de `reports_pilot/` para Tiny-ImageNet tienen el `final_test_acc` **mal calculado** (bug previo a la corrección), así que VD4 y, por depender del test, VD5 y VD6 no son fiables en esas celdas del pilot; las métricas del lado val (VD1-VD3) y el timing sí lo son. Desde el 2026-07-17 la referencia corregida vive **dentro de cada run del pilot**: `reports_pilot/<run>/testfix_40ep/` contiene la celda re-corrida con la corrección (mismo LR centrado y seed 0, pero al presupuesto calibrado de 40 épocas, no a las 160 del pilot: horizontes distintos, no intercambiables), y el `summary.json` corrupto se auto-declara con la clave `_tiny_test_note`. La antigua `reports_validity/` quedó retirada tras la fusión. La referencia sirve para apuntar test-acc/gap por celda, no para análisis (un solo LR y seed); como todos los `reports_*` está gitignored, y el test-acc definitivo de Tiny saldrá de la matriz completa, ya con el código corregido.
+Las seis hipótesis H1-H6 viven en [[1 - Diseño]] §Hipótesis a contrastar, enunciadas como afirmaciones falsables. El método con el que se decidirá cada una está **por definir**: el plan de análisis anterior se retiró el 2026-08-25 ([[2 - Decisiones]]), así que hoy no existe criterio escrito para ninguna.
 
-### 5.2 Hipótesis / objetivos de análisis
+Las ventanas `f`, la fracción del presupuesto de épocas en la que se leen las métricas, sí están fijadas en `src/config.py` (`windows = (0.05, 0.10, 0.25, 0.50, 1.0)`) y se registran en `metrics_at_window.parquet`.
 
-Inferencia en **dos etapas**: Spearman ρ por celda (descriptivo) + Wilcoxon entre celdas (confirmatorio). El ρ de cada celda es solo un estadístico-resumen, **no** una prueba: los 40 runs de una celda no son independientes, porque el learning rate los clusteriza. La confirmación ocurre **entre celdas**, donde los runs sí son disjuntos. Criterios completos en [[4 - Análisis]] §Contrastes.
+### 5.3 Tabla de signos esperados
 
-- **H1 (existencia):** ≥1 métrica de gradiente con `|mediana ρ| ≥ 0,3` y `q < 0,05` entre celdas.
-- **H2 (valor incremental, la decisiva):** ≥1 métrica conserva poder *tras controlar por el baseline de loss* (correlación parcial). Si H1 ✓ y H2 ✗, las métricas son redundantes con la curva de loss (negativo válido).
-- **H3 (familia ganadora):** ¿alineación o variabilidad predice mejor? (pregunta abierta, ligada al título).
-- **H4 (suficiencia temprana):** la señal satura pronto (no-inferioridad de `f = 0,10` frente a `f = 0,50`).
-- **H5 (invariancia cross-optimizador):** concordancia de signo de ρ entre pares SGD↔Adam.
-- **H6 (mecanismo, con signo):** concordancia con la tabla de signos preregistrada (§5.3).
-- **Gap (doble disociación, generalización):** las métricas que reclaman generalización (GSNR, GWA, gradient disparity, stiffness, m-coherence) se asocian más al gap que a la velocidad, y las de velocidad al revés. Las métricas de velocidad (gradient confusion, NGV, GNS) **no** tienen predicción direccional propia sobre el gap: su asociación se reporta, pero la predicción fuerte es la disociación misma, no un signo.
-
-**Ventanas:** primaria `f = 0,10`; secundarias `f ∈ {0,05, 0,25, 0,50}`; `f = 1,0` solo referencia de saturación. Están fijadas en `src/config.py` (`windows = (0.05, 0.10, 0.25, 0.50, 1.0)`).
-
-### 5.3 Tabla de signos esperados (vs VD1: épocas-hasta-umbral, menor = más rápido)
+Qué signo predice el paper de cada métrica frente a VD1 (épocas hasta el umbral, menos es más rápido). Es el material que sostiene H6, así que vive aquí y no en un documento de método.
 
 | Métrica | Signo | Base |
 |---|---|---|
@@ -169,7 +150,7 @@ Inferencia en **dos etapas**: Spearman ρ por celda (descriptivo) + Wilcoxon ent
 | `val-acc@f` (baseline) | − | por construcción |
 | TSE / `val-loss@f` (baselines) | + | por construcción |
 
-Verificado contra los papers el 2026-07-17 (veredictos y citas en [[2 - Decisiones]]). El reparto real de predicciones fuertes: GSNR la lleva sobre el gap (signo −, vía OSGR; el gap del paper es en loss, la misma cantidad que VD5), y su + vs VD4 es derivación, no claim del paper. GWA la lleva sobre VD4 (signo +; Pearson 0,99 solo en ConvNeXt/CIFAR-10, 0,92 cross-arquitectura, medida sobre el máximo de alineamiento de la trayectoria completa, no en ventana temprana), y su − vs el gap es direccional cualitativo (el paper nunca mide test loss − train loss). m-coherence mantiene el − vs el gap con la salvedad del propio paper (conexión "complicated": con 100% label noise la coherencia también alcanza valores altos; lo informativo según la teoría es la coherencia temprana, lo que favorece la ventana del TFG). La aparente contradicción de signos (+ vs VD4 pero − vs el gap) es solo aritmética: VD4 y el gap apuntan a sentidos opuestos de «bueno» (más test-acc es mejor, más gap es peor). Además, VD5/VD6 forman **familia FDR propia** con dos controles preregistrados: un suelo de ajuste (se excluyen runs que no aprenden lo bastante el train) y correlación parcial por `final_train_eval_loss`.
+Verificado contra los papers el 2026-07-17 (veredictos y citas en [[2 - Decisiones]]). El reparto real de predicciones fuertes: GSNR la lleva sobre el gap (signo −, vía OSGR; el gap del paper es en loss, la misma cantidad que VD5), y su + vs VD4 es derivación, no claim del paper. GWA la lleva sobre VD4 (signo +; Pearson 0,99 solo en ConvNeXt/CIFAR-10, 0,92 cross-arquitectura, medida sobre el máximo de alineamiento de la trayectoria completa, no en ventana temprana), y su − vs el gap es direccional cualitativo (el paper nunca mide test loss − train loss). m-coherence mantiene el − vs el gap con la salvedad del propio paper (conexión "complicated": con 100% label noise la coherencia también alcanza valores altos; lo informativo según la teoría es la coherencia temprana, lo que favorece la ventana del TFG). La aparente contradicción de signos (+ vs VD4 pero − vs el gap) es solo aritmética: VD4 y el gap apuntan a sentidos opuestos de «bueno» (más test-acc es mejor, más gap es peor).
 
 ---
 

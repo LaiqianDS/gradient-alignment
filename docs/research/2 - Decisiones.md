@@ -8,9 +8,19 @@ El *qué decidimos y por qué* vive aquí; el *estado resultante del diseño*, e
 
 Bloquean experimentos. La acción para resolverlas vive en [[3 - Progreso]] (Pasos inmediatos).
 
-**Ninguna a 2026-08-02.** La última que quedaba, la congelación del plan de análisis, se cerró ese día (ver el log). Lo que queda hasta lanzar la matriz ya no son decisiones sino ejecución.
+**El método de análisis, entero (abierto el 2026-08-25).** Los 960 entrenamientos están hechos y sus datos versionados en `reports/`. No hay método definido para analizarlos: el plan anterior se retiró (ver el log de hoy). Lo que queda por decidir es, hipótesis por hipótesis, con qué cuenta concreta se responde. Es la única pendiente, y bloquea el capítulo de resultados.
 
 ## Tomadas (log)
+
+### 2026-08-25
+
+#### Se retira el plan de análisis
+
+Se borran `4 - Análisis.md` (el plan preregistrado y congelado), `src/power_analysis.py` con sus pruebas, y el §Protocolo de análisis de [[1 - Diseño]]. Las seis hipótesis se conservan en [[1 - Diseño]] como afirmaciones falsables, ahora sin criterio de decisión.
+
+**Por qué.** El plan había crecido hasta un punto en que ya no se entendía por completo, y un método que no se entiende no se puede defender ante un tribunal. Se prefiere partir de una base comprensible y construir el análisis desde ahí, hipótesis por hipótesis.
+
+**Consecuencia que hay que declarar en la memoria.** El plan estaba congelado y commiteado antes del primer resultado, lo que permitía afirmar que el análisis precedía a los datos. Al retirarlo, el análisis que se haga es **posterior a los datos** y así debe presentarse. El plan retirado sigue íntegro en el historial de git por si hiciera falta recuperarlo.
 
 ### 2026-08-08
 
@@ -18,43 +28,33 @@ Las tres entradas de esta fecha salen de la primera revisión de la matriz en ma
 
 #### El coste de instrumentación documentado era anterior al barrido compartido
 
-La cifra de 3,21x que este log y [[4 - Análisis]] venían citando como peor caso procede del pilot, que se ejecutó el 2026-06-15. El barrido compartido entró dos días después (commit `8566fc3`, `perf(metrics): share one per-sample gradient sweep per probe`). **Todas las cifras de coste del vault eran, por tanto, de una versión del código que ya no es la que corre la matriz.**
+La cifra de 3,21x que este log venía citando como peor caso procede del pilot, que se ejecutó el 2026-06-15. El barrido compartido entró dos días después (commit `8566fc3`, `perf(metrics): share one per-sample gradient sweep per probe`). **Todas las cifras de coste del vault eran, por tanto, de una versión del código que ya no es la que corre la matriz.**
 
 Medido ahora celda a celda contra el pilot, el sobrecoste baja de 3,09x a 2,04x en `fc × cifar10 × sgd`, de 2,40x a 1,65x en `resnet18 × mnist`, de 1,77x a 1,40x en `fc × mnist` y de 1,05x a 1,02x en `cnn × mnist`. El peor caso medido sobre la matriz es **2,04x**. Las dos celdas que encabezaban el pilot (`fc × cifar100` y `fc × tiny_imagenet`) todavía no han corrido; escalando el factor observado quedarían alrededor de 2,1x, dentro de la cota <3-4x con bastante más holgura que antes.
 
 Que la causa es la optimización y no otra cosa se comprueba con tres hechos: el tiempo de entrenamiento por época es el mismo (1,671 s en el pilot frente a 1,638 s en la matriz), el de medición se reduce a la mitad, y las trayectorias de la misma configuración salen **idénticas bit a bit** durante las 40 épocas. Eso último es exactamente lo que promete el invariante de que la ruta compartida y la independiente coincidan hasta el último bit, así que el hallazgo confirma la optimización además de corregir el número.
 
-**δ_H2 se queda en 0,15.** El plan usa el coste como justificación del margen, no como fórmula que lo calcule, y 2x sigue siendo un coste que justifica exigir esa parcial. Bajarlo solo restaría potencia a la hipótesis decisiva. La corrección se declara igualmente como enmienda en [[4 - Análisis]] por ser factual y afectar a dos secciones del preregistro.
+**La corrección no cambió ninguna decisión.** El coste servía para justificar cuánto había que exigirle a una métrica de gradiente para que mereciera la pena, no para calcularlo, y 2x sigue siendo un coste alto. (El margen concreto, δ_H2 = 0,15, pertenecía al plan de análisis retirado el 2026-08-25.)
 
-#### `fc × cifar10` degenera en VD1, y la proyección deja VD1 justo en el suelo de 18 celdas
+#### FC no alcanza el umbral en CIFAR-10, CIFAR-100 ni Tiny-ImageNet
 
-Los 26 runs terminados de `fc × cifar10 × sgd` están **censurados los 26**: el umbral de CIFAR-10 es 0,65 de val-acc y el mejor run llega a 0,584. Por la regla de celda degenerada, una celda con más del 80% de censura sale de VD1 para todas las métricas.
+Verificado sobre los 960 runs (2026-08-25). Ninguna de las seis celdas de FC fuera de MNIST alcanza nunca su umbral de val-accuracy, con ninguna de las 8 tasas de aprendizaje ni ninguna de las 5 semillas. Los techos medidos: 0,584 y 0,569 contra un umbral de 0,65 en CIFAR-10; 0,295 y 0,289 contra 0,35 en CIFAR-100; 0,114 y 0,108 contra 0,20 en Tiny-ImageNet.
 
-No es falta de presupuesto. El pilot corrió esa configuración al presupuesto doblado, 80 épocas, y tocó techo en 0,584 justo en la época 40 para quedarse plano el resto. Una red totalmente conectada no llega a 0,65 en CIFAR-10; es el techo de la arquitectura, y por eso `fc × cifar10 × adam` caerá igual.
+El contraste que lo explica: la misma red FC **sí** pasa el umbral en MNIST, con 0,987 y 0,985 contra 0,97. No es falta de presupuesto ni un fallo de configuración. El pilot corrió esa configuración al presupuesto doblado, 80 épocas, y tocó techo en la época 40 para quedarse plano el resto. Es el techo de la arquitectura.
 
-[[4 - Análisis]] anticipaba que esto pasaría con FC sobre CIFAR-100 y Tiny-ImageNet, es decir 4 celdas. Con CIFAR-10 dentro son **6**, y la proyección deja VD1 con **18 celdas elegibles**, que es exactamente el suelo por debajo del cual el propio plan manda declarar el estudio incompleto y pasar todo a exploratorio. Margen cero. Quedan además dos celdas en riesgo razonable de degenerar también, `cnn × cifar100` contra 0,35 y `cnn × tiny_imagenet` contra 0,20.
+Consecuencia práctica: en esas seis celdas, "cuántas épocas tarda en llegar al umbral" no existe para ningún run. Cualquier análisis que use ese indicador trabaja con 18 de las 24 celdas.
 
-**No se toca el umbral de CIFAR-10.** Sería mover un criterio congelado después de ver que una celda no lo alcanza, y el propio plan degradaría VD1 a exploratoria. Conviene dejar anotado que la restricción es del preregistro y no del dato: recalculando `epochs_to_threshold` desde `trajectory.parquet` con la misma mediana móvil de tres épocas sale idéntico al de `summary.json` en **268 de 268** runs, así que un cambio de umbral no costaría cómputo. Si el tutor decidiera que la calibración estuvo mal hecha, es corregible a coste cero, pero como enmienda declarada y con esa consecuencia asumida.
+#### Muchos entrenamientos se quedan clavados en el azar, y se detectan por un cero exacto
 
-#### Runs colapsados: la regla de divergencia no los cubría, y solo afectan a GWA
+Verificado sobre los 960 runs (2026-08-25). En las tasas de aprendizaje altas hay entrenamientos que no aprenden nada: su accuracy de validación se queda en el azar. Son **154 de 960** por el criterio de "mejor val-acc por debajo de 1,2 veces el azar", repartidos por 16 de las 24 celdas. No es una curiosidad de un conjunto de datos concreto.
 
-De los 268 runs, 11 divergen con NaN, que es lo previsto. Pero hay **26 que colapsan sin divergir**: se quedan finitos, con la loss de entrenamiento clavada en 2,30 que es ln(10), y la accuracy en el 10% que es el azar. Están en `cnn × mnist` (21) y `fc × mnist × adam` (5), todos en las tasas de aprendizaje altas.
+**El mecanismo, comprobado.** Las ReLU mueren, la última capa recibe un vector de entrada exactamente nulo y el clasificador solo emite su sesgo. El gradiente del peso de la última capa es entonces exactamente cero, y como GWA protege su norma con un `clamp_min(EPS)`, `gwa/score_mean` sale **0,0 exacto**. Un cero exacto en coma flotante no sale por casualidad, así que sirve de firma: aparece en 124 runs y, en los afectados, ocupa de media el 74% de las épocas.
 
-Lo que les pasa es que las ReLU mueren, la última capa recibe un vector de entrada exactamente nulo y el clasificador solo emite su sesgo. Importa porque la regla de divergencia del lado predictor (2026-07-25) decide con la finitud de la fila, y estas filas son perfectamente finitas: el caso se le escapa. Y como se concentra en las tasas altas, que son también las lentas y las censuradas, es la misma estructura de confusión que aquella regla existía para impedir.
+**Lo que NO se sostiene.** La versión anterior de esta entrada, escrita con 268 runs, decía que el cero exacto "discrimina sin ambigüedad". Sobre los 960 no es así: de los 124 runs con cero exacto, 115 acaban clavados y **9 no**. La firma es fuerte, no infalible.
 
-**El alcance real es mucho más estrecho de lo que parecía, y conviene ser preciso sobre por qué.** Los gradientes por muestra no son nulos (`var/avg` = 1,9·10⁻⁶ > 0 en todas las épocas), así que la mayoría de columnas son mediciones reales de una geometría degenerada: `gsnr/mean`, `mcoh/global` y los cosenos de confusión salen con valores ordinarios. Incluso `stiffness/cos_within` = 1,0 exacto es real, porque con la entrada de la última capa a cero el único gradiente no nulo es el del sesgo, que es literalmente el mismo vector para todas las muestras de una clase.
-
-La única cantidad fabricada es **`gwa/score_mean`**. GWA usa el gradiente del peso de la última capa, que aquí sí es exactamente cero, y su norma se protege con `clamp_min(EPS)`, de modo que el coseno sale 0/EPS = 0,0 exacto. El coseno de un vector nulo no existe; ese 0,0 es un relleno, y es justo "un valor que parece medido y no lo es". `gwa/kurt` y `gwa/value` ya salen NaN por la rama documentada de varianza nula.
-
-**Regla, y se aplica en el análisis, no en el entrenamiento.** Un `gwa/score_mean` exactamente igual a 0,0 se marca como faltante para GWA en ese (run, época), igual que hace la regla de 2026-07-25 con las columnas de signo. Discrimina sin ambigüedad: los 22 runs que lo cumplen están colapsados y ninguno de los 242 sanos lo cumple. Los runs colapsados **siguen dentro** del estudio para todo lo demás, porque un run que colapsa es genuinamente ineficiente y una métrica que lo anticipe temprano es genuinamente útil, que es la misma lógica por la que los censurados entran con el peor rango en vez de tirarse.
-
-Como el valor 0,0 es detectable a posteriori sobre lo ya registrado, esto **no obliga a re-correr nada ni a tocar `src/` mientras la matriz corre**. Arreglar `gwa.py` para que devuelva NaN en vez de 0,0 queda pendiente para cuando la matriz termine, y es cosmético una vez la regla está escrita.
+Qué se hace con estos runs al analizar está **por decidir**, como el resto del análisis.
 
 ### 2026-08-05
-
-#### Renombrado del plan congelado a `4 - Análisis.md`
-
-El preregistro pasa a llamarse [[4 - Análisis]] y entra en la serie numerada. El motivo es de orden de lectura: los cuatro documentos que mandan son ahora *qué y por qué* (1), *decisiones* (2), *estado* (3) y *cómo se decide cada hipótesis* (4), y el número lo dice sin que haya que leer el índice. No se pierde la marca de congelado: el estado sigue en la primera línea del propio documento y el acto quedó registrado en la entrada del 2026-08-02, con su commit. Se actualizaron todos los enlaces del vault, la referencia del README raíz, la del notebook y la del backend de análisis, que además apuntaba todavía a la ruta antigua en `pending/`.
 
 #### Corregido el estadístico de degeneración de los diagnósticos de sanidad
 
@@ -72,39 +72,7 @@ El diagnóstico que responde "¿esta métrica llega a moverse dentro de un entre
 
 La versión corregida deja de emitir una etiqueta `degenerate` y publica solo la comparación contra la referencia (`below_noise`). El motivo es que 1/√2 es el valor **asintótico**: una métrica que fuera puro ruido cae a un lado o a otro de la línea aproximadamente la mitad de las veces, de modo que un booleano por run afirma una decisión que el estadístico no sostiene con una sola trayectoria. Lo que se lee es la distribución completa de los 24 runs frente a la línea. Nada del plan congelado depende de esta etiqueta: sus reglas de exclusión son sobre degeneración de VD1 por celda, no sobre métricas.
 
-### 2026-08-02
-
-#### Congelación del plan de análisis (acto formal)
-
-El plan se movió de `pending/` a `docs/research/` y se commiteó en `e433377`, con lo que queda bajo control de versiones y **anterior al primer commit de resultados**. Esto cierra la última pendiente del proyecto.
-
-**Por qué el acto importaba y no era trámite.** El plan había sido borrado de git en el commit `563d5a5` y desde entonces vivía solo en `pending/`, que está en `.gitignore`. Es decir, existía el documento pero **no existía ninguna prueba verificable de que precediera a los datos**, que es justamente lo que un preregistro tiene que poder demostrar. El commit es lo que crea esa prueba: no hay que creerse que el plan es anterior a los resultados, se comprueba en el historial.
-
-**El orden queda garantizado por construcción.** `reports/` se versiona a propósito (decisión 2026-07-25, hace además de backup incremental de la Fase 4), así que el primer commit de resultados dejará su propia marca temporal en el historial, por detrás de `e433377`. Se verificó explícitamente que `reports/` sigue **sin** estar en `.gitignore`.
-
-**Qué rige desde ahora.** No se mira ningún resultado de matriz fuera de lo que el plan prescribe. Toda modificación posterior pasa por la política de enmiendas del propio plan: se anota con fecha y motivo en su §Historial de revisiones, se marca como enmienda y se declara en la memoria, y si la enmienda es posterior a haber visto resultados degrada a exploratorio el contraste que toca.
-
-**Contexto del commit.** Fue uno de cinco commits del 2026-08-02, ordenados a propósito: la escritura atómica de `summary.json` primero (prerrequisito para lanzar), después `src/power_analysis.py` (porque el plan lo cita como su fuente de reproducibilidad y no debe referenciar código inexistente), después la congelación, y al final la redacción de la memoria y el notebook del pilot, separados por no tener relación con el acto.
-
 ### 2026-08-01
-
-#### Revisión estadística del plan de análisis, antes de congelarlo
-
-Pasada crítica sobre la cadena objetivo → hipótesis → test, con las skills de estadística y con simulación. Toda ella anterior a existir ningún dato de matriz. El detalle vive en [[4 - Análisis]] §Historial; aquí queda el *qué y por qué*.
-
-**Suelo de ajuste del gap, cerrado.** Umbral absoluto por dataset reutilizando los umbrales de accuracy que VD1 ya usa sobre val, aplicados sobre train: MNIST 0,97; CIFAR-10 0,65; CIFAR-100 0,35; Tiny 0,20. No se calibra sobre el pilot porque el pilot no puede hacerlo con honestidad (un valor por celda, al LR central, a presupuesto doblado, sin cubrir el barrido de LR que es lo que puebla esa distribución en la matriz). Reutilizar un número ya congelado y ya justificado añade cero grados de libertad al investigador, y el argumento es de una frase: un run que no alcanza sobre train la accuracy que el estudio exige sobre val no aprendió. Se declara como filtro de "no aprendió" y no como calibración fina; la carga del confusor la lleva la parcial por `final_train_eval_loss`.
-
-**La nota de potencia estaba calculada al α equivocado.** Se recalculó por simulación Monte Carlo (`src/power_analysis.py`, con tests). Confirma el punto central del plan (24 celdas, mediana ρ = 0,30 → potencia 0,993) pero calculaba a α = 0,05 cuando el criterio decide a q, ignorando la multiplicidad. De paso apareció el **suelo discreto** del Wilcoxon: con menos de 9 celdas el p mínimo alcanzable supera el α corregido, así que el test no puede rechazar tenga el efecto que tenga. De ahí el mínimo de 18 celdas elegibles para la regla de matriz incompleta, que antes era un 12 puesto por analogía.
-
-**H2 gana un brazo de equivalencia y cambia de covariable.** El negativo de H2 es una contribución declarada de la tesis, pero un contraste que solo puede rechazar la nula lo convierte en "no encontramos nada", indistinguible de la falta de potencia (con una parcial real de 0,15 la detección es del 0,46). Se añade un TOST con δ = 0,15 anclado en el coste de instrumentación medido (~2,1x según la lectura de entonces; el peor caso real es 3,2x, ver la corrección del 2026-08-05, que solo refuerza el ancla), no en una convención: por debajo de esa parcial, la métrica explica menos del 2,3% de varianza residual, irrelevante a ese precio. Y la parcial primaria pasa de tres covariables a **una** (`val-acc@f`): las tres son casi colineales, así que k = 3 daba casi el mismo ajuste con más varianza, gastando potencia justo en la hipótesis decisiva.
-
-**El criterio de H3 estaba sesgado y se sustituye.** Contaba en cuántas celdas la métrica de mayor ΔR² pertenecía a cada familia, exigiendo 16 de 24. Pero alineación tiene 5 métricas y variabilidad 3, así que bajo la nula el argmax cae en alineación con probabilidad 5/8: **15 celdas esperadas por azar**, y probabilidad **0,42** de superar el umbral sin efecto alguno. El criterio favorecía a la familia que el título apuesta. Se sustituye por la diferencia pareada de medianas de |ρ| por familia dentro de cada celda, insesgada respecto al tamaño de familia y sin maquinaria nueva.
-
-**H6 tenía que tener una nula y no la tenía.** Era la única hipótesis sin criterio de falsación, pese a estar descrita como "prueba más exigente que la magnitud". Se le da el binomial exacto de concordancia de signos contra 0,5, el mismo test que H5. **H5**, a su vez, se restringe a las métricas que superaron H1 (misma disciplina que H4) y declara la no independencia de sus 12 pares.
-
-**Atenuación desigual de ρ por censura.** Ningún documento la recogía: un bloque de rangos empatados comprime el |ρ| alcanzable en proporción a la censura, que está correlacionada con la dificultad de la celda, o sea el confusor que la inferencia en dos etapas existía para evitar. No se corrige el estimador; se vigila con dos comprobaciones que no cuestan cálculo nuevo (etapa 2 restringida a celdas con <25% de censura, y VD2/VD3 como control sin censura).
-
-**Descartado: validación leave-one-cell-out.** Se consideró añadir un contraste fuera de muestra, porque todo el diseño es asociación dentro de muestra. Se descarta: su información marginal sobre el Wilcoxon cross-celda y la fracción de signos consistentes es pequeña, y no compensa añadir un contraste, una familia de corrección y una salvedad de potencia. Queda como trabajo futuro y la limitación se declara en la memoria.
 
 #### Orden de ejecución de la matriz, fijado antes de lanzarla
 
@@ -124,9 +92,9 @@ El motivo de sacar `mnist × cnn` fuera del orden natural es de diagnóstico, no
 
 Cierra la decisión abierta desde el pilot ([[3 - Progreso]], Pasos inmediatos). Se mantiene la medición tal cual: registro completo de las 8 métricas + baseline al final de cada época, sobre la probe fija de M=256, en toda la rejilla. La prioridad declarada es disponer de datos suficientes: la serie temporal completa por época.
 
-- **Por qué.** El peor caso medido es ~3,2x el wall-clock de un run sin instrumentar, dentro de la cota <3-4x fijada. (Corregido el 2026-08-05: esta entrada citaba fc × tiny_imagenet a 2,08x; ese es el run de mayor coste absoluto, pero el de mayor cociente es fc × cifar100, donde medir cuesta 2,21 s por cada segundo de entrenar. La conclusión de mantener la medición completa no cambia.) Conservar la serie completa preserva la elección de ventanas a posteriori y la línea exploratoria post-meseta anotada como trabajo futuro.
+- **Por qué.** El peor caso, ya medido sobre la matriz completa, es **2,048x** el wall-clock de un run sin instrumentar, en `fc × cifar100 × sgd`, dentro de la cota <3-4x fijada. Cifra corregida el 2026-08-08: las lecturas anteriores salían del pilot, anterior al barrido compartido, y sobrestimaban. La conclusión de mantener la medición completa no cambia. Conservar la serie completa preserva la elección de ventanas a posteriori y la línea exploratoria post-meseta anotada como trabajo futuro.
 - **Alternativas descartadas.** Bajar la cadencia de medición (pierde resolución de trayectoria y complica el snap exacto de ventanas); submuestrear la probe (M=256 está congelado por comparabilidad cross-celda: tocarlo introduce un confusor); fusionar las 2 batch-sweeps restantes (NGV, gradient disparity) en el sweep compartido (palanca válida de ingeniería, pero no bit-idéntica, cambios ~1e-6 frente a los valores que los tests pinean; queda como optimización futura si el coste apretara).
-- **Consecuencia.** El coste aceptado ya está incluido en la proyección de ~147 GPU-h del registro de abajo (el pilot midió las métricas dentro del wall-clock por celda).
+- **Consecuencia.** La proyección de ~147 GPU-h del registro de abajo sobrestimaba, porque salía del pilot. La matriz completa consumió **121,7 h** de reloj: 97,6 h de entrenamiento y 24,1 h de instrumentación, sumadas sobre los 960 `summary.json`.
 
 #### Presupuestos y umbrales definitivos del pilot (registro formal)
 
@@ -142,7 +110,7 @@ Cierra el "registrar aquí los valores finales con su evidencia" de la decisión
 
 #### Tabla de signos de H6 verificada contra los papers
 
-Verificación previa a la congelación ([[3 - Progreso]], Pasos inmediatos), realizada con 6 subagentes de lectura sobre los PDFs del vault (GSNR/Liu, Coherent Gradients/Chatterjee, Making Coherence/Chatterjee & Zielinski, GWA/Hölzl, GNS/McCandlish, TSE/Ru). La tabla corregida vive en [[Datos experimentales]] §5.3 y en [[4 - Análisis]]; cambios y evidencia clave:
+Verificación previa a la congelación ([[3 - Progreso]], Pasos inmediatos), realizada con 6 subagentes de lectura sobre los PDFs del vault (GSNR/Liu, Coherent Gradients/Chatterjee, Making Coherence/Chatterjee & Zielinski, GWA/Hölzl, GNS/McCandlish, TSE/Ru). La tabla corregida vive en [[Datos experimentales]] §5.3; cambios y evidencia clave:
 
 - **m-coherence vs VD1: sigue −, pero la base fuerte cambia de paper.** Chatterjee & Zielinski no afirma velocidad (su α es eficiencia por paso, definicional; las menciones de velocidad son citas a terceros). El claim explícito es de Chatterjee 2020 (CGH): "we expect that greater the agreement in per-example gradients, the faster loss should decrease" (§2.2) y "as noise increases, the time taken to reach a given level of accuracy (i.e., realized learning rate) increases" (§2.3). Matiz: medido sobre train accuracy; la extensión a val es razonada.
 - **GSNR vs VD4: de fuerte a extrapolada.** El paper solo afirma el gap ("larger GSNR during training process leads to better generalization performance", vía OSGR, ec. 22; el gap es en loss, la misma cantidad que VD5); no hay claim de test accuracy. Su predicción fuerte es − vs el gap. Matices: la teoría se deriva en fase temprana (favorece la ventana del TFG) pero con full-batch GD, no SGD.
@@ -161,7 +129,7 @@ Confirmado por el tutor el 2026-06-14 e implementado el mismo día en `src/data.
 
 - **Qué se mide.** Cinco claves nuevas en `summary.json`: `final_gap_loss = final_test_loss − final_train_eval_loss` (primaria; positivo = sobreajuste), `final_gap_acc = final_train_eval_acc − final_test_acc` (robustez, mismo sentido), sus términos `final_train_eval_loss`/`final_train_eval_acc`, y `final_test_loss` (la evaluación final ya recorría el test; solo se le añadió la loss).
 - **Cómo.** Una pasada `evaluate()` extra al final del run, en modo eval y con los mismos pesos, sobre un subconjunto fijo y estratificado por clase del train recortado, de tamaño igual al test y muestreado con `SPLIT_SEED` (idéntico en todos los runs, independiente de la semilla del run; `build_train_eval_loader` en `data.py`). Coste: segundos por run, una vez. Solo toca la evaluación final, como el protocolo ya implementado.
-- **Controles pre-registrados** (contra el confound del presupuesto fijo): suelo de ajuste (los contrastes del gap excluyen runs cuyo `final_train_eval_acc` no alcance un mínimo calibrado en el pilot; esos runs siguen contando para velocidad y rendimiento) y correlación parcial de Spearman por `final_train_eval_loss`. Más reporte por celda (mediana + peor caso) para todas las familias. Detalle en [[4 - Análisis]].
+- **Confound conocido** (el presupuesto de épocas es fijo): a presupuesto fijo, un gap pequeño puede significar que el modelo generaliza bien o que no ha aprendido lo suficiente, y las dos cosas se confunden. Quien analice el gap tiene que separarlas, por ejemplo excluyendo los runs que no aprenden el train o controlando por `final_train_eval_loss`. Cómo hacerlo está por decidir.
 - **Respaldo.** La cantidad (riesgo de test − riesgo empírico) y el rol (gap como variable dependiente de un estudio correlacional) son de la literatura: Jiang et al. 2020 (arXiv:1912.02178), Dziugaite et al. 2020 (arXiv:2010.11924); incluso la estimación del término de train por submuestreo tiene precedente en Jiang §3. Lo propio del TFG son los dos controles.
 - **Verificación.** Suite en verde (tests nuevos: subconjunto train-eval estratificado/fijo/del tamaño del test; claves del gap y sus signos en el smoke test) + run corto de MNIST: `final_gap_loss` ≈0.02 a 1 época y ≈0.09 a 12 (positivo y monótono, signo correcto).
 - **Qué queda.** El pilot calibra el suelo de ajuste (distribución de `final_train_eval_acc` por celda). Sin impacto en presupuestos ni umbrales.
@@ -237,7 +205,7 @@ Resuelve el budget de cómputo y cierra la variante de ResNet. Spec ejecutable e
 - **Profundidad por celda.** 8 LR × 5 seeds = 40 runs/celda → ~960 runs, por encima del suelo n ≥ 30. A conteo fijo se prioriza tener más LR distintos (dan la dispersión del predictor) sobre más seeds (que dan intervalos de confianza). Mismas seeds {0,1,2,3,4} en todas las celdas para comparación pareada entre SGD y Adam (sostiene H5).
 - **Tiny-ImageNet entra.** Como cabe en cómputo, se confirma el condicional anterior: cuarto dataset, sube el techo de dificultad sobre CIFAR-100. Actualizado [[1 - Diseño]] §Setup de entrenamiento.
 - **ResNet-18 fija la variante.** La rejilla se congela con ResNet-18 (adaptada a imágenes pequeñas, ya en código). Cierra la pendiente "Variante de ResNet".
-- **Todas las métricas implementadas en toda la rejilla.** El cluster hace viables las caras (m-coherence, gradient confusion); en ResNet-18 las per-sample van last-layer-only. Computar el conjunto completo de antemano no contradice "no añadir métricas a posteriori": la lista *reportada* se decide luego por poda con prueba (pendiente "Lista definitiva de métricas" + decisión de poda de abajo).
+- **Todas las métricas implementadas en toda la rejilla.** Computar el conjunto completo de antemano no contradice "no añadir métricas a posteriori": la lista *reportada* se decide luego por poda con prueba (pendiente "Lista definitiva de métricas" + decisión de poda de abajo). (Corregido: esta entrada decía que el cluster hacía viables las caras y que en ResNet-18 las per-sample iban last-layer-only. Ninguna de las dos se sostiene. Hay una sola GPU desde el 2026-07-17, y lo que hace viables las caras es el troceado en filas del barrido per-sample, que recorre todos los parámetros; GWA es la única métrica last-layer.)
 - **Horizonte septiembre.** La rejilla completa asume el Plan B de septiembre ([[3 - Progreso]]); no se compromete a entrar antes del 22-jun.
 
 #### Decisiones de ejecución

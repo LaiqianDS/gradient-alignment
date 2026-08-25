@@ -27,7 +27,7 @@ Examples::
     python src/run_matrix.py --init           # write the 24 cell configs
     python src/run_matrix.py --status         # how many of the 960 are done?
     python src/run_matrix.py                   # run all pending runs (resume)
-    python src/run_matrix.py --dataset mnist   # restrict to one dataset (cluster slice)
+    python src/run_matrix.py --dataset mnist   # restrict to one dataset (grid slice)
     python src/run_matrix.py --dry-run         # print what would run, run nothing
 """
 

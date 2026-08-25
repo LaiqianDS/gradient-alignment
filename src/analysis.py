@@ -20,10 +20,9 @@ tables and figures:
   the later "prune redundant metrics" decision -- NOT a confirmatory test).
 
 Scope note. The calibration pilot has **one run per cell**, so there is no
-intra-cell predictor spread to correlate against efficiency: nothing here touches
-the frozen confirmatory plan (``docs/research/4 - Análisis.md``), which
-runs on the full matrix in ``reports/``. The loaders default to ``reports_pilot/``
-but take any report directory, so the same functions serve the matrix later.
+intra-cell predictor spread to correlate against efficiency: nothing here is a
+confirmatory test. The loaders default to ``reports_pilot/`` but take any report
+directory, so the same functions serve the full matrix in ``reports/``.
 
 The single source of truth for *what each column means* is :data:`SPECS`: its
 valid range and the expected sign of its trajectory. Add a metric there and every

@@ -36,7 +36,7 @@ Usage::
     python src/run_pilot.py --status   # done/pending table
     python src/run_pilot.py --dry-run  # print commands, run nothing
     python src/run_pilot.py --report   # calibration table from finished runs
-    python src/run_pilot.py --dataset cifar10   # slice (cluster node)
+    python src/run_pilot.py --dataset cifar10   # restrict to one dataset (grid slice)
 """
 
 from __future__ import annotations
