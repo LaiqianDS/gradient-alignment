@@ -22,7 +22,13 @@ Ninguno obliga a cambiar los seis objetivos de `introduccion.tex`. Se resuelven 
 
 ## Plan por objetivos (rev. 2026-08-26; objetivo: primera semana de septiembre de 2026)
 
-**La regla, y no se negocia: una fase, un objetivo, un entregable completo.** Una fase se cierra cuando su código está escrito y probado, sus números calculados sobre `reports/`, su figura hecha, y su texto redactado en el `.tex` correspondiente. Nada pasa a la fase siguiente con algo a medias, porque lo que queda a medias es lo que no se hace.
+**Metodología de trabajo, fijada el 2026-08-27: una cosa cada vez, y en tres carriles a la vez.** Son dos mitades que se sostienen la una a la otra, y gobiernan todo lo que queda del proyecto.
+
+*Una cosa cada vez.* En cada momento hay un solo tema abierto, y no se abre otro hasta cerrarlo. Lo que aparezca por el camino se anota donde corresponda y se sigue con lo que había. Dispersarse deja tres cosas al setenta por ciento, y tres cosas al setenta por ciento valen cero.
+
+*Tres carriles a la vez.* Ese tema único avanza en los tres sitios en la misma tanda: el **código** de `src/` y `tests/`, la **documentación** del vault, y la **memoria** en `thesis/`. No se adelanta el código para escribir el texto más tarde, porque el texto que se deja para más tarde no se escribe. Si un paso no toca alguno de los tres carriles, se dice por qué en vez de dejarlo en silencio.
+
+**La regla de fase, y no se negocia: una fase, un objetivo, un entregable completo.** Una fase se cierra cuando su código está escrito y probado, sus números calculados sobre `reports/`, su figura hecha, y su texto redactado en el `.tex` correspondiente. Nada pasa a la fase siguiente con algo a medias, porque lo que queda a medias es lo que no se hace.
 
 **Segunda regla, del 2026-08-26:** toda cuenta que se ejecute tiene que poder responder de qué objetivo es y qué se haría distinto si saliera al revés. Si no hay respuesta, no se ejecuta. Y el contraste no puede ser solo visual: cada objetivo lleva su prueba de hipótesis, que hay que reconstruir porque la anterior se retiró.
 
