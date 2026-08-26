@@ -8,7 +8,9 @@ El *qué decidimos y por qué* vive aquí; el *estado resultante del diseño*, e
 
 Bloquean experimentos. La acción para resolverlas vive en [[3 - Progreso]] (Plan hasta la entrega).
 
-**El método de análisis, entero (abierto el 2026-08-25).** Los 960 entrenamientos están hechos y sus datos versionados en `reports/`. No hay método definido para analizarlos: el plan anterior se retiró (ver el log de hoy). Lo que queda por decidir es, hipótesis por hipótesis, con qué cuenta concreta se responde. Es la única pendiente, y bloquea el capítulo de resultados.
+**El método de análisis, entero (abierto el 2026-08-25).** Los 960 entrenamientos están hechos y sus datos versionados en `reports/`. No hay método definido para analizarlos: el plan anterior se retiró (ver el log del 2026-08-25). Lo que queda por decidir es, hipótesis por hipótesis, con qué cuenta concreta se responde. Es la única pendiente, y bloquea el capítulo de resultados.
+
+El 2026-08-27 se retiró de este log la tanda de decisiones del 2026-08-26, la que abría la primera pasada de la fase A, junto con el código y el texto que produjo. La fase A se rehace después de la fase 0, así que sus decisiones se vuelven a tomar entonces y se registran aquí con la fecha en que se tomen. Lo que sobrevive de aquella pasada, porque está aprobado y escrito en la memoria, son la población de análisis y el tratamiento del censurado de `metodologia.tex`.
 
 ## Tomadas (log)
 

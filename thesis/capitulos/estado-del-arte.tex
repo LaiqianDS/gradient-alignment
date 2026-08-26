@@ -57,48 +57,53 @@ Estos dos predictores definen el suelo que las métricas de gradiente deben supe
 \section{Posicionamiento de este trabajo}
 \label{sec:sota-hueco}
 
-La revisión anterior deja ver un patrón. Cada métrica se ha propuesto y validado por separado, con un objetivo propio (explicar la generalización, elegir el tamaño de batch o decidir cuándo parar), sobre un conjunto de datos y una arquitectura concretos, y rara vez frente al predictor de referencia barato. La Tabla~\ref{tab:sota-metricas} las reúne en los mismos ejes y está pensada como referencia a la que volver desde el resto de la memoria: de cada métrica recoge qué mide, cómo se interpreta su valor y cuánto cuesta obtenerlo.
+La revisión anterior deja ver un patrón. Cada métrica se ha propuesto y validado por separado, con un objetivo propio (explicar la generalización, elegir el tamaño de batch o decidir cuándo parar), sobre un conjunto de datos y una arquitectura concretos, y rara vez frente al predictor de referencia barato. La Tabla~\ref{tab:sota-metricas} las reúne en los mismos ejes y está pensada como referencia a la que volver desde el resto de la memoria: de cada métrica recoge su símbolo y la ecuación que la define en el Capítulo~\ref{ch:fundamentos}, qué mide, cómo se interpreta su valor, sobre qué escala se lee y qué hace falta para calcularla.
 
-La columna de lectura indica si el trabajo de origen asocia un valor alto o un valor bajo con un entrenamiento más eficiente o una mejor generalización, y precisa a continuación qué significa ese valor. La escala de ruido y la varianza normalizada son la excepción: no se propusieron como medidas de calidad, sino para predecir el tamaño de batch crítico y para describir la varianza, de modo que su lectura señala solo el sentido de menos ruido y no una valoración de mejor o peor. El coste se expresa en relación con el de un paso de entrenamiento y distingue tres tramos: bajo cuando la sobrecarga queda por debajo del cinco por ciento, medio cuando exige un barrido de gradientes por ejemplo sobre el conjunto de medición, y alto cuando además hay que recorrer todos los pares de ese barrido.
+La columna de interpretación indica si un valor alto o uno bajo acompaña a un entrenamiento más eficiente o a una mejor generalización, y precisa qué significa ese valor. La escala de ruido y la varianza normalizada son la excepción: no se propusieron como medidas de calidad, sino para predecir el tamaño de batch crítico y para describir la varianza, de modo que su lectura señala solo el sentido de menos ruido y no una valoración de mejor o peor. La alineación gradiente-peso es un caso aparte: su trabajo de origen define el gradiente como $-\nabla\ell$, mientras que esta memoria mide sobre el gradiente bruto, así que la tabla da el sentido ya convertido a esta convención, que es el contrario del que aparece en el artículo (Sección~\ref{sec:sgd}).
+
+La columna de escala da el rango de cada métrica y su valor de referencia, que es lo que permite juzgar una cifra concreta. Sin ese punto de apoyo, una alineación de 0,05 no dice nada; sabiendo que los cosenos viven en $[-1, 1]$ y que el valor esperable entre gradientes sin relación es prácticamente cero, esa misma cifra pasa a ser una señal clara, como desarrolla la Sección~\ref{sec:geometria}. Lo mismo ocurre con la m-coherencia, cuyo punto de referencia no es el cero sino el uno.
+
+La última columna sustituye una etiqueta de coste por el requisito concreto de cada métrica, que es lo que determina ese coste. TSE no necesita nada más que la curva de loss, que el entrenamiento ya calcula. La alineación gradiente-peso solo necesita el gradiente de la última capa y admite una forma cerrada que la deja casi gratis. La disparidad y la varianza normalizada necesitan unos pocos gradientes medios de submuestras. Las demás exigen el gradiente de cada ejemplo por separado, un barrido bastante más caro que un paso de entrenamiento, y la stiffness y la gradient confusion añaden a ese barrido el recorrido de todos los pares.
 
 Quedan fuera dos ejes que no admiten lectura en paralelo. Los bancos de prueba apenas se solapan: van de una única ResNet-18 sobre ImageNet en la m-coherencia a las 220 configuraciones sobre cuatro arquitecturas de la gradient disparity. Y las correlaciones publicadas miden cosas distintas, porque solo la de GWA relaciona la métrica con el accuracy de test, mientras que la de gradient disparity compara dos variantes de la propia métrica, la de GSNR contrasta los dos lados de la ecuación teórica que sus autores derivan y el resto respalda su propuesta con figuras y no con un coeficiente. Alinear esas cifras en una columna invitaría justo a la comparación que no procede. Esa heterogeneidad, más que la magnitud de ningún coeficiente concreto, es lo que justifica someter a todas las métricas a una evaluación común.
 
-\begin{table}[ht]
+\begin{table}[htbp]
 \centering
 \footnotesize
-\setlength{\tabcolsep}{4pt}
-\caption{Síntesis comparativa de las métricas tempranas revisadas.}
+\setlength{\tabcolsep}{3pt}
+\caption{Síntesis comparativa de las métricas tempranas revisadas: significado, lectura de sus valores, escala en la que se leen y requisito de cálculo.}
 \label{tab:sota-metricas}
-\begin{tabular}{>{\raggedright\arraybackslash}p{2.3cm}
-                >{\raggedright\arraybackslash}p{3.5cm}
-                >{\raggedright\arraybackslash}p{6.7cm}
-                >{\centering\arraybackslash}p{1.0cm}}
+\begin{tabular}{>{\raggedright\arraybackslash}p{2.1cm}
+                >{\raggedright\arraybackslash}p{2.7cm}
+                >{\raggedright\arraybackslash}p{4.5cm}
+                >{\raggedright\arraybackslash}p{2.4cm}
+                >{\raggedright\arraybackslash}p{2.1cm}}
 \toprule
-\textbf{Métrica} & \textbf{Qué mide} & \textbf{Cómo se lee} & \textbf{Coste} \\
+\textbf{Métrica} & \textbf{Significado} & \textbf{Interpretación} & \textbf{Escala} & \textbf{Qué requiere} \\
 \midrule
-\multicolumn{4}{l}{\itshape Familia de alineación o coherencia direccional} \\
+\multicolumn{5}{l}{\itshape Familia de alineación o coherencia direccional} \\
 \addlinespace[2pt]
-m-coherencia \cite{chatterjee2020making} & Ejemplos que se benefician del paso obtenido de uno solo & Un valor alto es favorable: indica cuántos ejemplos progresan a la vez con un mismo paso. Cerca de 1 cada ejemplo avanza por separado, lo que apunta a memorización & Medio \\
+m-coherencia \cite{chatterjee2020making}\newline {\scriptsize $\alpha$, Ec.~\ref{eq:mcoherence}\par} & Ejemplos que se benefician del paso obtenido de uno solo & Alto es favorable: muchos ejemplos progresan a la vez con un mismo paso. En el límite ortogonal cada uno avanza por separado, lo que apunta a memorización & $[0, M]$, con $M$ ejemplos medidos. Límite ortogonal: $1$ & Gradiente de cada ejemplo \\
 \addlinespace[2pt]
-Stiffness \cite{fort2019stiffness} & Coseno entre gradientes de pares, desglosado por clase & Un valor alto es favorable: los ejemplos de una misma clase se benefician mutuamente de cada paso. Su caída hacia cero anuncia el sobreajuste & Medio \\
+Stiffness \cite{fort2019stiffness}\newline {\scriptsize $S_{\cos}$, Ec.~\ref{eq:stiffness}\par} & Coseno entre gradientes de pares, desglosado por clase & Alto es favorable dentro de una clase: sus ejemplos se benefician mutuamente de cada paso. Su caída hacia cero anuncia el sobreajuste & $[-1, 1]$. Valor esperable sin relación: $\approx 0$ & Todos los pares de gradientes \\
 \addlinespace[2pt]
-Gradient confusion \cite{sankararaman2020impact} & Coseno más negativo entre pares, el peor caso & Un valor bajo es favorable: un valor alto revela pares de ejemplos con gradientes opuestos, que reducen el avance neto de SGD & Alto \\
+Gradient confusion \cite{sankararaman2020impact}\newline {\scriptsize $\hat{\eta}$, Ec.~\ref{eq:confusion}\par} & Coseno más negativo entre pares, el peor caso & Bajo es favorable: un valor alto revela pares de ejemplos con gradientes opuestos, que reducen el avance neto de SGD. Por ser un mínimo, es ruidoso & $[-1, 1]$. Valor esperable sin relación: $\approx 0$ & Todos los pares de gradientes \\
 \addlinespace[2pt]
-Gradient disparity \cite{forouzesh2021disparity} & Distancia entre los gradientes de dos minibatches & Un valor bajo es favorable: dos lotes cualesquiera producen gradientes casi idénticos. Su aumento es la señal de parada temprana & Bajo \\
+Gradient disparity \cite{forouzesh2021disparity}\newline {\scriptsize $\overline{\mathcal{D}}$, Ec.~\ref{eq:disparity}\par} & Distancia entre los gradientes de dos submuestras & Bajo es favorable: dos submuestras cualesquiera dan gradientes casi idénticos. Su aumento es la señal de parada temprana & $\ge 0$, sin normalizar. Solo comparable a igual tamaño de lote & Gradiente medio de $s$ submuestras \\
 \addlinespace[2pt]
-GWA \cite{hoelzl2025gradient} & Coseno entre el gradiente y los pesos del clasificador & Un valor alto es favorable: el gradiente se alinea con la dirección ya fijada por los pesos. Su máximo durante el entrenamiento anticipa el accuracy final & Bajo \\
+GWA \cite{hoelzl2025gradient}\newline {\scriptsize Ec.~\ref{eq:gwa}\par} & Coseno entre el gradiente y los pesos del clasificador & Bajo es favorable sobre el gradiente bruto, la convención de esta memoria; el artículo de origen mide sobre $-\nabla\ell$ y lee el signo contrario. Su valor extremo anticipa el accuracy final & $[-1, 1]$ antes de corregir por curtosis & Gradiente de la última capa \\
 \addlinespace[3pt]
-\multicolumn{4}{l}{\itshape Familia de variabilidad estocástica} \\
+\multicolumn{5}{l}{\itshape Familia de variabilidad estocástica} \\
 \addlinespace[2pt]
-Varianza normalizada \cite{faghri2020study} & Varianza del gradiente relativa a su magnitud & Un valor bajo corresponde a menos ruido frente a la señal, si bien en la práctica la métrica crece durante el entrenamiento en lugar de decrecer & Bajo \\
+Varianza normalizada \cite{faghri2020study}\newline {\scriptsize NGV, Ec.~\ref{eq:ngv}\par} & Varianza del gradiente relativa a su magnitud & Bajo es menos ruido frente a la señal, no un entrenamiento mejor. En la práctica crece durante el entrenamiento en lugar de decrecer & $> 0$. Frontera señal-ruido: $1$ & Gradiente medio de $K$ submuestras \\
 \addlinespace[2pt]
-Escala de ruido (GNS) \cite{mccandlish2018empirical} & Traza de la covarianza sobre la norma del gradiente al cuadrado & Un valor bajo corresponde a menos ruido frente a la señal. Su magnitud es el tamaño de lote a partir del cual ampliarlo deja de acelerar el entrenamiento & Medio \\
+Escala de ruido (GNS) \cite{mccandlish2018empirical}\newline {\scriptsize $\mathcal{B}_{\text{simple}}$, Ec.~\ref{eq:gns}\par} & Traza de la covarianza sobre la norma del gradiente al cuadrado & Bajo es menos ruido frente a la señal, no un entrenamiento mejor. Su magnitud es el tamaño de lote a partir del cual ampliarlo deja de acelerar el entrenamiento & $> 0$, en ejemplos por lote & Gradiente de cada ejemplo \\
 \addlinespace[2pt]
-GSNR \cite{liu2020understanding} & Razón señal-ruido del gradiente por parámetro & Un valor alto es favorable: la media del gradiente domina a su varianza, lo que se asocia con un gap de generalización menor & Medio \\
+GSNR \cite{liu2020understanding}\newline {\scriptsize $r(\theta_j)$, Ec.~\ref{eq:gsnr}\par} & Razón señal-ruido del gradiente por parámetro & Alto es favorable: la media del gradiente domina a su varianza, lo que se asocia con un gap de generalización menor & $\ge 0$. Frontera señal-ruido: $1$ & Gradiente de cada ejemplo \\
 \addlinespace[3pt]
-\multicolumn{4}{l}{\itshape Predictor de referencia, sin instrumentar el gradiente} \\
+\multicolumn{5}{l}{\itshape Predictor de referencia, sin instrumentar el gradiente} \\
 \addlinespace[2pt]
-TSE \cite{ru2021speedy} & Suma del loss de entrenamiento de las primeras épocas & Un valor bajo es favorable: la curva de loss desciende antes, lo que ya ordena las configuraciones sin coste añadido & Nulo \\
+TSE \cite{ru2021speedy} & Suma del loss de entrenamiento de las primeras épocas & Bajo es favorable: la curva de loss desciende antes, lo que ya ordena las configuraciones sin coste añadido & $> 0$, sin normalizar. Solo comparable a igual número de épocas & La curva de loss, ya calculada \\
 \bottomrule
 \end{tabular}
 \end{table}

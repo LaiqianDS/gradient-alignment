@@ -12,52 +12,6 @@
 \label{sec:impl-metricas}
 % Interfaz común compute(model,X,y,loss_fn) sobre el conjunto de medición; REGISTRY+BASELINE; last-layer en ResNet.
 
-\section{Verificación}
-\label{sec:verificacion}
-
-Un estudio correlacional descansa por completo en que sus mediciones sean correctas: un error en la fórmula de una métrica no produce un fallo visible, produce una correlación equivocada que nadie puede distinguir de un hallazgo. La verificación es por tanto parte del método y no una tarea de higiene, y por eso se describe aquí.
-
-\subsection{Estrategia de las pruebas}
-
-Cada métrica está partida en dos piezas: una función pura que opera sobre tensores de gradiente ya extraídos, y un envoltorio delgado que obtiene esos gradientes del modelo y llama a la función pura. Esa separación es lo que hace verificable la parte que importa. Las pruebas analíticas construyen matrices de gradientes pequeñas cuyo resultado se conoce a mano, se lo pasan a la función pura y comparan con el valor calculado sobre el papel: por ejemplo, dos gradientes ortogonales de la misma norma deben dar una m-coherencia de exactamente 1, y dos gradientes opuestos deben dar una similitud coseno de exactamente $-1$.
-
-La consecuencia práctica es que la suite no necesita ningún modelo real ni ningún conjunto de datos descargado. Corre en segundos, se puede ejecutar en cada cambio, y cuando falla señala la fórmula y no el entrenamiento. Las pruebas de humo, que sí instancian un perceptrón multicapa mínimo, comprueban solo que el envoltorio devuelve las claves esperadas con valores finitos.
-
-\begin{table}[ht]
-\centering
-\small
-\caption{Reparto de la suite de pruebas.}
-\label{tab:pruebas}
-\begin{tabular}{@{}lr@{}}
-\toprule
-\textbf{Grupo} & \textbf{Pruebas} \\
-\midrule
-Métricas de gradiente y predictor de referencia & 104 \\
-Barrido compartido y primitivas de gradiente    & 46 \\
-Entrenamiento, datos, modelos y registro        & 42 \\
-Análisis                                        & 12 \\
-Figuras                                         & 20 \\
-Lanzadores de la matriz y del piloto            & 17 \\
-\midrule
-\textbf{Total}                                  & \textbf{241} \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-El reparto de la Tabla~\ref{tab:pruebas} no es uniforme, y la desproporción es deliberada. El grupo más numeroso después de las métricas es el del barrido compartido, porque es donde un error silencioso haría más daño: seis de las ocho métricas consumen sus productos, de modo que un fallo ahí contaminaría seis columnas a la vez sin producir ninguna señal de error. La exigencia que fijan esas pruebas es que la ruta compartida y la ruta independiente den resultados idénticos hasta el último bit, lo que permite usar la segunda como referencia de la primera, y que las estadísticas obtenidas por trozos no dependan del tamaño del trozo.
-
-Los otros grupos verifican las propiedades de las que depende la validez del diseño, y conviene enumerar cuáles son porque cada una sostiene una decisión metodológica concreta. Sobre los datos se comprueba que la partición sea estratificada, disjunta y completa, que dependa únicamente de su propia semilla y no de la del entrenamiento, lo que es la condición para que sea idéntica en los más de novecientos entrenamientos, y que el etiquetado del conjunto de validación de Tiny-ImageNet coincida con el índice de clases del entrenamiento. Se comprueba también que el conjunto de medición sea determinista dada la semilla y cambie con ella, y que el subconjunto de entrenamiento sobre el que se mide el gap sea estratificado, fijo y del tamaño del test.
-
-Sobre el bucle de entrenamiento se verifican las lecturas que definen las variables dependientes: el promedio de loss por época con la semántica que el predictor de referencia necesita, el ajuste de cada ventana a la época más cercana, la mediana móvil centrada de tres épocas con su comportamiento en los bordes, y los indicadores de eficiencia en sus dos casos delicados, cuando el umbral no se alcanza nunca y cuando un pico de una sola época podría desplazar el cruce. Sobre los modelos se comprueba que la última capa sea una capa lineal, condición que la métrica GWA necesita para existir, y que la ResNet-18 se adapte a entrada monocroma. Sobre la configuración se verifica la precedencia entre fichero y argumentos de línea de órdenes y la consistencia de las constantes de la matriz.
-
-Sobre los lanzadores se comprueba que la rejilla completa contenga exactamente los novecientos sesenta entrenamientos previstos, que la reanudación se decida por la existencia del fichero de resumen, y que el piloto use la tasa de aprendizaje central, duplique el presupuesto y aísle su salida de la de la matriz. Sobre el análisis se verifican los diagnósticos de sanidad: la detección de valores fuera de rango o no finitos, las identidades entre columnas que deben cumplirse de forma exacta, la concordancia de la tendencia con el signo teórico esperado y la detección de entrenamientos degenerados. Y sobre el ejecutor de métricas se comprueba que una métrica que falle quede aislada sin abortar el entrenamiento, y que el coste de la instrumentación se atribuya a su propio reloj y no al del entrenamiento.
-
-El grupo de figuras merece una nota, porque a primera vista una figura no parece contrastable. Lo que se comprueba no es su aspecto, que es cuestión de gusto, sino las propiedades sin las cuales una figura afirma algo falso o deja de leerse. Que el tamaño de la página guardada coincida con el declarado, para que el documento no la reescale y le encoja la tipografía respecto a las demás. Que cada grupo se distinga por el trazo además de por el color, porque la paleta pierde separación al imprimirse en gris. Que en escala logarítmica no se rotulen las marcas menores, que se solapan. Y que cada eje quede etiquetado incluso cuando la rejilla de paneles queda incompleta, que es como se perdía la escala de la última columna.
-
-Tres pruebas fijan errores reales encontrados durante el desarrollo y se conservan como regresión. La primera es el etiquetado del conjunto de validación de Tiny-ImageNet, cuyo directorio plano mandaba las diez mil imágenes a una única clase. La segunda es la escritura de los ficheros de resumen, que no era atómica: la prueba simula la muerte del proceso a mitad de escritura, y se comprobó que falla contra la versión anterior del código. Esta segunda importa más de lo que su tamaño sugiere, porque el lanzador decide qué entrenamientos están hechos comprobando que ese fichero exista, de modo que un fichero truncado marcaba un entrenamiento como completo para siempre y con datos corruptos.
-
-La tercera está en los diagnósticos de sanidad. El estadístico que medía si una métrica llega a moverse dentro de un entrenamiento se normalizaba contra una referencia calculada entre entrenamientos, de modo que ordenaba por escala en lugar de por movimiento: la misma magnitud medida en unidades mil veces menores salía marcada como plana. La prueba mide la misma curva en dos sistemas de unidades separados por un factor de un millón y exige que el resultado sea idéntico. El error importaba porque el diagnóstico se lee antes de cualquier contraste, y sus conclusiones deciden qué mirar con lupa.
-
 \section{Reproducibilidad}
 \label{sec:reproducibilidad}
 % Principio: seed.py, determinismo como requisito, normalización por dataset, caveat Tiny-ImageNet
