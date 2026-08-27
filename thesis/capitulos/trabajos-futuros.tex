@@ -1,0 +1,40 @@
+\chapter{Trabajos futuros}
+\label{ch:trabajos-futuros}
+% Capítulo aparte por indicación de los seminarios ETSINF. Va tras Conclusiones.
+% Fuera del rango 2-6, así que no lleva hoja de ruta formal ni sección de conclusiones,
+% igual que la Introducción y las Conclusiones.
+% El régimen post-meseta se cuenta en cualitativo a propósito: los porcentajes viven en
+% reports_pilot/, que está en .gitignore y solo existe en el disco local.
+
+Este capítulo recoge lo que el trabajo deja abierto. Actuar sobre la señal en lugar de limitarse a medirla es el paso que la pregunta de investigación no aborda, y es la continuación que la Sección~\ref{sec:alcance} anuncia al declarar el alcance. Ampliar ese alcance por los ejes que la matriz congeló a propósito es la segunda vía. La tercera la forman las deudas de medición que el propio diseño reconoce y que los datos disponibles no pueden saldar.
+
+\section{Intervención sobre la señal}
+\label{sec:futuro-intervencion}
+
+El diseño de este trabajo es correlacional. Mide si una métrica temprana anticipa la eficiencia, no si actuar sobre ella durante el entrenamiento sirve de algo. La continuación evidente es dar ese salto y usar la métrica para decidir en marcha, deteniendo un entrenamiento que no va a compensar o ajustando el \emph{learning rate} en función de lo medido.
+
+El salto exige dos cosas que aquí no existen. La primera es un criterio de decisión, esto es, un valor de la métrica a partir del cual se actúa y una regla de qué hacer entonces, y ese criterio depende de lo que responda H2. Si ninguna métrica supera al predictor de referencia, la intervención se construiría igual de bien sobre la curva de \emph{loss}, sin calcular ningún gradiente, y el coste de instrumentación no tendría justificación.
+
+La segunda es un diseño experimental propio. Una intervención altera el entrenamiento que observa, porque en cuanto se detiene una ejecución o se cambia su \emph{learning rate} a partir de la métrica, la trayectoria deja de ser la que aquí se ha medido. Los 960 entrenamientos de esta matriz no se pueden reanalizar para responder esa pregunta, de modo que haría falta una matriz nueva con la intervención dentro del bucle.
+
+\section{Extensión del alcance}
+\label{sec:futuro-alcance}
+
+El estudio se limita a clasificación de imágenes, y deja fuera los demás dominios y las arquitecturas de tipo \emph{transformer}. Nada en la definición de las ocho métricas las ata a la visión, porque todas se construyen sobre el gradiente por ejemplo y ese objeto existe en cualquier red entrenada por descenso de gradiente. Lo que queda por saber es si la asociación sobrevive al cambio de dominio, que es una pregunta empírica y no de definición.
+
+El conjunto ImageNet completo se sustituyó por Tiny-ImageNet por restricciones de disco y de cómputo. El conjunto de datos es uno de los dos ejes que más mueven el nivel de eficiencia, según recoge la Sección~\ref{sec:riesgos}, así que llevar el estudio a un conjunto verdaderamente grande comprobaría la relación justo donde predecir la eficiencia sale más caro y, por tanto, más rentable.
+
+El entrenamiento se hizo sin \emph{data augmentation} para no añadir una fuente de azar al proceso. Recuperarlo no es solo entrenar en condiciones más habituales, porque el \emph{batch} de medición se extrae del conjunto de entrenamiento con la misma transformación y pasaría a estar formado por versiones distorsionadas de los ejemplos. Medir con \emph{data augmentation} es, entonces, medir otra cosa, y comprobar cuánto cambian los valores sería un resultado por sí mismo.
+
+La partición entre entrenamiento y validación es fija y compartida por los 960 entrenamientos. Aleatorizarla mediría también cuánto varía el estimador frente al reparto de los datos, que la Sección~\ref{sec:protocolo-eval} declara pregunta legítima pero distinta de la que aquí se formula.
+
+\section{Medición y métricas}
+\label{sec:futuro-medicion}
+
+Tres deudas de medición quedan reconocidas en el texto y sin saldar. La variante de signo de la \emph{stiffness} es la más informativa entre clases distintas, pero exige una muestra mayor que la de un \emph{batch} de medición barato para no quedar dominada por el ruido, y agrandarlo encarece de forma cuadrática el recorrido de todos los pares. Estudiarla pide, por tanto, un protocolo menos restrictivo que el de esta matriz.
+
+La versión exacta de la escala de ruido del gradiente se descartó por coste, porque requiere la Hessiana, y en su lugar se emplea la forma simplificada, que supone la curvatura proporcional a la identidad. Ese supuesto es cómodo pero no inocuo, y medir cuánto se separan las dos versiones sobre unas pocas configuraciones diría qué se está perdiendo al aceptarlo.
+
+El presupuesto de \emph{epochs} se calibró donde el \emph{loss} de validación se aplana, y las métricas de alineación siguen evolucionando después de esa meseta mientras el \emph{accuracy} ya no mejora, según se observó en las trayectorias extendidas del piloto de calibración. La matriz corta en el presupuesto, de manera que observa las métricas en fase transitoria y no puede decir nada del régimen posterior. Caracterizarlo exigiría entrenamientos más largos, y la evidencia del piloto es de una sola ejecución por celda y solo descriptiva.
+
+Queda por último el coste, que este trabajo acota en notación asintótica pero no mide por métrica. El barrido compartido calcula los gradientes por ejemplo una sola vez y los reparte entre las seis métricas que los consumen, y el resumen de cada entrenamiento guarda un único reloj de instrumentación, así que el coste marginal de una métrica concreta no se puede recuperar ni siquiera a posteriori. Obtenerlo pide un banco de pruebas aparte, de minutos y fuera de la matriz, que cronometre cada métrica por separado sobre las mismas redes. En la dirección contraria, los datos ya guardan el tiempo de reloj hasta el umbral, que este trabajo registra sin declararlo variable del estudio. Es la lectura de velocidad pertinente al comparar SGD con Adam, porque su paso no cuesta lo mismo, y explotarla no exigiría ningún entrenamiento nuevo.

@@ -14,16 +14,5 @@
 
 \section{Limitaciones}
 \label{sec:concl-limitaciones}
-% Solo visión; correlacional; sin augmentation; per-sample last-layer en ResNet.
-
-\section{Trabajo futuro}
-\label{sec:concl-futuro}
-% Intervención (early stopping / LR dinámico); label noise; ImageNet completa; transformers.
-% Régimen post-meseta (sobreajuste): las métricas de alineamiento siguen evolucionando tras la meseta
-% de validación mientras el accuracy se estanca (evidencia del piloto a 160 ep en tiny_imagenet, LR
-% central y seed 0, lado de validación válido: stiffness/cos_global +90-190%, cos_between +230-570%,
-% confusion/median_cos hasta +330%). Es decir, el presupuesto se calibró sobre la meseta del loss,
-% pero las métricas, que son el objeto del estudio, distan de haberse asentado en el corte, así que
-% la matriz las observa en fase transitoria. La matriz corta en el presupuesto, de modo que
-% caracterizar ese régimen exigiría corridas extendidas o las trayectorias del piloto (n=1, solo
-% descriptivo, y `reports_pilot/` está en .gitignore).
+% Solo visión, correlacional, sin augmentation, per-sample last-layer en ResNet.
+% Las líneas de continuación viven ahora en su propio capítulo, \ref{ch:trabajos-futuros}.

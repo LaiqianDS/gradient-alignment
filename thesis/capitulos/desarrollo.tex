@@ -1,25 +1,25 @@
-\chapter{Implementación}
-\label{ch:implementacion}
-% El desarrollo software; no volcar código entero. Fuente: src/ + README.
-% Frontera con metodología: aquí solo el CÓMO; el QUÉ/POR QUÉ está en \ref{ch:metodologia}.
-% No repetir decisiones de diseño; describir su realización.
+\chapter{Desarrollo}
+\label{ch:desarrollo}
+% El desarrollo software, sin volcar código entero. Fuente: src/ + README.
+% Frontera con metodología: aquí solo el CÓMO. El QUÉ/POR QUÉ está en \ref{ch:metodologia}.
+% No repetir decisiones de diseño, sino describir su realización.
 % Pendiente: el diagrama del pipeline de \ref{sec:pipeline}, cuando exista el estilo de figuras.
 
-Este capítulo describe cómo se realizó en software el diseño del Capítulo~\ref{ch:metodologia}. No repite las decisiones de diseño, sino que expone su realización y las restricciones que esta impuso. La Sección~\ref{sec:pipeline} describe la estructura del programa que ejecuta un entrenamiento. La Sección~\ref{sec:impl-metricas} detalla cómo se calculan las métricas y cuál es la optimización que hace viable medirlas en cada \emph{epoch} de los 960 entrenamientos. La Sección~\ref{sec:reproducibilidad} recoge las medidas de reproducibilidad y sus límites. Las Secciones~\ref{sec:ejecucion} y~\ref{sec:pilot} describen los dos lanzadores, el de la matriz completa y el del piloto de calibración. La Sección~\ref{sec:impl-conclusiones} recapitula lo esencial.
+Este capítulo describe cómo se realizó en software el diseño del Capítulo~\ref{ch:metodologia}. No repite las decisiones de diseño, sino que expone su realización y las restricciones que esta impuso. La Sección~\ref{sec:pipeline} describe la estructura del programa que ejecuta un entrenamiento. La Sección~\ref{sec:des-metricas} detalla cómo se calculan las métricas y cuál es la optimización que hace viable medirlas en cada \emph{epoch} de los 960 entrenamientos. La Sección~\ref{sec:reproducibilidad} recoge las medidas de reproducibilidad y sus límites. Las Secciones~\ref{sec:ejecucion} y~\ref{sec:pilot} describen los dos lanzadores, el de la matriz completa y el del piloto de calibración. La Sección~\ref{sec:des-conclusiones} recapitula lo esencial.
 
 \section{Arquitectura del pipeline}
 \label{sec:pipeline}
 
 Un entrenamiento es una configuración y un solo programa. La configuración se resuelve por capas, de menor a mayor prioridad: los valores por defecto, el fichero de la celda y las opciones de línea de órdenes, que son las que inyectan el \emph{learning rate} y la \emph{seed} de cada punto de la rejilla. A partir de ahí el programa fija las semillas, construye los cargadores de datos y el \emph{batch} de medición, construye la red y entrena hasta agotar el presupuesto de \emph{epochs}. Al terminar cada \emph{epoch} evalúa la validación, calcula todas las métricas sobre el \emph{batch} de medición y registra una fila.
 
-Una decisión de estructura sostiene el resto: los ejes de la matriz de experimentos viven en el mismo módulo que las perillas de un entrenamiento individual. Los conjuntos de datos, las arquitecturas, los optimizadores, las rejillas de \emph{learning rate}, las \emph{seeds}, los presupuestos por conjunto y las perillas congeladas son constantes de ese módulo, y el resto del código las importa en lugar de repetirlas. El diseño congelado tiene así una definición única, y cambiar un eje es cambiar una línea en un sitio en vez de rastrear el mismo número por varios ficheros.
+Una decisión de estructura sostiene el resto: los ejes de la matriz de experimentos viven en el mismo módulo que los ajustes de un entrenamiento individual. Los conjuntos de datos, las arquitecturas, los optimizadores, las rejillas de \emph{learning rate}, las \emph{seeds}, los presupuestos por conjunto y los ajustes congelados son constantes de ese módulo, y el resto del código las importa en lugar de repetirlas. El diseño congelado tiene así una definición única, y cambiar un eje es cambiar una línea en un sitio en vez de rastrear el mismo número por varios ficheros.
 
 Cada entrenamiento deja cuatro ficheros en su propio directorio: la configuración ya resuelta, la trayectoria con una fila por \emph{epoch}, esa misma trayectoria recortada a las cinco ventanas, y un resumen con los indicadores de eficiencia, la única evaluación de test y los relojes. El resumen se escribe el último porque su existencia es lo que marca un entrenamiento como terminado, y de ella depende la reanudación que describe la Sección~\ref{sec:ejecucion}.
 
-El módulo de registro se limita a la entrada y salida. Acumula filas y las escribe; toda la lógica del dominio, el recorte de ventanas y el cálculo de los indicadores de eficiencia, queda en el programa de entrenamiento. La separación mantiene el registro trivial de leer y evita que una decisión de diseño acabe escondida en el código que guarda ficheros.
+El módulo de registro se limita a la entrada y salida. Acumula filas y las escribe. Toda la lógica del dominio, el recorte de ventanas y el cálculo de los indicadores de eficiencia, queda en el programa de entrenamiento. La separación mantiene el registro trivial de leer y evita que una decisión de diseño acabe escondida en el código que guarda ficheros.
 
 \section{Cálculo de las métricas}
-\label{sec:impl-metricas}
+\label{sec:des-metricas}
 
 Las ocho métricas de gradiente comparten una interfaz única: reciben el modelo congelado y el \emph{batch} de medición, y devuelven un diccionario de escalares. Esa uniformidad es lo que permite recorrerlas en un bucle y añadir una novena sin tocar el bucle. El predictor de referencia queda deliberadamente fuera de ese registro, porque su firma es distinta: no recibe un modelo, sino la sucesión de \emph{loss} medios de entrenamiento por \emph{epoch}. Mantenerlos separados evita forzar una interfaz común entre dos cosas que no la comparten.
 
@@ -27,15 +27,17 @@ Cada métrica se parte en dos piezas. Un núcleo puro opera sobre tensores de gr
 
 La optimización que hace viable el estudio es la del barrido de gradientes por ejemplo. Calcular por separado el gradiente de cada ejemplo del \emph{batch} de medición es, con diferencia, el coste dominante de una medición, y seis de las ocho métricas lo necesitan. En lugar de que cada una lo recalcule, el barrido se ejecuta una sola vez por medición y entrega todos los productos que esas seis consumen: los dos primeros momentos por columna, la matriz de productos escalares entre pares de gradientes junto con sus normas, y los cosenos de última capa. Cada métrica reduce entonces esos productos a sus escalares. Las dos restantes no participan, porque trabajan con gradientes de submuestras y no con gradientes por ejemplo.
 
-El segundo problema es de memoria. La matriz densa de gradientes por ejemplo tiene una fila por ejemplo del \emph{batch} de medición y una columna por parámetro, de modo que para la red \emph{fully connected} sobre Tiny-ImageNet ocuparía unos 14 GB, por encima de los 16 GB de la GPU empleada una vez se descuenta lo que ya ocupan el modelo y sus activaciones. Nunca se materializa entera: los gradientes se calculan por bloques de filas y en el acelerador reside un solo bloque cada vez, mientras se acumulan los productos que sí caben, que son las matrices pequeñas y los momentos. El tamaño de bloque es una perilla operativa y no científica, porque los estadísticos que salen del barrido son idénticos para cualquier tamaño de bloque y lo único que cambia es el pico de memoria.
+El segundo problema es de memoria. La matriz densa de gradientes por ejemplo tiene una fila por ejemplo del \emph{batch} de medición y una columna por parámetro, de modo que para la red \emph{fully connected} sobre Tiny-ImageNet ocuparía unos 14 GB, por encima de los 16 GB de la GPU empleada una vez se descuenta lo que ya ocupan el modelo y sus activaciones. Nunca se materializa entera: los gradientes se calculan por bloques de filas y en el acelerador reside un solo bloque cada vez, mientras se acumulan los productos que sí caben, que son las matrices pequeñas y los momentos. El tamaño de bloque es un ajuste operativo y no científico, porque los estadísticos que salen del barrido son idénticos para cualquier tamaño de bloque y lo único que cambia es el pico de memoria.
 
-El coste de una medición se descompone en dos cantidades que crecen de forma distinta: el número de pasadas hacia atrás sobre la red, y la aritmética que se hace después sobre los gradientes ya calculados. Las dos se cuentan aparte porque una pasada hacia atrás solo cuesta del orden del número de parámetros en la red \emph{fully connected}; en las convolucionales lo que fija el coste es el trabajo de las convoluciones, de modo que las dos cantidades no se pueden sumar en una sola cifra. La Tabla~\ref{tab:coste-metricas} recoge ambas en los dos regímenes: cada métrica medida por separado, y cada métrica añadida cuando el barrido compartido ya se ha ejecutado.
+El coste de una medición se descompone en dos cantidades que crecen de forma distinta: el número de pasadas hacia atrás sobre la red, y la aritmética que se hace después sobre los gradientes ya calculados. Una pasada hacia atrás es una ejecución de la retropropagación, la operación que devuelve el gradiente de un \emph{loss} respecto a cada peso de la red, y es la misma que ejecuta cada paso de entrenamiento. Las dos cantidades se cuentan aparte porque una pasada hacia atrás no cuesta lo mismo en las tres arquitecturas. En la red \emph{fully connected} cuesta del orden del número de parámetros, mientras que en las convolucionales lo que fija el coste es el trabajo de las convoluciones, de modo que las dos cantidades no se pueden sumar en una sola cifra.
+
+La Tabla~\ref{tab:coste-metricas} recoge ambas en los dos regímenes, cada métrica medida por separado y cada métrica añadida cuando el barrido compartido ya se ha ejecutado. En la columna de pasadas, un valor de $M$ indica que la métrica necesita el gradiente de cada ejemplo por separado, lo que obliga a retropropagar una vez por cada ejemplo del \emph{batch} de medición. Un número pequeño indica que a la métrica le basta el gradiente medio de cada submuestra, así que retropropaga una sola vez por submuestra, sobre todos sus ejemplos a la vez. Un cero indica que el barrido compartido ya hizo ese trabajo y la métrica se limita a reutilizar lo que aquel produjo.
 
 \begin{table}[htbp]
 \centering
 \footnotesize
 \setlength{\tabcolsep}{3pt}
-\caption{Coste asintótico de una medición, con las derivadas contadas aparte de la aritmética posterior. $M$ es el tamaño del \emph{batch} de medición, $P$ el número de parámetros de la red, $W$ los pesos de su última capa y $T$ las \emph{epochs} transcurridas.}
+\caption{Coste asintótico de una medición, con las pasadas hacia atrás contadas aparte de la aritmética posterior. $M$ es el tamaño del \emph{batch} de medición, $P$ el número de parámetros de la red, $W$ los pesos de su última capa y $T$ las \emph{epochs} transcurridas.}
 \label{tab:coste-metricas}
 \begin{tabular}{>{\raggedright\arraybackslash}p{3.5cm}
                 >{\raggedright\arraybackslash}p{2.6cm}
@@ -45,7 +47,7 @@ El coste de una medición se descompone en dos cantidades que crecen de forma di
 \toprule
 & \multicolumn{2}{l}{\textbf{Medida por separado}} & \multicolumn{2}{l}{\textbf{Con barrido compartido}} \\
 \cmidrule(lr){2-3} \cmidrule(lr){4-5}
-\textbf{Métrica} & \textbf{Derivadas} & \textbf{Aritmética} & \textbf{Derivadas} & \textbf{Aritmética} \\
+\textbf{Métrica} & \textbf{Pasadas hacia atrás} & \textbf{Aritmética} & \textbf{Pasadas hacia atrás} & \textbf{Aritmética} \\
 \midrule
 \multicolumn{5}{l}{\itshape Familia de alineación o coherencia} \\
 \addlinespace[2pt]
@@ -67,16 +69,16 @@ Escala de ruido (GNS) & $M$, una por ejemplo & $\Theta(MP)$ & 0 & $\Theta(P)$ \\
 \addlinespace[2pt]
 GSNR & $M$, una por ejemplo & $\Theta(MP)$ & 0 & $\Theta(P\log P)$ \\
 \addlinespace[3pt]
-\multicolumn{5}{l}{\itshape Predictor de referencia, sin instrumentar el gradiente} \\
+\multicolumn{5}{l}{\itshape Predictor de referencia, sin calcular el gradiente} \\
 \addlinespace[2pt]
 TSE & 0 & $\Theta(T)$ & 0 & $\Theta(T)$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-El número de derivadas no separa a ninguna métrica de otra. Las ocho recorren el \emph{batch} de medición una vez, seis ejemplo a ejemplo y dos por submuestras, y entre esas dos formas la diferencia está en la memoria, porque el número de ejemplos derivados es prácticamente el mismo. Lo que sí las separa es la aritmética posterior, en dos niveles: las que acumulan momentos por columna crecen con el producto del tamaño del \emph{batch} por el número de parámetros, y las que necesitan todos los pares crecen con el cuadrado del tamaño del \emph{batch}. La segunda mitad de la tabla es la que justifica el barrido compartido. Seis de las ocho métricas no necesitan ni una sola derivada más, y solo las dos que trabajan con submuestras siguen pagando las suyas, con lo que medir el registro completo cuesta unas tres pasadas sobre el \emph{batch} de medición en lugar de nueve.
+El número de pasadas hacia atrás no separa a ninguna métrica de otra. Las ocho recorren el \emph{batch} de medición una vez, seis ejemplo a ejemplo y dos por submuestras, y entre esas dos formas la diferencia está en la memoria, porque el número de ejemplos derivados es prácticamente el mismo. Lo que sí las separa es la aritmética posterior, en dos niveles: las que acumulan momentos por columna crecen con el producto del tamaño del \emph{batch} por el número de parámetros, y las que necesitan todos los pares crecen con el cuadrado del tamaño del \emph{batch}. La segunda mitad de la tabla es la que justifica el barrido compartido. Seis de las ocho métricas no necesitan ni una sola pasada más, y solo las dos que trabajan con submuestras siguen pagando las suyas, con lo que medir el registro completo cuesta unas tres pasadas sobre el \emph{batch} de medición en lugar de nueve.
 
-La tabla admite dos lecturas equivocadas. La GWA solo lee los pesos de la última capa, pero la implementación deriva la red entera para cada ejemplo y descarta después el resto del gradiente, así que su ventaja está en la aritmética y no en el número de derivadas; esa última capa, además, no siempre es una parte pequeña, ya que en la red convolucional sobre Tiny-ImageNet reúne 102.400 de los 116.936 pesos. El término cuadrático de la \emph{stiffness} y de la confusión domina sobre las derivadas bajo el mismo supuesto de antes: en la red \emph{fully connected} la matriz de pares cuesta del orden de $M$ veces más que el barrido completo, y en las convolucionales la comparación puede invertirse.
+La tabla admite dos lecturas equivocadas. La GWA solo lee los pesos de la última capa, pero la implementación deriva la red entera para cada ejemplo y descarta después el resto del gradiente, así que su ventaja está en la aritmética y no en el número de pasadas. Esa última capa, además, no siempre es una parte pequeña, ya que en la red convolucional sobre Tiny-ImageNet reúne 102.400 de los 116.936 pesos. El término cuadrático de la \emph{stiffness} y de la confusión domina sobre las pasadas hacia atrás bajo el mismo supuesto de antes: en la red \emph{fully connected} la matriz de pares cuesta del orden de $M$ veces más que el barrido completo, y en las convolucionales la comparación puede invertirse.
 
 Los momentos se acumulan en doble precisión, porque las formas que restan cuadrados sufren cancelación en precisión simple. Y una métrica que falle, por ejemplo al agotar la memoria en la matriz de pares, se registra y se omite: sus columnas quedan ausentes de esa fila y el entrenamiento continúa. Un fallo aislado cuesta unas columnas, no un entrenamiento de horas.
 
@@ -108,8 +110,8 @@ El piloto de calibración tiene su propio lanzador, que reutiliza el de la matri
 El piloto escribe en un directorio distinto del de la matriz, y esa separación evita un error silencioso. El lanzador de la matriz da un punto por terminado cuando encuentra su resumen, así que un entrenamiento del piloto escrito en el directorio de la matriz se contaría más tarde como un punto hecho, cuando en realidad se entrenó con otro presupuesto.
 
 \section{Conclusiones del capítulo}
-\label{sec:impl-conclusiones}
+\label{sec:des-conclusiones}
 
-La realización software del diseño se apoya en cuatro decisiones. La primera es tener una definición única de la matriz, importada por todo lo demás, de modo que el diseño congelado no pueda divergir entre módulos. La segunda es la interfaz uniforme de las métricas, que separa un núcleo comprobable con casos analíticos de la extracción de gradientes. La tercera es el barrido compartido de gradientes por ejemplo, que amortiza el coste dominante de la medición entre las seis métricas que lo necesitan y que, junto al procesado por bloques de filas, es lo que permite instrumentar en cada \emph{epoch} arquitecturas cuya matriz de gradientes por ejemplo no cabe en memoria. La cuarta es la reanudación basada en un único fichero marcador, que hace idempotente el lanzamiento de la matriz sin ningún estado externo.
+La realización software del diseño se apoya en cuatro decisiones. La primera es tener una definición única de la matriz, importada por todo lo demás, de modo que el diseño congelado no pueda divergir entre módulos. La segunda es la interfaz uniforme de las métricas, que separa un núcleo comprobable con casos analíticos de la extracción de gradientes. La tercera es el barrido compartido de gradientes por ejemplo, que amortiza el coste dominante de la medición entre las seis métricas que lo necesitan y que, junto al procesado por bloques de filas, es lo que permite medir en cada \emph{epoch} arquitecturas cuya matriz de gradientes por ejemplo no cabe en memoria. La cuarta es la reanudación basada en un único fichero marcador, que hace idempotente el lanzamiento de la matriz sin ningún estado externo.
 
 Ninguna de las cuatro cambia qué se mide, que es lo que fija el Capítulo~\ref{ch:metodologia}. Cambian qué resulta posible medir con una sola GPU y en un tiempo acotado, que es la restricción real de este trabajo.
