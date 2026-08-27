@@ -55,7 +55,7 @@ No depende de ningún resultado, así que corre en paralelo. Recoge en la memori
 ### Fase A: datos y validez
 
 No ataca ningún objetivo. Establece que los datos sirven y qué se puede calcular con ellos. **Regla de ejecución: un lado cada vez**, predictores y variables dependientes por separado.
-
+- [ ] Vaciar este documento de lo innecesario de fases previas
 - [ ] Validez de las columnas registradas sobre los 960 runs: rango teórico, identidades exactas y columnas ausentes, valores nulos o imposibles, runs que se quedaron sin aprender estancadas, etc.
 - [ ] Mapa de lo computable celda a celda: qué runs entran en el análisis y cuántos quedan para cada variable dependiente.
 - [ ] Rango dinámico del predictor: si la métrica se mueve más por el learning rate que por la semilla.
