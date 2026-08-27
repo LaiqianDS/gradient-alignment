@@ -2,13 +2,12 @@
 
 Per-parameter GSNR ``r_j = gbar_j² / Var_i[g_{i,j}]`` measures how consistent the
 raw loss gradient of parameter ``j`` is across samples: large signal (mean) over
-small noise (variance) is argued to predict good generalisation. Per
-``docs/research/metrics.md`` we aggregate by **mean** (never sum — incomparable
-across architectures with different ``P``), use the unbiased variance (``÷ M-1``),
-drop "dead" parameters (dead ReLUs, zero-init biases) by a threshold on ``‖g_j‖``,
-and additionally report **median** and **p95** because the heavy tail of ``r_j``
-biases the mean. Shares the per-sample ∇L sweep with ``m_coherence`` and
-``stiffness``.
+small noise (variance) is argued to predict good generalisation. We aggregate by
+**mean** (never sum, which is incomparable across architectures with different
+``P``), use the unbiased variance (``÷ M-1``), drop "dead" parameters (dead
+ReLUs, zero-init biases) by a threshold on ``‖g_j‖``, and additionally report
+**median** and **p95** because the heavy tail of ``r_j`` biases the mean. Shares
+the per-sample ∇L sweep with ``m_coherence`` and ``stiffness``.
 """
 
 from __future__ import annotations

@@ -2,7 +2,7 @@
 
 The metric is the mean ℓ2 distance ``D_{i,j} = ‖g_i − g_j‖₂`` between the
 gradients of independent mini-batches, averaged over the ``C(s, 2)`` unordered
-pairs with ``s = 5`` (``docs/research/metrics.md``). It derives from a PAC-Bayes
+pairs with ``s = 5``. It derives from a PAC-Bayes
 bound where ``KL(Q_1‖Q_2) = ½ (γ²/σ²) ‖g_1 − g_2‖₂²``, so the raw distance must
 *not* be normalised by ``‖g‖`` — doing so severs the theoretical link.
 

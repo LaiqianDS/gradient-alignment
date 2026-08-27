@@ -8,10 +8,9 @@ but non-negative by construction in floating point). The numerator is the
 plug-in estimator of :math:`\\mathrm{tr}(\\Sigma)` — biased low by
 :math:`(M-1)/M`, deliberately uncorrected (≈0.4% at M=256; the paper itself
 concedes the ratio is not unbiased, App. A.1 fn. 12). It is logged as
-``noise_scale/tr_sigma``; the key ``noise_scale/noise`` is reserved in the
-docs for the exact Hessian-weighted :math:`\\mathcal{B}_{\\text{noise}}`,
-which was dropped for cost. Operates on the raw loss gradient ∇L.
-See ``docs/research/metrics.md``.
+``noise_scale/tr_sigma``; the key ``noise_scale/noise`` is reserved for the
+exact Hessian-weighted :math:`\\mathcal{B}_{\\text{noise}}`, which was dropped
+for cost. Operates on the raw loss gradient ∇L.
 """
 
 from __future__ import annotations

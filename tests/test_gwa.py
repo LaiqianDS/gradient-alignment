@@ -169,9 +169,9 @@ def test_compute_excludes_bias_and_uses_weight_only_layout():
 
 def test_compute_uses_raw_grad_negating_paper_convention():
     # The paper defines g = -∇L (Eq. 1), but compute() runs on the RAW ∇L returned by
-    # per_sample_grads. Pin the documented sign caveat (metrics.md) to the real compute()
-    # path: the pipeline's score_mean must equal the NEGATION of the paper-convention mean
-    # (cosine of -∇L against w), since cos(-g, w) = -cos(g, w).
+    # per_sample_grads. Pin that sign caveat to the real compute() path: the pipeline's
+    # score_mean must equal the NEGATION of the paper-convention mean (cosine of -∇L
+    # against w), since cos(-g, w) = -cos(g, w).
     torch.manual_seed(0)
     model = tiny_mlp().eval()
     X, y = synthetic_probe()

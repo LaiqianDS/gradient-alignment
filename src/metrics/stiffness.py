@@ -1,7 +1,7 @@
 """Stiffness (Fort et al., 2019): pairwise per-sample gradient alignment.
 
 Over all unordered pairs ``i < j`` of per-sample gradients we report two
-complementary statistics (``docs/research/metrics.md``, "Stiffness"):
+complementary statistics:
 
   * ``S_cos  = mean cos(g_i, g_j)``   — preferred within-class,
   * ``S_sign = mean sign(g_i · g_j)`` — more informative between-class,

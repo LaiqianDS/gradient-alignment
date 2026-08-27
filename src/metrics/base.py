@@ -1,12 +1,11 @@
 """Contract every metric in the registry conforms to.
 
 A metric maps a *frozen* model + a fixed data probe to a flat dict of scalar
-floats keyed by the canonical log names in ``docs/research/metrics.md``
-(e.g. ``{"var/normalized": 0.42}``). The uniform ``dict[str, float]`` return lets
-the pipeline collect all metrics into one parquet row without per-metric
-branching.
+floats keyed by canonical log names (e.g. ``{"var/normalized": 0.42}``). The
+uniform ``dict[str, float]`` return lets the pipeline collect all metrics into
+one parquet row without per-metric branching.
 
-Design rules (from ``docs/research/metrics.md``):
+Design rules:
   * Operate on the RAW loss gradient ∇L, never the optimiser's preconditioned
     update — this keeps values comparable across SGD and Adam.
   * Split each metric into a pure ``_core(...)`` function over gradient tensors

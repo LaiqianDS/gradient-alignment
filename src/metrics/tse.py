@@ -8,7 +8,7 @@ mean batch loss of one epoch); callers must aggregate per-step losses first
 (``train.epoch_mean_losses``). Cost is **zero**: the train loss is already
 produced by the forward pass.
 
-Variants (see ``docs/research/metrics.md``, tag ``metric_kind="baseline"``):
+Variants:
   * TSE      = Σ_t ℓ_t                       — ``tse/cumulative``
   * TSE-E    = Σ_{t=T-E+1}^T ℓ_t (burn-in E) — ``tse/e_window``
   * TSE-EMA  = Σ_t γ^(T-t) ℓ_t, γ∈{0.9,0.999} — ``tse/ema_0_9``, ``tse/ema_0_999``

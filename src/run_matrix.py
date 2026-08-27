@@ -1,6 +1,6 @@
 """Matrix sweep launcher: generate per-cell configs, run the grid, resume pending.
 
-The experiment matrix (frozen in ``docs/research``) is a full grid::
+The experiment matrix is a full grid::
 
     {mnist, cifar10, cifar100, tiny_imagenet} x {fc, cnn, resnet18} x {sgd, adam}
         x  8 learning rates (per optimizer)  x  5 seeds   =  960 runs

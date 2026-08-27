@@ -13,7 +13,7 @@ The per-epoch aggregate corrects for excess kurtosis,
 where ``M1`` is the mean cosine and ``M2``/``M4`` are the 2nd/4th central
 moments; ``gwa/kurt`` logs the excess kurtosis ``M4/M2² - 3`` (Gaussian ≈ 0).
 The canonical estimator is **last-layer-only**: the classifier weight matrix, bias
-excluded (``docs/research/metrics.md``, "Gradient-Weight Alignment").
+excluded.
 """
 
 from __future__ import annotations

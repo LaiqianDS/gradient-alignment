@@ -1,7 +1,7 @@
 """Shared gradient primitives, computed once and reused across metrics.
 
-``docs/research/metrics.md`` calls for amortising cost via shared sweeps;
-centralising them here also means the ``torch.func`` per-sample path is
+The per-sample sweep is the dominant probe cost, so it is computed once and
+shared; centralising it here also means the ``torch.func`` per-sample path is
 implemented and tested once instead of nine times. Everything operates on the
 raw loss gradient ∇L so values stay comparable across optimisers.
 """

@@ -1,12 +1,12 @@
 """Calibration pilot: one extended run per matrix cell, before the real sweep.
 
 The frozen matrix fixes per-dataset epoch budgets and accuracy thresholds as
-*starting points* to be calibrated by a pilot (docs/research, decisions of
-2026-06-09). This launcher runs that pilot: ONE run per cell (24 total) at the
-center of the LR grid (SGD 1e-2, Adam 1e-3 -- the canonical defaults), seed 0,
-with a DOUBLED epoch budget, so the curves show where val loss actually
-flattens. Cutting a generous curve afterwards is free; relaunching a too-short
-matrix is not (budgets define ``progress_frac``, windows and AUC).
+*starting points* to be calibrated by a pilot. This launcher runs that pilot:
+ONE run per cell (24 total) at the center of the LR grid (SGD 1e-2, Adam 1e-3,
+the canonical defaults), seed 0, with a DOUBLED epoch budget, so the curves show
+where val loss actually flattens. Cutting a generous curve afterwards is free;
+relaunching a too-short matrix is not (budgets define ``progress_frac``,
+windows and AUC).
 
 Pilot runs write to ``reports_pilot/``, never ``reports/``: run_matrix counts
 a grid point as done iff ``reports/<run_name>/summary.json`` exists, so a

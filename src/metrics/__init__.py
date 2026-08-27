@@ -11,8 +11,7 @@ They are collected here into two groups, because their call signatures differ:
   **per-epoch mean** training losses instead of a model:
   ``BASELINE.compute(losses) -> dict`` (aggregate per-step losses first, see
   ``train.epoch_mean_losses``). Every gradient metric must out-predict TSE-EMA
-  to justify its cost, so it is kept separate on purpose (see
-  ``docs/research/metrics.md``).
+  to justify its cost, so it is kept separate on purpose.
 
 Example
 -------

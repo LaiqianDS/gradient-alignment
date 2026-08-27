@@ -1,7 +1,6 @@
 """Normalized Gradient Variance (Faghri et al., 2020).
 
-Two global scalars over ``K`` independent batch gradients of the frozen model
-(``docs/research/metrics.md``, "A Study of Gradient Variance in Deep Learning"):
+Two global scalars over ``K`` independent batch gradients of the frozen model:
 
   * ``var/avg``        — Average Variance, the normalized trace of the gradient
     covariance ``tr(Cov(g)) / d``: an absolute, scale-dependent variance

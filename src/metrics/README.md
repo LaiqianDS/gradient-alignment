@@ -4,10 +4,6 @@ This package measures **how the per-example gradients behave early in training**
 
 Every metric is a small, self-contained module with its own tests. They all share one contract, so the training loop can run all of them and get back a single flat dictionary of numbers per checkpoint.
 
-> The plain-language summaries below are the readable counterpart to
-> `docs/research/metrics.md`, which holds the full formulas, costs, and the
-> per-paper rationale. When the two disagree, `metrics.md` is the source of truth.
-
 ## How to use it
 
 ```python

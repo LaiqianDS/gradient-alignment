@@ -78,8 +78,7 @@ class MetricSpec:
     headline: bool = False
 
 
-# Ranges and trends are grounded in docs/research/Metricas.md (per-paper
-# semantics) and the user-confirmed training-time expectations. cosines -> [-1, 1];
+# Ranges and trends follow each metric's source paper. cosines -> [-1, 1];
 # variances / distances / GSNR / TSE -> [0, inf); fractions -> [0, 1]; m-coherence
 # -> [0, M]; GWA excess kurtosis -> [-2, inf).
 SPECS: tuple[MetricSpec, ...] = (
@@ -169,16 +168,16 @@ def load_trajectories(report_dir: str | Path = PILOT_DIR) -> pd.DataFrame:
 
 
 def load_windows(report_dir: str | Path = PILOT_DIR) -> pd.DataFrame:
-    """Per-window snapshots of every run (the predictor table of the frozen plan)."""
+    """Per-window snapshots of every run (the early-window predictor table)."""
     return _load_concat(report_dir, "metrics_at_window.parquet")
 
 
 def load_summaries(report_dir: str | Path = PILOT_DIR) -> pd.DataFrame:
     """One row per run: the ``summary.json`` scalars (final test/val/gap, timing).
 
-    Pilot caveat (memory ``pilot-results-validity``): for ``tiny_imagenet`` the
-    test/gap fields are corrupt (a pre-fix bug); val-side and timing fields are
-    valid. The loader does not drop them -- the notebook annotates.
+    Pilot caveat: for ``tiny_imagenet`` the test/gap fields are corrupt (a
+    pre-fix bug); val-side and timing fields are valid. The loader does not drop
+    them, the notebook annotates.
     """
     rows = [
         json.loads((d / "summary.json").read_text())
@@ -330,9 +329,9 @@ def degeneracy_report(
     deliberately *not* called degenerate. The reference is the asymptotic value,
     so a genuinely noise-only metric scatters around it and lands on either side
     about half the time; a boolean verdict would read as a decision the statistic
-    cannot support on a single run. Nothing in the frozen plan keys off it -- it
-    is descriptive, and what carries the reading is the whole distribution across
-    runs against the reference line.
+    cannot support on a single run. Nothing keys off it: it is descriptive, and
+    what carries the reading is the whole distribution across runs against the
+    reference line.
     """
     keys = keys or [k for k in metric_columns() if k in traj.columns]
     rows = []
@@ -400,7 +399,7 @@ def trend_report(
     The paper predictions describe the *training* phase, but the pilot runs 2x
     budget deep into overfitting; pass ``progress_max`` to grade only the early
     window (rows with ``progress_frac <= progress_max``). In pilot terms the frozen
-    1x budget is ``progress_frac`` 0.5, so the plan's windows f in {0.05, 0.10,
+    1x budget is ``progress_frac`` 0.5, so the logged windows f in {0.05, 0.10,
     0.25, 0.50} map to ``progress_max`` {0.025, 0.05, 0.125, 0.25}.
     """
     if progress_max is not None:
@@ -459,7 +458,7 @@ def redundancy_matrix(
     so the correlation reflects co-movement *over training inside each run* and is
     not manufactured by between-run scale differences (a Simpson guard). This is a
     redundancy preview for the later metric-pruning decision; it is NOT a
-    metric<->efficiency test and feeds no hypothesis in the frozen plan.
+    metric<->efficiency test and feeds no hypothesis test.
     """
     keys = keys or [k for k in headline_columns() if k in traj.columns]
     if not within_run:

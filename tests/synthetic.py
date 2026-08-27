@@ -1,6 +1,6 @@
 """Synthetic models and crafted gradient matrices for metric sanity checks.
 
-Two tiers, matching the "sanity checks sintéticos" the plan calls for:
+Two tiers:
   * crafted gradient matrices with analytically known metric values
     (parallel rows, orthogonal rows): test the pure ``_core`` functions.
   * a tiny MLP + random probe: smoke-test the full ``compute()`` path returns

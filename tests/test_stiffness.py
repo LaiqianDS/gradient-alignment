@@ -160,8 +160,8 @@ def test_within_aggregation_is_pooled_micro_not_macro():
     # mean over class-stiffness-matrix cells; this implementation pools over
     # pairs (micro). Class sizes {3, 2} with within-cosines {1.0, 0.5} expose
     # the difference: micro = (3·1 + 1·0.5)/4 = 0.875 vs macro = 0.75. Pinned
-    # here as the documented, deliberate adaptation (docs/research/metrics.md);
-    # with a balanced probe the two estimands nearly coincide.
+    # here as a deliberate adaptation; with a balanced probe the two estimands
+    # nearly coincide.
     p = 8
     a = torch.zeros(p)
     a[0] = 1.0
