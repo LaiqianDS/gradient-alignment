@@ -32,7 +32,7 @@ Este capítulo traduce el posicionamiento del Capítulo~\ref{ch:estado-del-arte}
 % Pendiente en esta sección: arquitecturas (FC/CNN/ResNet-18), optimizadores (SGD/Adam) y
 % normalización sin augmentation.
 
-El estudio emplea cuatro conjuntos de clasificación de imágenes de dificultad creciente: MNIST~\cite{lecun1998gradient}, CIFAR-10 y CIFAR-100~\cite{krizhevsky2009learning} y Tiny-ImageNet~\cite{le2015tiny}. En todos ellos el conjunto de test oficial se mantiene intacto y el de validación se recorta del entrenamiento oficial mediante muestreo estratificado por clase con una \emph{seed} fija; en CIFAR esto reproduce la partición 45.000/5.000 de He et al.~\cite{he2015deep}. Así la validación conserva las proporciones de clase del entrenamiento y la partición es idéntica en los más de novecientos entrenamientos. La Tabla~\ref{tab:datasets} recoge los tamaños resultantes, el número de clases y la dimensión de entrada de cada conjunto. Tiny-ImageNet es la excepción: como las etiquetas de su conjunto de test oficial no son públicas, su conjunto de validación público se emplea como test, y por eso el total usable baja a 110.000 ejemplos en lugar de 120.000.
+El estudio emplea cuatro conjuntos de clasificación de imágenes de dificultad creciente: MNIST~\cite{lecun1998gradient}, CIFAR-10 y CIFAR-100~\cite{krizhevsky2009learning} y Tiny-ImageNet~\cite{le2015tiny}. En todos ellos el conjunto de test oficial se mantiene intacto y el de validación se recorta del entrenamiento oficial mediante muestreo estratificado por clase con una \emph{seed} fija; en CIFAR esto reproduce la partición 45.000/5.000 de He et al.~\cite{he2015deep}. Así la validación conserva las proporciones de clase del entrenamiento y la partición es idéntica en los 960 entrenamientos. La Tabla~\ref{tab:datasets} recoge los tamaños resultantes, el número de clases y la dimensión de entrada de cada conjunto. Tiny-ImageNet es la excepción: como las etiquetas de su conjunto de test oficial no son públicas, su conjunto de validación público se emplea como test, y por eso el total usable baja a 110.000 ejemplos en lugar de 120.000.
 
 \begin{table}[ht]
 \centering
@@ -75,7 +75,43 @@ Como cota laxa de contexto, ResNet-18 entrenada desde cero a resolución nativa 
 
 \section{Matriz de experimentos}
 \label{sec:matriz}
-% 24 celdas x 8 LR x 5 seeds ~ 960 runs; rejilla de LR por optimizador; hiperparámetros fijos.
+% Fuente única de la rejilla: src/config.py (DATASETS, MODELS, OPTIMIZERS, SEEDS, LR_GRID,
+% FIXED_KNOBS). Toda cifra de esta sección debe cuadrar con esas constantes.
+
+La matriz de experimentos determina qué entrenamientos se ejecutan y qué combinaciones de hiperparámetros se barren. Combina tres factores, descritos en la Sección~\ref{sec:setup}: cuatro conjuntos de datos, tres arquitecturas y dos optimizadores. Cada combinación de los tres forma una celda, y hay 24 en total. Además, dentro de cada celda se barren ocho \emph{learning rates} y cinco \emph{seeds}, lo que da 40 entrenamientos por celda y 960 en total. La Tabla~\ref{tab:matriz} recoge los valores de cada eje.
+
+La celda es la unidad de análisis: dentro de ella el conjunto de datos, la arquitectura y el optimizador permanecen fijos, y lo único que cambia entre sus 40 entrenamientos es el \emph{learning rate} y la \emph{seed}. Las correlaciones se calculan dentro de cada celda y no sobre los 960 entrenamientos juntos. Mezclarlos haría que casi toda la variación en eficiencia procediese del conjunto de datos y de la arquitectura, porque todo entrenamiento sobre MNIST es rápido y ninguno sobre Tiny-ImageNet lo es, y la correlación resultante sería alta aunque la métrica no distinguiese nada dentro de un problema concreto. Con los tres factores fijos, en cambio, lo único que separa en eficiencia a dos entrenamientos de la misma celda es su \emph{learning rate}, y la correlación mide entonces lo que el trabajo pregunta: si la métrica temprana anticipa qué \emph{learning rates} van a entrenar bien. El procedimiento se detalla en la Sección~\ref{sec:protocolo-analisis}.
+
+\begin{table}[ht]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\caption{Ejes de la matriz de experimentos.}
+\label{tab:matriz}
+\begin{tabular}{llc}
+\toprule
+\textbf{Eje} & \textbf{Valores} & \textbf{Niveles} \\
+\midrule
+Conjunto de datos & MNIST, CIFAR-10, CIFAR-100, Tiny-ImageNet & 4 \\
+Arquitectura      & FC, CNN, ResNet-18 & 3 \\
+Optimizador       & SGD, Adam & 2 \\
+\addlinespace
+\emph{Learning rate} (SGD)  & $3 \times 10^{-4}$, $10^{-3}$, $3 \times 10^{-3}$, $10^{-2}$, $3 \times 10^{-2}$, $10^{-1}$, $3 \times 10^{-1}$, $1$ & 8 \\
+\emph{Learning rate} (Adam) & $3 \times 10^{-5}$, $10^{-4}$, $3 \times 10^{-4}$, $10^{-3}$, $3 \times 10^{-3}$, $10^{-2}$, $3 \times 10^{-2}$, $10^{-1}$ & 8 \\
+\emph{Seed}                 & 0, 1, 2, 3, 4 & 5 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Los ocho \emph{learning rates} están espaciados de forma logarítmica, multiplicando cada valor por algo más de tres para obtener el siguiente, porque lo que separa a un \emph{learning rate} de otro es su orden de magnitud y no la diferencia entre ambos. El recorrido es ancho a propósito, con el valor mayor unas 3.000 veces por encima del menor, de manera que la lista abarca desde entrenamientos demasiado lentos hasta entrenamientos que divergen. Esos extremos no son cómputo desperdiciado, sino lo que da rango a la variable que se quiere predecir: si todas las configuraciones fuesen razonables, la eficiencia sería casi constante y no habría forma de distinguir una métrica predictiva de una que no lo es. Los entrenamientos que no alcanzan el umbral quedan censurados en la velocidad de convergencia, en el sentido de la Sección~\ref{sec:eficiencia}.
+
+Cada optimizador tiene su propia lista, y las tres arquitecturas comparten la del optimizador con el que entrenan. Dar una lista distinta a cada arquitectura, centrada donde mejor le funcione, exigiría conocer ese óptimo antes de ejecutar los entrenamientos, es decir, fijar el diseño con información extraída del resultado. La lista de Adam es la de SGD dividida entre 10, porque en Adam el paso efectivo mide aproximadamente el \emph{learning rate}, como expone la Sección~\ref{sec:sgd}, mientras que en SGD el \emph{momentum} de 0,9 lo amplifica alrededor de 10 veces; un mismo valor nominal resulta así un paso corriente en SGD y un salto desmedido en Adam.
+
+Salvo por dónde empiezan, las dos listas son idénticas en número de valores, en factor entre valores consecutivos y en anchura de recorrido. Esa simetría permite emparejar SGD y Adam por posición en la lista, que es lo que sitúa a ambos en el mismo tramo de su propio rango útil, y es lo que exige el objetivo OE5. Emparejarlos por valor nominal parecería más limpio, pero compararía tramos distintos, porque un mismo número deja a SGD todavía trabajando y a Adam muy por encima de su rango.
+
+Las cinco \emph{seeds} son las mismas en todas las celdas. Una \emph{seed} fija la inicialización de los pesos, el orden de los \emph{minibatches} y qué ejemplos forman el \emph{batch} de medición, pero no cambia el régimen del entrenamiento, cosa que el \emph{learning rate} sí hace. Por eso el barrido se reparte a favor de los \emph{learning rates} y las \emph{seeds} se limitan a las necesarias para medir la dispersión que queda al fijar todo lo demás. Compartirlas entre celdas permite además comparar SGD y Adam con idéntica inicialización e idéntico orden de los datos.
+
+El resto de hiperparámetros toma el mismo valor en los 960 entrenamientos: tamaño de \emph{batch} 128, \emph{momentum} 0,9 en SGD, \emph{weight decay} nulo y $M = 256$ ejemplos en el \emph{batch} de medición. Al no variar ninguno, ninguno puede actuar como variable de confusión. La excepción son el presupuesto de \emph{epochs} y el umbral de \emph{accuracy}, que dependen del conjunto de datos y por tanto de un eje de la matriz; su calibración se detalla en la Sección~\ref{sec:calibracion}.
 
 \section{Calibración de presupuestos y umbrales}
 \label{sec:calibracion}
@@ -106,7 +142,7 @@ Tiny-ImageNet  & 80 & 40 & 0,25 & 0,20 \\
 \end{tabular}
 \end{table}
 
-Dos umbrales bajaron respecto a su candidato. En CIFAR-10 el umbral pasó de 0,75 a 0,65: el techo de \emph{accuracy} de validación de la CNN con el \emph{learning rate} centrado ronda 0,72--0,73, de modo que con 0,75 esa celda quedaba censurada de forma permanente, no por lentitud sino por techo. En Tiny-ImageNet pasó de 0,25 a 0,20: el margen de la CNN sobre 0,25 era de apenas 0,007, frágil frente a la varianza entre \emph{seeds}, mientras que con 0,20 sube a en torno a 0,06. Dos presupuestos se recortaron, el de CIFAR-100 de 60 a 40 \emph{epochs} y el de Tiny-ImageNet de 80 a 40: sin \emph{data augmentation} las curvas de \emph{loss} de validación se aplanan mucho antes del presupuesto candidato, y cada \emph{epoch} sobrante sería coste muerto multiplicado por los más de novecientos entrenamientos de la matriz.
+Dos umbrales bajaron respecto a su candidato. En CIFAR-10 el umbral pasó de 0,75 a 0,65: el techo de \emph{accuracy} de validación de la CNN con el \emph{learning rate} centrado ronda 0,72--0,73, de modo que con 0,75 esa celda quedaba censurada de forma permanente, no por lentitud sino por techo. En Tiny-ImageNet pasó de 0,25 a 0,20: el margen de la CNN sobre 0,25 era de apenas 0,007, frágil frente a la varianza entre \emph{seeds}, mientras que con 0,20 sube a en torno a 0,06. Dos presupuestos se recortaron, el de CIFAR-100 de 60 a 40 \emph{epochs} y el de Tiny-ImageNet de 80 a 40: sin \emph{data augmentation} las curvas de \emph{loss} de validación se aplanan mucho antes del presupuesto candidato, y cada \emph{epoch} sobrante sería coste muerto multiplicado por los 960 entrenamientos de la matriz.
 
 La calibración no altera el protocolo de medición: todas las métricas se calculan al final de cada \emph{epoch} sobre el \emph{batch} de medición fijo, en todos los entrenamientos, y conservar la serie temporal completa permite escoger las ventanas de análisis a posteriori.
 
@@ -118,6 +154,11 @@ La calibración no altera el protocolo de medición: todas las métricas se calc
 \section{Protocolo de análisis}
 \label{sec:protocolo-analisis}
 % Pendiente: se reconstruye objetivo por objetivo (fase B).
+% Viene de \ref{sec:matriz}, que remite aquí y por tanto DEBE quedar cubierto: cada uno de los 40
+% entrenamientos de una celda aporta un par de cifras, el valor de la métrica en sus primeras
+% epochs y el indicador de eficiencia del entrenamiento completo; la correlación de la celda se
+% calcula entre esas dos series de 40 valores; el cálculo se repite en las 24 celdas y la pregunta
+% pasa a ser si todas dan la misma respuesta.
 
 \section{Riesgos}
 \label{sec:riesgos}
