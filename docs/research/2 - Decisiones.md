@@ -10,11 +10,22 @@ Bloquean experimentos. La acción para resolverlas vive en [[3 - Progreso]] (Pla
 
 **El método de análisis, entero (abierto el 2026-08-25).** Los 960 entrenamientos están hechos y sus datos versionados en `reports/`. No hay método definido para analizarlos: el plan anterior se retiró (ver el log del 2026-08-25). Lo que queda por decidir es, hipótesis por hipótesis, con qué cuenta concreta se responde. Es la única pendiente, y bloquea el capítulo de resultados.
 
+Tamaño del problema de multiplicidad, para tenerlo presente al decidir: `metrics_at_window.parquet` registra **27 columnas de predictor**, porque cada métrica escribe varias variantes (*stiffness* seis, *gradient confusion* cinco, GSNR tres, TSE cuatro, el resto una o dos). Una correlación consume los 40 entrenamientos de una celda, así que cada elección de predictor, ventana e indicador de eficiencia produce 24 coeficientes, uno por celda. Con 27 predictores, 4 ventanas tempranas y los indicadores de eficiencia en juego, el factorial completo son miles de contrastes sobre las mismas 24 celdas. El método tiene que decidir qué subconjunto se contrasta y cómo se corrige la multiplicidad, no barrerlo entero.
+
 El 2026-08-27 se retiró de este log la tanda de decisiones del 2026-08-26, la que abría la primera pasada de la fase A, junto con el código y el texto que produjo. La fase A se rehace después de la fase 0, así que sus decisiones se vuelven a tomar entonces y se registran aquí con la fecha en que se tomen. Lo que sobrevive de aquella pasada, porque está aprobado y escrito en la memoria, son la población de análisis y el tratamiento del censurado de `metodologia.tex`.
 
 ## Tomadas (log)
 
 ### 2026-08-27
+
+#### La comparación SGD↔Adam se hace sobre las ocho posiciones, no sobre el solape de rejillas
+
+Las rejillas de LR de SGD y Adam **se solapan en seis de sus ocho valores**, de 3e-4 a 1e-1; solo SGD tiene 0,3 y 1, y solo Adam tiene 3e-5 y 1e-4. Es consecuencia mecánica del desplazamiento, porque una década son dos saltos en una rejilla espaciada a medias décadas. De ahí la pregunta de si la comparación pareada de OE5 no sería más limpia sobre esos seis valores compartidos, al mismo LR nominal, en lugar de por posición en la rejilla. **Se decide mantener las ocho posiciones** y no usar el solape.
+
+- **Decide el reparto de los fallos, medido sobre los 960 `summary.json`.** Con las ocho posiciones, SGD tiene 72 entrenamientos clavados en el azar de 480 y Adam 82 de 480, un 15 % frente a un 17 %, y los dos fallan por el mismo lado, el de paso demasiado grande. Restringido al solape, SGD cae a 3 de 300 y Adam se queda en 82 de 300, un 1 % frente a un 27 %. La restricción convierte una comparación equilibrada en una desequilibrada, porque **el mismo valor nominal no es el mismo régimen** en los dos optimizadores: sobre el solape, SGD recorrería de lento a bueno sin fallar casi nunca y Adam de bueno a muerto uno de cada cuatro.
+- **De paso queda validado el desplazamiento de 10×**, que hasta hoy era una suposición tomada de los valores por defecto canónicos y del *momentum* 0,9, que amplifica el paso efectivo de SGD unas diez veces. El piloto no pudo comprobarlo porque solo ejecutó el punto central de cada rejilla. La matriz completa sí lo comprueba a posteriori: que los dos optimizadores fallen casi al mismo ritmo, 72 frente a 82 muertos y 227 frente a 239 censurados, es lo que se observa cuando las dos rejillas cubren tramos comparables de sus rangos respectivos.
+- **Se descarta también el solape como comprobación de robustez**, que fue la primera propuesta. Sería un control peor que aquello que controla: con un desequilibrio propio del 1 % frente al 27 %, una discrepancia en OE5 no permitiría distinguir un desplazamiento mal elegido de un subconjunto torcido.
+- **Criterio de "clavado en el azar"** usado en estas cuentas: *accuracy* de validación máxima por debajo de 1,25 veces el azar del conjunto de datos. Da exactamente 154 entrenamientos, el mismo recuento que la firma `gwa/score_mean` = 0,0 que ya estaba registrada, aunque no se ha comprobado que sean el mismo conjunto de 154.
 
 #### Terminología: anglicismos bien conocidos, y siempre en cursiva
 
