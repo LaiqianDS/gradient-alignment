@@ -42,7 +42,7 @@ No depende de ningún resultado, así que corre en paralelo. Recoge en la memori
 
 - [ ] Aplicar el estilo de [[Estilo de redacción - notas del TFM HOFT]] a lo ya escrito: roadmap al abrir capítulo, conclusiones al cerrarlo, y su plantilla de capítulo.
 - [ ] **Definir el estilo de figuras desde cero**, con las notas de HOFT §Estilo de las figuras como referencia. No hay nada heredado: los dos intentos anteriores se retiraron.
-- [ ] **Unificar la terminología en inglés** (decidido el 2026-08-27): se admiten los términos bien conocidos del campo, *epoch* y *learning rate* incluidos. Hay que pasarlo por los siete capítulos de una vez, porque mezclar "época" y *epoch* es peor que cualquiera de las dos opciones.
+- [x] **Unificar la terminología en inglés.** Hecho el 2026-08-27, decisión y detalle en [[2 - Decisiones]]. A inglés *epoch*, *learning rate* y *seed*; "conjunto de medición" pasa a "batch de medición" y queda definido en `fundamentos.tex` antes de usarse; todo anglicismo va en cursiva **siempre**, que es la norma de la escuela y deroga la convención anterior de cursiva solo en la primera aparición.
 - [ ] Secciones de metodología que no dependen del análisis: variables, ventana temporal, matriz de experimentos y protocolo de evaluación.
 - [ ] Capítulo de implementación, hoy seis títulos sin prosa.
 - [ ] Revisar §Protocolo de análisis y §Riesgos: qué se queda, cómo se llama y qué se va al capítulo de resultados por estar duplicado.
@@ -53,7 +53,7 @@ No depende de ningún resultado, así que corre en paralelo. Recoge en la memori
 
 No ataca ningún objetivo: establece que los datos sirven y qué se puede calcular con ellos. **Regla de ejecución: un lado cada vez**, predictores y variables dependientes por separado.
 
-- [ ] Validez de las columnas registradas sobre los 960 runs: rango teórico, identidades exactas y columnas ausentes.
+- [ ] Validez de las columnas registradas sobre los 960 runs: rango teórico, identidades exactas y columnas ausentes, valores nulos o imposibles, runs que se quedaron sin aprender estancadas, etc.
 - [ ] Mapa de lo computable celda a celda: qué runs entran en el análisis y cuántos quedan para cada variable dependiente.
 - [ ] Rango dinámico del predictor: si la métrica se mueve más por el learning rate que por la semilla.
 - [ ] Solape entre la ventana de medida y el cruce del umbral, que decide en qué ventanas se puede analizar la velocidad.

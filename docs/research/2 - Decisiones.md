@@ -14,6 +14,20 @@ El 2026-08-27 se retiró de este log la tanda de decisiones del 2026-08-26, la q
 
 ## Tomadas (log)
 
+### 2026-08-27
+
+#### Terminología: anglicismos bien conocidos, y siempre en cursiva
+
+Se admiten en la memoria los términos ingleses de uso corriente en el campo, y todo anglicismo va en cursiva **cada vez que aparece**, no solo la primera. Esto último deroga la convención vigente desde julio, que reservaba la cursiva a la primera aparición de cada término.
+
+- **Por qué la cursiva siempre.** Lo manda la norma de la escuela: el material de seminarios dice "cursiva para palabras extranjeras" y remite al DLE para distinguir el extranjerismo crudo, que va en cursiva, del adaptado, que va en redonda. Ninguno de los nuestros está adaptado en el DLE. Son unas 160 cursivas en 43 páginas, algo más de tres por página.
+- **Pasan a inglés:** *epoch* y *epochs* (47), *learning rate* y *learning rates* (10), *seed* y *seeds* (8). Con dos consecuencias gramaticales que hubo que resolver a mano: *epoch* y *seed* heredan el género femenino de "época" y "semilla", de modo que los artículos y adjetivos que ya estaban siguen concordando; *learning rate*, en cambio, es masculino en el uso habitual, así que sus diez apariciones se reescribieron una a una.
+- **"Conjunto de medición" pasa a "batch de medición"** (17). El nombre anterior era ambiguo en castellano, porque se lee igual como "el conjunto de las mediciones", que es lo contrario de lo que designa. **Se descartó "probe"**, que es el nombre del concepto en el código y encaja por significado, porque en aprendizaje automático *probe* ya designa otra cosa muy conocida, el clasificador lineal entrenado sobre representaciones congeladas. Falla justo el criterio de admisión: es conocido, pero por otra cosa. El término queda definido formalmente en `fundamentos.tex` §Geometría del gradiente, antes de su primer uso.
+- **"Tamaño de lote" pasa a "tamaño de batch"** (2). No es una decisión nueva sino la aplicación de la del 2026-07-04, que ya fijaba *batch* frente a "lote" y no se había aplicado en el estado del arte.
+- **Regla para los nombres de métrica:** acrónimo en redonda, palabra inglesa en cursiva. Quedan en redonda GSNR, GWA, TSE, NGV y GNS, y también "m-coherencia", que es una adaptación al castellano. Van en cursiva *stiffness*, *gradient disparity* y *gradient confusion*, que son sintagmas ingleses usados como nombre. Se aplica lo mismo a *minibatch*, *dropout* y *weight decay*.
+- **Se quedan en castellano**, porque cambiarlos sería anglicismo por anglicismo y no por claridad: "conjunto de datos" frente a *dataset*, "submuestra", "ventana", "banco de pruebas" y los conjuntos de entrenamiento, validación y test.
+- **Verificado.** Compila en 43 páginas, cero referencias indefinidas y cero cajas desbordadas. Trampa que costó una reparación: al marcar *batch* se volvió a marcar el que ya estaba dentro de *batch normalization*, y quedaron tres cursivas anidadas.
+
 ### 2026-08-25
 
 #### Se retira el plan de análisis
