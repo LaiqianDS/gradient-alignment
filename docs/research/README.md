@@ -19,7 +19,7 @@
 
 Antes de nada, dos avisos que ahorran tiempo. El primero es que aquí hay tres tipos de documento y conviene no confundirlos: los que explican **qué se hace y por qué**, los que registran **qué se decidió y cuándo**, y el que dice **dónde está el proyecto ahora**. El segundo es que ningún documento largo de este vault se lee de principio a fin; se consultan por la sección que hace falta.
 
-Hay cuatro caminos de lectura según a qué vengas, y cada uno se sostiene solo. Uno de ellos, el de cómo se decide cada hipótesis, hoy no existe: el plan de análisis se retiró el 2026-08-25 y construir el método es el trabajo que queda.
+Hay cuatro caminos de lectura según a qué vengas, y cada uno se sostiene solo. Uno de ellos, el de cómo se decide cada hipótesis, hoy no existe. El plan de análisis se retiró el 2026-08-25 y construir el método es el trabajo que queda.
 
 **Para entender la pregunta (media hora).** Leer el resumen de cinco líneas de arriba y después [[1 - Diseño]] entero, que es el qué y el porqué completo: pregunta de investigación, las seis hipótesis, el diseño experimental, la matriz de runs y los baselines. Con eso ya se puede tener una conversación sobre el trabajo.
 

@@ -30,7 +30,7 @@ La contribución principal es la introducción del concepto formal de **gradient
 
 $$\langle \nabla f_i(w), \nabla f_j(w) \rangle \geq -\eta.$$
 
-La interpretación operativa es transparente. Cuando $\eta$ es pequeña los gradientes de distintas muestras interactúan de manera armoniosa: un paso que reduce la pérdida en un mini-batch no perjudica sustancialmente a los demás, y SGD progresa con rapidez incluso bajo learning rate constante. Cuando $\eta$ es grande aparecen pares de gradientes fuertemente anti-correlacionados, los mini-batches "tiran" en direcciones contrarias y el progreso neto se diluye. La métrica permite ligar de forma directa la geometría del problema con la velocidad de convergencia. A diferencia de la varianza de gradientes o de la gradient diversity, no requiere asumir gradientes con norma acotada y captura específicamente correlaciones negativas pares.
+La interpretación operativa es transparente. Cuando $\eta$ es pequeña los gradientes de distintas muestras interactúan de manera armoniosa. Un paso que reduce la pérdida en un mini-batch no perjudica sustancialmente a los demás, y SGD progresa con rapidez incluso bajo learning rate constante. Cuando $\eta$ es grande aparecen pares de gradientes fuertemente anti-correlacionados, los mini-batches "tiran" en direcciones contrarias y el progreso neto se diluye. La métrica permite ligar directamente la geometría del problema con la velocidad de convergencia. A diferencia de la varianza de gradientes o de la gradient diversity, no requiere asumir gradientes con norma acotada y captura específicamente correlaciones negativas pares.
 
 ### Metodología
 

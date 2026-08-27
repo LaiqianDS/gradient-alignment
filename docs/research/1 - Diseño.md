@@ -16,7 +16,7 @@ Hipótesis falsada si las correlaciones son débiles (|ρ| < 0.3) o inestables e
 
 ## Hipótesis a contrastar
 
-Formalización de la hipótesis operativa en seis afirmaciones falsables. Aquí se enuncia **qué** se quiere averiguar. El criterio estadístico con el que se decidirá cada una está **por definir**: es trabajo pendiente y no existe todavía.
+Formalización de la hipótesis operativa en seis afirmaciones falsables. Aquí se enuncia **qué** se quiere averiguar. El criterio estadístico con el que se decidirá cada una está **por definir**. Es trabajo pendiente y no existe todavía.
 
 - **H1 (existencia).** Al menos una métrica temprana de gradiente correlaciona con la eficiencia del entrenamiento completo. (Es la hipótesis operativa de arriba.)
 - **H2 (valor incremental, la decisiva).** Al menos una métrica conserva poder predictivo *tras controlar por lo que la curva de loss ya da gratis*. Si H1 se cumple pero H2 falla, las métricas de gradiente son redundantes con una señal que no cuesta nada, y ese resultado negativo es una contribución válida y no trivial.
@@ -45,13 +45,13 @@ El conjunto *computado* está implementado y fijado en código (`src/metrics/`, 
 - **Alineación / coherencia direccional**: gradient confusion, stiffness, m-coherence, gradient disparity, GWA.
 - **Variabilidad estocástica**: gradient noise scale, normalized gradient variance, GSNR.
 
-Una candidata temprana no aparece como métrica separada: la *cosine similarity entre gradientes de batches* ya está contenida en otras métricas (stiffness y gradient confusion se construyen sobre los cosenos por pares de gradientes per-ejemplo).
+Una candidata temprana no aparece como métrica separada, porque la *cosine similarity entre gradientes de batches* ya está contenida en otras métricas (stiffness y gradient confusion se construyen sobre los cosenos por pares de gradientes per-ejemplo).
 
 ### Ventana temporal
 
 Fracciones fijas del presupuesto total de entrenamiento. Barrido en 5%, 10%, 25%, 50%. El barrido en sí mismo es un resultado reportable (cuán temprano basta para predecir).
 
-Cómo se mide en la práctica (`src/train.py`): las métricas se registran al final de *cada* época durante todo el entrenamiento. Los snapshots de 5/10/25/50/100% no se miden en el instante exacto: se eligen *a posteriori* sobre la trayectoria completa, tomando para cada fracción la época cuyo progreso quede más cerca (`metrics_at_window.parquet`). Con los presupuestos calibrados (20/40/40/40 épocas, todos múltiplos de 20) la selección es exacta: cada fracción de `windows` cae justo en una frontera de época (0,05×20=1, 0,25×40=10, etc.), así que no hay desfase entre la fracción nominal y la época elegida.
+Cómo se mide en la práctica (`src/train.py`): las métricas se registran al final de *cada* época durante todo el entrenamiento. Los snapshots de 5/10/25/50/100% no se miden en el instante exacto. Se eligen *a posteriori* sobre la trayectoria completa, tomando para cada fracción la época cuyo progreso quede más cerca (`metrics_at_window.parquet`). Con los presupuestos calibrados (20/40/40/40 épocas, todos múltiplos de 20) la selección es exacta, porque cada fracción de `windows` cae justo en una frontera de época (0,05×20=1, 0,25×40=10, etc.), así que no hay desfase entre la fracción nominal y la época elegida.
 
 ### Setup de entrenamiento
 
@@ -75,13 +75,13 @@ Rejilla completa: cuatro datasets × tres arquitecturas × dos optimizadores = *
 
 ### Baselines
 
-El baseline no es la métrica más simple ni la que diga el paper: es *el mejor predictor obtenible sin instrumentar el gradiente*. Lo que da valor al estudio es el coste de medir el gradiente, así que el rival a batir es lo que se obtiene gratis de la curva de loss. Tres niveles:
+El baseline no es la métrica más simple ni la que diga el paper, sino *el mejor predictor obtenible sin instrumentar el gradiente*. Lo que da valor al estudio es el coste de medir el gradiente, así que el rival a batir es lo que se obtiene gratis de la curva de loss. Tres niveles:
 
 - **Nivel 0, sin gradiente (suelo).** TSE (suma o EMA de las train loss tempranas; coste cero, estándar en NAS) y, sobre todo, **`early-val-accuracy@f`** (val accuracy/loss medida en la misma fracción $f$). Este último es un predictor muy fuerte y casi gratis: si las métricas de gradiente no lo superan, no hay aporte que defender.
 - **Nivel 1, gradiente barato (benchmark interno).** Normalized variance (NGV) y gradient noise scale (GNS) en variabilidad; gradient disparity en alineación (Pearson 0,957 con test error sobre 220 configuraciones en Forouzesh & Thiran). Es el rival a batir para justificar una métrica de gradiente *cara*.
 - **Nivel 2, retadoras.** Las caras o novedosas (gradient confusion, m-coherence, stiffness, GSNR, GWA) deben superar a los niveles 0 y 1. GWA es barato y a la vez el de mayor correlación reportada en la literatura (Pearson 0,99 en Hölzl 2025): si una métrica barata domina a las caras, la conclusión sería que *no hace falta instrumentación cara*.
 
-El resultado más valioso no es "quién predice mejor" sino "quién predice mejor por unidad de coste": un **frente de Pareto** de potencia predictiva frente a coste, no un único ganador.
+El resultado más valioso no es "quién predice mejor" sino "quién predice mejor por unidad de coste", esto es, un **frente de Pareto** de potencia predictiva frente a coste, no un único ganador.
 
 ## Procedimiento
 
@@ -98,7 +98,7 @@ flowchart LR
 
 ### Ejecución y reanudación
 
-`src/run_matrix.py` es la fuente única de verdad de la rejilla. `--init` genera los 24 YAML de celda en `experiments/` con el presupuesto por dataset y los hiperparámetros congelados; los ficheros existentes no se tocan, así sobreviven las ediciones a mano tras el pilot. LR y seed no van en los YAML: son los ejes de barrido y se inyectan por run, de modo que el nombre del run queda determinado por (modelo, dataset, optimizador, lr, seed). Un run cuenta como *hecho* si existe `reports/<run_name>/summary.json`: `train.py` lo escribe en último lugar, así que su presencia marca un run completo. El lanzador es idempotente: relanzarlo ejecuta solo los pendientes, de modo que se reanuda tras una caída sin llevar contabilidad externa, y los flags `--dataset/--model/--optimizer` permiten ejecutar solo una parte de la rejilla.
+`src/run_matrix.py` es la fuente única de verdad de la rejilla. `--init` genera los 24 YAML de celda en `experiments/` con el presupuesto por dataset y los hiperparámetros congelados; los ficheros existentes no se tocan, así sobreviven las ediciones a mano tras el pilot. LR y seed no van en los YAML, porque son los ejes de barrido y se inyectan por run, de modo que el nombre del run queda determinado por (modelo, dataset, optimizador, lr, seed). Un run cuenta como *hecho* si existe `reports/<run_name>/summary.json`: `train.py` lo escribe en último lugar, así que su presencia marca un run completo. El lanzador es idempotente. Relanzarlo ejecuta solo los pendientes, de modo que se reanuda tras una caída sin llevar contabilidad externa, y los flags `--dataset/--model/--optimizer` permiten ejecutar solo una parte de la rejilla.
 
 Antes de la matriz va el pilot de calibración: `src/run_pilot.py` ejecuta un run por celda (LR centrado, seed 0, presupuesto doblado) escribiendo en `reports_pilot/` para no colisionar con la detección de reanudación de la matriz, y `--report` resume la evidencia para fijar presupuestos y umbrales definitivos. Protocolo y justificación en [[2 - Decisiones]].
 

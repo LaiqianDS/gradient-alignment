@@ -47,7 +47,7 @@ La gradient disparity supera al early stopping basado en validation set, incluye
 
 $$\mathcal{D}_{i,j} = \|g_i - g_j\|_2,$$
 
-y el estimador escalar promedia las $\binom{s}{2}$ distancias sobre $s$ batches con $s \ll B$ (el paper fija $s = 5$, equivalente a 10 pares): $\overline{\mathcal{D}} = \binom{s}{2}^{-1} \sum_{i<j} \mathcal{D}_{i,j}$. Conviene insistir en que se trata de una **magnitud $\ell_2$ sin normalizar, no una similitud coseno**: la cota PAC-Bayes del paper depende explícitamente de $\|g_1 - g_2\|_2^2$ a través de $\mathrm{KL}(Q_1\|Q_2) = \tfrac{1}{2}\tfrac{\gamma^2}{\sigma^2}\|g_1-g_2\|_2^2$, y por tanto cualquier normalización por $\|g\|$ rompe la conexión teórica.
+y el estimador escalar promedia las $\binom{s}{2}$ distancias sobre $s$ batches con $s \ll B$ (el paper fija $s = 5$, equivalente a 10 pares): $\overline{\mathcal{D}} = \binom{s}{2}^{-1} \sum_{i<j} \mathcal{D}_{i,j}$. Conviene insistir en que se trata de una **magnitud $\ell_2$ sin normalizar, no una similitud coseno**, porque la cota PAC-Bayes del paper depende explícitamente de $\|g_1 - g_2\|_2^2$ a través de $\mathrm{KL}(Q_1\|Q_2) = \tfrac{1}{2}\tfrac{\gamma^2}{\sigma^2}\|g_1-g_2\|_2^2$, y por tanto cualquier normalización por $\|g\|$ rompe la conexión teórica.
 
 **Entradas.** Los $s$ vectores gradiente $g_i = \nabla L_{S_i}(h_w)$ se calculan sobre mini-batches *independientes* extraídos del propio training set sobre los **mismos pesos $w$ congelados** del paso de medición. No se requiere conjunto de validación. El gradiente del modelo completo se concatena en un único vector para el cálculo escalar; opcionalmente puede descomponerse por capa para diagnóstico estructural sin afectar al criterio agregado.
 
