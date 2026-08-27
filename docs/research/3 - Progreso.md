@@ -47,7 +47,7 @@ No depende de ningún resultado, así que corre en paralelo. Recoge en la memori
 - [ ] Capítulo de implementación, hoy seis títulos sin prosa.
 - [ ] Revisar §Protocolo de análisis y §Riesgos: qué se queda, cómo se llama y qué se va al capítulo de resultados por estar duplicado.
 - [ ] Cerrar las promesas colgantes que ya se pueden cerrar sin tener el método de análisis.
-- [ ] **Criterio de cierre:** ninguna sección con título y sin prosa salvo las que dependen de resultados, y ninguna referencia cruzada que apunte a una sección vacía.
+- [ ] **Criterio de cierre:** ninguna sección con título y sin prosa salvo las que dependen de resultados, y ninguna referencia cruzada que apunte a una sección vacía. **Medido el 2026-08-27: 14 referencias apuntan hoy a algo vacío**, cinco a los capítulos de Implementación, Resultados y Conclusiones desde la Introducción, y nueve a secciones de Metodología desde su propia hoja de ruta y desde §Calibración. Ojo: LaTeX no detecta ninguna de las dos cosas, porque un `\ref` resuelve igual aunque la sección esté vacía, así que «cero referencias indefinidas» no vale como comprobación y hay que contarlas aparte.
 
 ### Fase A: datos y validez
 
