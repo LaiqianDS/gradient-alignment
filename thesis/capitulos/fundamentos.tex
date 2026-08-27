@@ -1,16 +1,15 @@
 \chapter{Fundamentos teóricos}
 \label{ch:fundamentos}
-% Definiciones formales. Las cifras y la dirección de cada métrica siguen la versión
-% auditada de docs/research/Métricas.md y las notas de Papers/, no Conceptos.md.
+% Definiciones formales.
 
-Este capítulo fija las definiciones formales que el Capítulo~\ref{ch:estado-del-arte} maneja en su versión conceptual. La Sección~\ref{sec:notacion} reúne la notación común a modo de glosario de símbolos. Sobre ella se establecen el descenso por gradiente estocástico y la geometría de los gradientes por ejemplo (Secciones~\ref{sec:sgd} y~\ref{sec:geometria}), y a continuación se definen las dos familias de métricas, la de alineación y la de variabilidad (Secciones~\ref{sec:def-alineacion} y~\ref{sec:def-variabilidad}). La Sección~\ref{sec:eficiencia} define los indicadores de eficiencia que actúan como variables a predecir, y la Sección~\ref{sec:fund-conclusiones} recapitula lo establecido. El capítulo define los objetos y, cuando la definición lo exige, anticipa qué agregado concreto se emplea; el protocolo de medición (el \emph{batch} de medición, las ventanas, el suavizado) y las hipótesis con signo asociadas a cada métrica se detallan en el Capítulo~\ref{ch:metodologia}.
+Este capítulo fija las definiciones formales que el Capítulo~\ref{ch:estado-del-arte} maneja en su versión conceptual. La Sección~\ref{sec:notacion} reúne la notación común a modo de glosario de símbolos. Sobre ella se establecen el descenso por gradiente estocástico y la geometría de los gradientes por ejemplo (Secciones~\ref{sec:sgd} y~\ref{sec:geometria}), y a continuación se definen las dos familias de métricas, la de alineación y la de variabilidad (Secciones~\ref{sec:def-alineacion} y~\ref{sec:def-variabilidad}). La Sección~\ref{sec:eficiencia} define los indicadores de eficiencia que actúan como variables a predecir, y la Sección~\ref{sec:fund-conclusiones} recapitula lo establecido. El capítulo define los objetos y, cuando la definición lo exige, anticipa qué agregado concreto se emplea. El protocolo de medición (el \emph{batch} de medición, las ventanas, el suavizado) y las hipótesis con signo asociadas a cada métrica se detallan en el Capítulo~\ref{ch:metodologia}.
 
 \section{Notación}
 \label{sec:notacion}
 
 La Tabla~\ref{tab:notacion} recoge los símbolos que se emplean a lo largo de la memoria, con el lugar donde cada uno se introduce y define. Funciona como glosario de consulta. Cada símbolo se define una sola vez, en la sección donde aparece por primera vez, y esta tabla es el punto desde el que localizar esa definición sin releer el capítulo entero.
 
-\begin{table}[ht]
+\begin{table}[!ht]
 \centering
 \small
 \caption{Notación común de la memoria.}
@@ -39,9 +38,15 @@ $T$                   & presupuesto de \emph{epochs}                            
 $\tau$                & umbral de \emph{accuracy} de validación                  & Sec.~\ref{sec:eficiencia} \\
 $t^\star$             & \emph{epochs} hasta el umbral                            & Sec.~\ref{sec:eficiencia} \\
 $f$                   & fracción temprana del presupuesto                 & Cap.~\ref{ch:metodologia} \\
+$W$                   & pesos de la última capa lineal                    & Cap.~\ref{ch:desarrollo} \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+% La tabla de notación no cabe en lo que la apertura del capítulo deja libre en la página, ni
+% siquiera a cuerpo menor, así que sin este corte LaTeX la empuja dentro de \ref{sec:sgd},
+% fuera de la sección que la presenta. El precio son dos páginas más en el total.
+\clearpage
 
 \section{Descenso por gradiente estocástico}
 \label{sec:sgd}
@@ -68,7 +73,7 @@ con $\Sigma$ la covarianza del gradiente por ejemplo. Esta varianza escala como 
 
 Dos resúmenes estadísticos del gradiente por ejemplo $g$ (que la Sección~\ref{sec:geometria} define formalmente) organizan el resto del capítulo. El \emph{primer momento} $\mathbb{E}[g]$ describe la dirección consistente del gradiente y es lo que estiman el término de inercia (\emph{momentum}) de SGD y la media móvil $m_t$ de Adam~\cite{kingma2015adam}. El \emph{segundo momento}, a través de $\mathbb{E}[\|g\|^2]$ o de la traza de $\Sigma$, describe su magnitud y su dispersión, y es lo que recogen la media móvil $v_t$ de Adam y la escala de ruido del gradiente. Las dos familias de métricas leen, respectivamente, la dirección relativa de los gradientes por ejemplo (alineación) y su dispersión (variabilidad).
 
-Esa lectura fija además una decisión de diseño central del trabajo: todas las métricas se calculan sobre el gradiente bruto $\nabla \ell$ y nunca sobre el paso ya preacondicionado por el optimizador. El motivo es que Adam divide el gradiente por una estimación de su propio segundo momento, que es justamente lo que mide la familia de variabilidad; medir sobre el paso haría que una misma red, con el mismo gradiente, arrojase valores distintos según el optimizador, y la métrica pasaría a describir en parte la mecánica de este en lugar del aprendizaje. Sobre el gradiente bruto, en cambio, las ocho métricas son la misma cantidad bajo SGD y bajo Adam, que es lo que hace legítima la comparación entre ambos en el Capítulo~\ref{ch:metodologia}.
+Esa lectura fija además una decisión de diseño central del trabajo: todas las métricas se calculan sobre el gradiente bruto $\nabla \ell$ y nunca sobre el paso ya preacondicionado por el optimizador. El motivo es que Adam divide el gradiente por una estimación de su propio segundo momento, que es justamente lo que mide la familia de variabilidad. Medir sobre el paso haría que una misma red, con el mismo gradiente, arrojase valores distintos según el optimizador, y la métrica pasaría a describir en parte la mecánica de este en lugar del aprendizaje. Sobre el gradiente bruto, en cambio, las ocho métricas son la misma cantidad bajo SGD y bajo Adam, que es lo que hace legítima la comparación entre ambos en el Capítulo~\ref{ch:metodologia}.
 
 \section{Geometría del gradiente}
 \label{sec:geometria}
@@ -93,7 +98,7 @@ Las dos operaciones elementales son la matriz de Gram y la similitud coseno. La 
 
 El coseno vale $1$ si los dos gradientes apuntan en la misma dirección, $0$ si son ortogonales y $-1$ si son opuestos. La normalización por norma importa porque lo relevante para la cooperación entre ejemplos es la dirección relativa, no la escala individual de cada gradiente.
 
-Conviene detenerse en un hecho de alta dimensión, porque fija la escala con la que hay que leer cualquier coseno entre gradientes. Se llama \emph{isótropo} a un vector aleatorio cuya distribución no privilegia ninguna dirección del espacio, esto es, que es invariante frente a rotaciones; el caso canónico es un vector gaussiano con covarianza proporcional a la identidad o, lo que es lo mismo una vez normalizado, un punto uniforme sobre la esfera unidad. Si $u$ y $v$ son dos vectores isótropos independientes en $\mathbb{R}^P$, su coseno tiene media nula y varianza exactamente $1/P$, de modo que su magnitud típica es del orden de $1/\sqrt{P}$. No se trata solo de que la media sea cero. La distribución se concentra exponencialmente en torno a ese valor, con $\Pr[\,|\cos(u,v)| \ge t\,]$ decayendo como $\exp(-P t^2 / 2)$, que es el fenómeno de concentración de la medida sobre la esfera~\cite{vershynin2018high}. Dicho de otro modo, en dimensión alta dos direcciones tomadas al azar son casi ortogonales, y lo son tanto más cuanto mayor es $P$~\cite{blum2020foundations}.
+Conviene detenerse en un hecho de alta dimensión, porque fija la escala con la que hay que leer cualquier coseno entre gradientes. Se llama \emph{isótropo} a un vector aleatorio cuya distribución no privilegia ninguna dirección del espacio, esto es, que es invariante frente a rotaciones. El caso canónico es un vector gaussiano con covarianza proporcional a la identidad o, lo que es lo mismo una vez normalizado, un punto uniforme sobre la esfera unidad. Si $u$ y $v$ son dos vectores isótropos independientes en $\mathbb{R}^P$, su coseno tiene media nula y varianza exactamente $1/P$, de modo que su magnitud típica es del orden de $1/\sqrt{P}$. No se trata solo de que la media sea cero. La distribución se concentra exponencialmente en torno a ese valor, con $\Pr[\,|\cos(u,v)| \ge t\,]$ decayendo como $\exp(-P t^2 / 2)$, que es el fenómeno de concentración de la medida sobre la esfera~\cite{vershynin2018high}. Dicho de otro modo, en dimensión alta dos direcciones tomadas al azar son casi ortogonales, y lo son tanto más cuanto mayor es $P$~\cite{blum2020foundations}.
 
 La consecuencia práctica es que la ortogonalidad, y no un valor cualquiera, es la hipótesis nula natural de toda la familia de alineación. En los modelos de este trabajo $P$ va desde unos $1{,}9 \times 10^{4}$ parámetros en la CNN pequeña hasta más de $10^{7}$ en ResNet-18 y en la red \emph{fully connected} sobre Tiny-ImageNet, lo que sitúa el coseno esperable entre gradientes sin relación alguna entre $7 \times 10^{-3}$ y $3 \times 10^{-4}$. Un coseno medio observado del orden de $0{,}05$ queda, según el modelo, entre siete y más de 100 desviaciones típicas por encima de ese suelo, así que cualquier desviación sistemática del coseno medio entre gradientes por ejemplo es señal real y no fluctuación muestral. El argumento alcanza también a los estadísticos de extremo. Al recorrer los $\binom{M}{2}$ pares del \emph{batch} de medición, el coseno más negativo esperable bajo la hipótesis nula solo alcanza en magnitud el orden de $\sqrt{\log M / P}$, de manera que tampoco un valor apreciable de \emph{gradient confusion} puede atribuirse al azar del muestreo.
 
@@ -107,7 +112,7 @@ La familia de alineación cuantifica en qué medida los gradientes de ejemplos d
 \label{eq:cgh}
 \end{equation}
 
-donde el primer término es la energía individual de cada ejemplo y el segundo, la suma de productos internos cruzados, es donde vive la coherencia. Las métricas siguientes son distintos agregadores de ese término cruzado.
+donde el primer término suma el tamaño al cuadrado del gradiente de cada ejemplo, esto es, lo que cada uno aporta por su cuenta, y el segundo suma el producto interno de cada par de gradientes distintos, positivo cuando los dos apuntan al mismo lado y negativo cuando se oponen. En ese segundo término vive la coherencia, y las métricas siguientes son distintos agregadores de él.
 
 \paragraph{m-coherencia.} Reduce la coherencia a un único escalar sobre el \emph{batch} de medición de $M$
 ejemplos~\cite{chatterjee2020making}:
@@ -117,7 +122,7 @@ ejemplos~\cite{chatterjee2020making}:
 \label{eq:mcoherence}
 \end{equation}
 
-Vale $M$ cuando los gradientes son idénticos y $1$ en el \emph{límite ortogonal}, donde son mutuamente perpendiculares y de igual norma; valores por debajo de $1$ indican gradientes anticorrelados. Su lectura intuitiva es el número medio de ejemplos que se benefician de un paso de descenso obtenido a partir del gradiente de un ejemplo cualquiera. Una alineación mayor se asocia con un aprendizaje más coherente, de modo que se espera que una $\alpha$ alta acompañe a un entrenamiento eficiente.
+Vale $M$ cuando los gradientes son idénticos y $1$ en el \emph{límite ortogonal}, donde son mutuamente perpendiculares y de igual norma. Por debajo de $1$ los gradientes están anticorrelados. Su lectura intuitiva es el número medio de ejemplos que se benefician de un paso de descenso obtenido a partir del gradiente de un ejemplo cualquiera. Una alineación mayor se asocia con un aprendizaje más coherente, de modo que se espera que una $\alpha$ alta acompañe a un entrenamiento eficiente.
 
 \paragraph{Stiffness.} Mide el coseno entre gradientes de pares de ejemplos, desagregado
 por clases~\cite{fort2019stiffness}. Sobre el \emph{batch} de medición se definen una variante de coseno y una de signo,
@@ -129,7 +134,7 @@ S_{\operatorname{sign}} = \mathbb{E}_{i \neq j}\!\big[\operatorname{sign}\langle
 \label{eq:stiffness}
 \end{equation}
 
-cada una restringida a pares de la misma clase ($y_i = y_j$, \emph{stiffness} \emph{intra-clase}) o de clases distintas ($y_i \neq y_j$, \emph{inter-clase}). Una \emph{stiffness} intra-clase alta indica que la red ha aprendido características compartidas y que cada paso de gradiente sobre un ejemplo beneficia al resto de su clase; el indicador que se emplea es la diferencia intra-clase menos inter-clase. La señal predictiva es más fuerte en la fase temprana, porque la \emph{stiffness} decae hacia cero cuando comienza el sobreajuste.
+cada una restringida a pares de la misma clase ($y_i = y_j$, \emph{stiffness} \emph{intra-clase}) o de clases distintas ($y_i \neq y_j$, \emph{inter-clase}). Una \emph{stiffness} intra-clase alta indica que la red ha aprendido características compartidas y que cada paso de gradiente sobre un ejemplo beneficia al resto de su clase. El indicador que se emplea es la diferencia intra-clase menos inter-clase. La señal predictiva es más fuerte en la fase temprana, porque la \emph{stiffness} decae hacia cero cuando comienza el sobreajuste.
 
 \paragraph{Gradient confusion.} Adopta el punto de vista del peor caso y toma el coseno más
 negativo entre cualquier par de gradientes del \emph{batch} de medición~\cite{sankararaman2020impact}. En su forma normalizada,
@@ -139,7 +144,7 @@ negativo entre cualquier par de gradientes del \emph{batch} de medición~\cite{s
 \label{eq:confusion}
 \end{equation}
 
-Un $\hat{\eta}$ alto señala que existe al menos un par de ejemplos cuyos gradientes se oponen con fuerza, lo que frena el avance neto de SGD; un $\hat{\eta}$ cercano a cero indica gradientes que no se contradicen. Por ser un estadístico de extremo es ruidoso, así que junto al mínimo se registran estadísticos de la distribución de cosenos: su mediana, su percentil 5 y la fracción de pares negativos. Se predice que una confusión menor acompaña a un entrenamiento más rápido.
+Un $\hat{\eta}$ alto señala que existe al menos un par de ejemplos cuyos gradientes se oponen con fuerza, lo que frena el avance neto de SGD. Un $\hat{\eta}$ cercano a cero indica gradientes que no se contradicen. Por ser un estadístico de extremo es ruidoso, así que junto al mínimo se registran estadísticos de la distribución de cosenos: su mediana, su percentil 5 y la fracción de pares negativos. Se predice que una confusión menor acompaña a un entrenamiento más rápido.
 
 \paragraph{Gradient disparity.} Sustituye el coseno por la distancia entre los gradientes
 medios de dos submuestras independientes, derivada de una cota de tipo PAC-Bayes~\cite{forouzesh2021disparity}. Si el \emph{batch} de medición se parte en $s$ submuestras disjuntas y $\bar{g}^{(a)}$ denota el gradiente medio de la submuestra $a$,
@@ -152,7 +157,7 @@ medios de dos submuestras independientes, derivada de una cota de tipo PAC-Bayes
 Es una magnitud $\ell_2$ \emph{sin normalizar}, no una similitud coseno, porque la cota teórica del trabajo depende de $\|\bar{g}^{(a)} - \bar{g}^{(b)}\|_2^2$ y dividir por la norma rompería la conexión con la teoría. Una disparidad baja indica submuestras coherentes, y se predice como señal de eficiencia, con la salvedad de que su magnitud depende del tamaño de \emph{batch} y solo es comparable entre entrenamientos que lo fijen.
 
 \paragraph{Alineación gradiente-peso (GWA).} Mide el coseno entre el gradiente por ejemplo
-y los pesos del clasificador final, restringido a la última capa lineal~\cite{hoelzl2025gradient}. Para cada ejemplo del \emph{batch} de medición, $\gamma_i = \cos\!\big(g_i^{\text{(últ.)}}, w^{\text{(últ.)}}\big)$, y el agregado por \emph{epoch} corrige la media por el exceso de curtosis de la distribución de los $\gamma_i$:
+y los pesos de la última capa lineal de la red, la que convierte la representación aprendida en una puntuación por clase, con el gradiente restringido también a esa capa~\cite{hoelzl2025gradient}. Para cada ejemplo del \emph{batch} de medición, $\gamma_i = \cos\!\big(g_i^{\text{(últ.)}}, w^{\text{(últ.)}}\big)$, y el agregado por \emph{epoch} corrige la media por el exceso de curtosis de la distribución de los $\gamma_i$:
 
 \begin{equation}
 \mathrm{GWA} = \frac{\bar{\gamma}}{\dfrac{\mu_4}{\mu_2^{2}} - 3 + \beta},
@@ -187,7 +192,7 @@ a partir del cual ampliar el \emph{batch} deja de reducir el número de pasos, s
 \label{eq:gns}
 \end{equation}
 
-con $\Sigma$ la covarianza por ejemplo y $G$ el gradiente medio. La versión exacta $\mathcal{B}_{\text{noise}} = \operatorname{tr}(H\Sigma)/(G^\top H G)$ requiere la Hessiana $H$ y se descarta por coste; la simplificada asume $H \propto I$. Por construcción, $\mathcal{B}_{\text{simple}} \approx B \cdot \mathrm{NGV}$, relación exacta en esperanza que emparenta esta métrica con la NGV.
+con $\Sigma$ la covarianza por ejemplo y $G$ el gradiente medio. La versión exacta $\mathcal{B}_{\text{noise}} = \operatorname{tr}(H\Sigma)/(G^\top H G)$ requiere la Hessiana $H$ y se descarta por coste. La simplificada asume $H \propto I$. Por construcción, $\mathcal{B}_{\text{simple}} \approx B \cdot \mathrm{NGV}$, relación exacta en esperanza que emparenta esta métrica con la NGV.
 
 Estimada sobre el \emph{batch} de medición con gradientes por ejemplo, la escala de ruido guarda además una relación que no es aproximada sino una identidad algebraica, y que cruza la frontera entre las dos familias. Con $S = \sum_i g_i$ y $Q = \sum_i \|g_i\|^2$ se tiene $\|G\|^2 = \|S\|^2/M^2$ y $\operatorname{tr}(\Sigma) = Q/M - \|S\|^2/M^2$, de donde
 
@@ -196,7 +201,7 @@ Estimada sobre el \emph{batch} de medición con gradientes por ejemplo, la escal
 \label{eq:gns-mcoh}
 \end{equation}
 
-con $\alpha$ la m-coherencia de la Ecuación~\ref{eq:mcoherence}. Ambas dependen solo del cociente $\|S\|^2/Q$, de modo que son la misma cantidad reparametrizada y su correlación de Spearman dentro de un mismo entrenamiento está forzada a $-1$ exacto; el piloto de calibración lo verificó a un error relativo de $8{,}8 \times 10^{-6}$, atribuible al redondeo en coma flotante. La consecuencia es que la escala de ruido y la m-coherencia no aportan evidencia independiente pese a pertenecer a familias distintas, lo que el Capítulo~\ref{ch:metodologia} recoge al comparar familias y entre los riesgos del diseño.
+con $\alpha$ la m-coherencia de la Ecuación~\ref{eq:mcoherence}. Ambas dependen solo del cociente $\|S\|^2/Q$, de modo que son la misma cantidad reparametrizada y su correlación de Spearman dentro de un mismo entrenamiento está forzada a $-1$ exacto. El piloto de calibración lo verificó a un error relativo de $8{,}8 \times 10^{-6}$, atribuible al redondeo en coma flotante. La consecuencia es que la escala de ruido y la m-coherencia no aportan evidencia independiente pese a pertenecer a familias distintas, lo que el Capítulo~\ref{ch:metodologia} recoge al comparar familias y entre los riesgos del diseño.
 
 \paragraph{Razón señal-ruido del gradiente por parámetro (GSNR).} Lleva la razón señal-ruido al nivel de
 cada parámetro $\theta_j$~\cite{liu2020understanding}:
@@ -210,12 +215,12 @@ r(\theta_j) = \frac{\tilde{g}(\theta_j)^2}{\sigma^2(\theta_j)},
 \label{eq:gsnr}
 \end{equation}
 
-agregado por la media sobre los parámetros, nunca por la suma, que sería incomparable entre arquitecturas de distinto tamaño. Es esencialmente el recíproco por parámetro de la NGV. Un GSNR alto significa que la media del gradiente por ejemplo domina a su varianza, y se asocia con un \emph{gap} de generalización pequeño. Las tres métricas miden, pues, la misma razón señal-ruido desde ángulos distintos, lo que las hace parcialmente redundantes; esa redundancia se contrasta empíricamente, como recoge el Capítulo~\ref{ch:metodologia}.
+agregado por la media sobre los parámetros, nunca por la suma, que sería incomparable entre arquitecturas de distinto tamaño. Es esencialmente el recíproco por parámetro de la NGV. Un GSNR alto significa que la media del gradiente por ejemplo domina a su varianza, y se asocia con un \emph{gap} de generalización pequeño. Las tres métricas miden, pues, la misma razón señal-ruido desde ángulos distintos, lo que las hace parcialmente redundantes. Esa redundancia se contrasta empíricamente, como recoge el Capítulo~\ref{ch:metodologia}.
 
 \section{Indicadores de eficiencia del entrenamiento}
 \label{sec:eficiencia}
 
-Las métricas anteriores son las variables predictoras; las que siguen son las variables a predecir, esto es, lo que en este trabajo se entiende por eficiencia del entrenamiento. Se leen sobre la curva de validación a lo largo del presupuesto de \emph{epochs} $T$. El protocolo concreto, incluido el suavizado de la curva, la separación entrenamiento/validación/test y el tratamiento del censurado en el análisis, se especifica en el Capítulo~\ref{ch:metodologia}.
+Las métricas anteriores son las variables predictoras. Las que siguen son las variables a predecir, esto es, lo que en este trabajo se entiende por eficiencia del entrenamiento. Se leen sobre la curva de validación a lo largo del presupuesto de \emph{epochs} $T$. El protocolo concreto, incluido el suavizado de la curva, la separación entrenamiento/validación/test y el tratamiento del censurado en el análisis, se especifica en el Capítulo~\ref{ch:metodologia}.
 
 \paragraph{Epochs hasta el umbral (indicador primario).} El número de \emph{epochs} que tarda la
 \emph{accuracy} de validación en alcanzar un nivel objetivo $\tau$ propio de cada conjunto de datos,
@@ -251,4 +256,4 @@ donde un valor positivo indica sobreajuste. Es la variable objetivo de generaliz
 \section{Conclusiones del capítulo}
 \label{sec:fund-conclusiones}
 
-Este capítulo ha fijado los dos lados de la correlación que el estudio persigue. Del lado predictor, el gradiente por ejemplo $g_i$ es el objeto común. Las cinco métricas de alineación agregan sus productos internos por pares, y las tres de variabilidad miden su dispersión respecto a la señal media, hasta el punto de ser facetas de una misma razón señal-ruido. Esa comunidad de origen llega más lejos de lo que sugiere la división en familias, porque la escala de ruido y la m-coherencia resultan ser la misma cantidad reparametrizada (Ecuación~\ref{eq:gns-mcoh}); la lista de ocho métricas no equivale, por tanto, a ocho señales independientes. Del lado a predecir, la eficiencia queda operacionalizada en cinco indicadores leídos sobre la curva de validación y el test final, con el censurado como tratamiento de los entrenamientos que no alcanzan el umbral. Queda pendiente el cómo y el cuándo de la medición: el \emph{batch} de medición fijo, la ventana temporal y los criterios de falsación de cada hipótesis se especifican en el Capítulo~\ref{ch:metodologia}.
+Este capítulo ha fijado los dos lados de la correlación que el estudio persigue. Del lado predictor, el gradiente por ejemplo $g_i$ es el objeto común. Las cinco métricas de alineación agregan sus productos internos por pares, y las tres de variabilidad miden su dispersión respecto a la señal media, hasta el punto de ser facetas de una misma razón señal-ruido. Esa comunidad de origen llega más lejos de lo que sugiere la división en familias, porque la escala de ruido y la m-coherencia resultan ser la misma cantidad reparametrizada (Ecuación~\ref{eq:gns-mcoh}). La lista de ocho métricas no equivale, por tanto, a ocho señales independientes. Del lado a predecir, la eficiencia se mide con cinco indicadores leídos sobre la curva de validación y el test final, con el censurado como tratamiento de los entrenamientos que no alcanzan el umbral. Queda pendiente el cómo y el cuándo de la medición: el \emph{batch} de medición fijo, la ventana temporal y los criterios de falsación de cada hipótesis se especifican en el Capítulo~\ref{ch:metodologia}.
