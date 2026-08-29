@@ -135,6 +135,34 @@ def test_redundancy_matrix_is_square_over_headlines():
     assert corr.loc["var/normalized", "gsnr/mean"] == pytest.approx(-1.0)
 
 
+def test_validity_separates_all_nan_from_missing():
+    # r1 logs the column and never puts a value in it: a fact about r1, not
+    # about the metric, so it must not read the same as a column nobody logged
+    traj = pd.concat([
+        _traj({"gd/scalar": [1.0, 0.5, 0.2]}, run_name="r0"),
+        _traj({"gd/scalar": [np.nan] * 3}, run_name="r1"),
+    ], ignore_index=True)
+    val = A.validity_report(traj)
+    assert val.loc["gd/scalar", "status"] == "all_nan; nan"
+    assert val.loc["gd/scalar", "runs_all_nan"] == 1
+    assert val.loc["gwa/value", "status"] == "missing"
+
+
+def test_absent_columns_reads_schemas_not_the_stacked_frame(tmp_path):
+    # r1's file has no gwa/value at all; concatenating would hide that as NaN
+    for name, metrics in (
+        ("a", {"gd/scalar": [0.1, 0.2], "gwa/value": [0.3, 0.4]}),
+        ("b", {"gd/scalar": [0.1, 0.2]}),
+    ):
+        d = tmp_path / name
+        d.mkdir()
+        _traj(metrics, run_name=name).to_parquet(d / "trajectory.parquet")
+    absent = A.absent_columns(tmp_path)
+    assert absent.loc["gd/scalar", "runs_absent"] == 0
+    assert absent.loc["gwa/value", "runs_absent"] == 1
+    assert absent["n_runs"].iloc[0] == 2
+
+
 def test_loaders_concat_runs(tmp_path):
     for name in ("a", "b"):
         d = tmp_path / name

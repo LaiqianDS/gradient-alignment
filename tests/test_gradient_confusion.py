@@ -138,6 +138,13 @@ def test_zero_row_does_not_mask_negative_pair():
     assert math.isclose(out["confusion/frac_neg"], 2.0 / 6.0, abs_tol=1e-6)
 
 
+def test_nan_gradients_do_not_become_zero_frac_neg():
+    # a diverged run gives NaN gradients; NaN < 0 is False, which would publish
+    # frac_neg = 0 where nothing was measured
+    out = _confusion_core(torch.full((4, 8), float("nan")))
+    assert all(math.isnan(v) for v in out.values()), out
+
+
 def test_compute_smoke_returns_finite_keys():
     X, y = synthetic_probe()
     out = METRIC.compute(tiny_mlp().eval(), X, y, nn.CrossEntropyLoss())

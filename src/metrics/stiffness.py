@@ -47,7 +47,9 @@ def _stiffness_from_gram(
     """
     n = norms.clamp_min(EPS)
     cos = gram / (n.unsqueeze(0) * n.unsqueeze(1))
-    sign = torch.sign(gram)
+    # torch.sign(NaN) is 0.0, so a diverged run would report a clean zero where
+    # nothing was measured. Keep the NaN, as the cosine branch already does.
+    sign = torch.where(gram.isnan(), gram, torch.sign(gram))
 
     same = y.unsqueeze(0) == y.unsqueeze(1)  # [M, M] within-class pair mask
     diff = ~same

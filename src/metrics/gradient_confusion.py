@@ -33,12 +33,15 @@ def _confusion_from_gram(gram: torch.Tensor, norms: torch.Tensor) -> dict[str, f
     off = cos[~torch.eye(M, dtype=torch.bool, device=gram.device)]  # [M*(M-1)] off-diagonal
 
     min_cos = off.min()
+    # NaN < 0 is False, so a diverged run would report frac_neg = 0 where nothing
+    # was measured. Keep the NaN, as min/median/quantile already do.
+    neg = torch.where(off.isnan(), off, (off < 0).to(off.dtype))
     return {
         "confusion/min_cos": min_cos.item(),
         "confusion/eta": (-min_cos).item(),
         "confusion/median_cos": off.median().item(),
         "confusion/p05_cos": torch.quantile(off, 0.05).item(),
-        "confusion/frac_neg": (off < 0).float().mean().item(),
+        "confusion/frac_neg": neg.mean().item(),
     }
 
 

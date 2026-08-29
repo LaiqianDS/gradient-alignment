@@ -186,6 +186,15 @@ def test_empty_subset_emits_zero():
     assert out["stiffness/sign_between"] == 0.0
 
 
+def test_nan_gradients_do_not_become_zero_signs():
+    # a diverged run gives NaN gradients; torch.sign(NaN) is 0.0, which would
+    # publish a clean zero where nothing was measured
+    G = torch.full((4, 8), float("nan"))
+    y = torch.tensor([0, 0, 1, 1])
+    out = _stiffness_core(G, y)
+    assert all(math.isnan(v) for v in out.values()), out
+
+
 def test_compute_smoke():
     X, y = synthetic_probe()
     out = METRIC.compute(tiny_mlp().eval(), X, y, nn.CrossEntropyLoss())

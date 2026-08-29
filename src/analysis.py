@@ -1,10 +1,9 @@
 """Post-hoc sanity diagnostics for the logged metric trajectories.
 
-This module is the shared, plotting-free backend for the analysis notebooks. It
-loads the per-run Parquet/JSON that ``train.py`` writes (see ``logger.py``) and
-answers one question, *before* any hypothesis test: **do the metrics make
-sense?** Four diagnostics, all returning tidy DataFrames the notebook turns into
-tables and figures:
+This module is the shared, plotting-free backend of the metric side. It loads the
+per-run Parquet/JSON that ``train.py`` writes (see ``logger.py``) and answers one
+question, *before* any hypothesis test: **do the metrics make sense?** Four
+diagnostics, all returning tidy DataFrames:
 
 * :func:`validity_report` / :func:`identity_report` -- are the values in their
   theoretically valid range (cosines in [-1, 1], variances >= 0, m-coherence in
@@ -19,10 +18,9 @@ tables and figures:
 * :func:`redundancy_matrix` -- which metrics move together (exploratory map for
   the later "prune redundant metrics" decision -- NOT a confirmatory test).
 
-Scope note. The calibration pilot has **one run per cell**, so there is no
-intra-cell predictor spread to correlate against efficiency: nothing here is a
-confirmatory test. The loaders default to ``reports_pilot/`` but take any report
-directory, so the same functions serve the full matrix in ``reports/``.
+Scope note. Nothing here is a confirmatory test; these are the checks that run
+before one exists. The loaders default to the full matrix in ``reports/`` and
+take any report directory, so the same functions still read ``reports_pilot/``.
 
 The single source of truth for *what each column means* is :data:`SPECS`: its
 valid range and the expected sign of its trajectory. Add a metric there and every
@@ -37,25 +35,22 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pyarrow.parquet as pq
+
+from config import FIXED_KNOBS
 
 ROOT = Path(__file__).resolve().parent.parent
 PILOT_DIR = ROOT / "reports_pilot"
 REPORTS_DIR = ROOT / "reports"
 
-# Frozen probe size M (config.probe_size / FIXED_KNOBS): the per-sample gradient
-# count, which is also the hard upper bound of m-coherence (alpha in [0, M]).
-PROBE_SIZE = 256
+# Frozen probe size M: the per-sample gradient count, and the hard upper bound of
+# m-coherence (alpha in [0, M]).
+PROBE_SIZE = int(FIXED_KNOBS["probe_size"])
 
 # Signal-to-jitter of a trajectory that is white noise around a constant. For
 # such a series std(diff) = sqrt(2) * std(values), so the ratio is 1/sqrt(2).
 # It is the reference line of :func:`degeneracy_report`, not a tuned threshold.
 NOISE_RATIO = float(1.0 / np.sqrt(2.0))
-
-# Columns that identify a measurement row but are not metrics themselves.
-ID_COLS = [
-    "run_name", "dataset", "model", "optimizer", "lr", "seed",
-    "epoch", "global_step", "progress_frac",
-]
 
 
 @dataclass(frozen=True)
@@ -162,22 +157,23 @@ def _load_concat(report_dir: str | Path, filename: str) -> pd.DataFrame:
     return pd.concat(frames, ignore_index=True)
 
 
-def load_trajectories(report_dir: str | Path = PILOT_DIR) -> pd.DataFrame:
+def load_trajectories(report_dir: str | Path = REPORTS_DIR) -> pd.DataFrame:
     """Per-epoch metric trajectories of every run, stacked (one row per epoch)."""
     return _load_concat(report_dir, "trajectory.parquet")
 
 
-def load_windows(report_dir: str | Path = PILOT_DIR) -> pd.DataFrame:
+def load_windows(report_dir: str | Path = REPORTS_DIR) -> pd.DataFrame:
     """Per-window snapshots of every run (the early-window predictor table)."""
     return _load_concat(report_dir, "metrics_at_window.parquet")
 
 
-def load_summaries(report_dir: str | Path = PILOT_DIR) -> pd.DataFrame:
+def load_summaries(report_dir: str | Path = REPORTS_DIR) -> pd.DataFrame:
     """One row per run: the ``summary.json`` scalars (final test/val/gap, timing).
 
-    Pilot caveat: for ``tiny_imagenet`` the test/gap fields are corrupt (a
-    pre-fix bug); val-side and timing fields are valid. The loader does not drop
-    them, the notebook annotates.
+    Caveat for ``PILOT_DIR`` only: there the ``tiny_imagenet`` test/gap fields are
+    the pre-fix corrupt ones and say so via a ``_tiny_test_note`` key; val-side
+    and timing fields are valid, and ``run_pilot.testfix_table`` owns that story.
+    No run under ``reports/`` carries the key.
     """
     rows = [
         json.loads((d / "summary.json").read_text())
@@ -189,12 +185,27 @@ def load_summaries(report_dir: str | Path = PILOT_DIR) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def tidy_long(traj: pd.DataFrame, keys: list[str] | None = None) -> pd.DataFrame:
-    """Melt selected metric columns to long form ``(*ID_COLS, key, value)`` for
-    faceted plotting. Defaults to every known metric column present."""
-    keys = keys or [k for k in metric_columns() if k in traj.columns]
-    ids = [c for c in ID_COLS if c in traj.columns]
-    return traj.melt(id_vars=ids, value_vars=keys, var_name="key", value_name="value")
+def absent_columns(
+    report_dir: str | Path = REPORTS_DIR,
+    filename: str = "trajectory.parquet",
+) -> pd.DataFrame:
+    """Per known column, in how many runs its Parquet file does not contain it.
+
+    Concatenating runs fills a column a run lacks with NaN, so the stacked frame
+    cannot tell "the metric failed in every epoch" from "the metric returned
+    NaN". Reading the schemas can.
+    """
+    runs = [d for d in _run_dirs(report_dir) if (d / filename).exists()]
+    absent = dict.fromkeys(metric_columns(), 0)
+    for d in runs:
+        present = set(pq.read_schema(d / filename).names)
+        for key in absent:
+            if key not in present:
+                absent[key] += 1
+    return pd.DataFrame(
+        {"runs_absent": list(absent.values()), "n_runs": len(runs)},
+        index=pd.Index(list(absent), name="key"),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -206,8 +217,13 @@ def validity_report(traj: pd.DataFrame, tol: float = 1e-6) -> pd.DataFrame:
 
     A metric is structurally sound when it is present in every run, never NaN/Inf,
     and never escapes its theoretical bound. ``status`` reads ``ok`` or a
-    semicolon list of issues (``missing`` / ``nan`` / ``inf`` / ``below`` /
-    ``above``). A failed runtime metric surfaces here as ``missing``/``nan``.
+    semicolon list of issues (``missing`` / ``all_nan`` / ``nan`` / ``inf`` /
+    ``below`` / ``above``).
+
+    ``missing`` means no run logged the column at all. ``all_nan`` means some run
+    logged it and every one of that run's values is NaN, which is a fact about
+    those runs and not about the instrumentation: use :func:`absent_columns` to
+    tell a metric that failed from one that returned NaN.
     """
     n_runs = traj["run_name"].nunique()
     out = []
@@ -217,7 +233,7 @@ def validity_report(traj: pd.DataFrame, tol: float = 1e-6) -> pd.DataFrame:
                 "key": s.key, "metric": s.metric, "family": s.family,
                 "lo": s.lo, "hi": s.hi, "obs_min": np.nan, "obs_max": np.nan,
                 "n_nan": np.nan, "n_inf": np.nan, "n_below": np.nan,
-                "n_above": np.nan, "runs_missing": n_runs, "status": "missing",
+                "n_above": np.nan, "runs_all_nan": n_runs, "status": "missing",
             })
             continue
         v = traj[s.key].to_numpy(dtype="float64", na_value=np.nan)
@@ -226,13 +242,13 @@ def validity_report(traj: pd.DataFrame, tol: float = 1e-6) -> pd.DataFrame:
         finite = v[np.isfinite(v)]
         n_below = int((finite < s.lo - tol).sum()) if s.lo is not None else 0
         n_above = int((finite > s.hi + tol).sum()) if s.hi is not None else 0
-        # runs where the column is entirely NaN (metric absent in that run)
-        runs_missing = int(
+        # runs that logged the column and never put a value in it
+        runs_all_nan = int(
             traj.groupby("run_name")[s.key].apply(lambda c: c.isna().all()).sum()
         )
         issues = []
-        if runs_missing:
-            issues.append("missing")
+        if runs_all_nan:
+            issues.append("all_nan")
         if n_nan:
             issues.append("nan")
         if n_inf:
@@ -247,7 +263,7 @@ def validity_report(traj: pd.DataFrame, tol: float = 1e-6) -> pd.DataFrame:
             "obs_min": float(finite.min()) if finite.size else np.nan,
             "obs_max": float(finite.max()) if finite.size else np.nan,
             "n_nan": n_nan, "n_inf": n_inf, "n_below": n_below,
-            "n_above": n_above, "runs_missing": runs_missing,
+            "n_above": n_above, "runs_all_nan": runs_all_nan,
             "status": "; ".join(issues) if issues else "ok",
         })
     return pd.DataFrame(out).set_index("key")
@@ -483,7 +499,7 @@ def top_redundant_pairs(corr: pd.DataFrame, n: int = 12) -> pd.DataFrame:
 # Console smoke report -- `uv run python src/analysis.py [report_dir]`.
 # ---------------------------------------------------------------------------
 
-def _main(report_dir: str | Path = PILOT_DIR) -> None:
+def _main(report_dir: str | Path = REPORTS_DIR) -> None:
     pd.set_option("display.width", 140)
     pd.set_option("display.max_rows", 60)
     traj = load_trajectories(report_dir)
@@ -496,13 +512,18 @@ def _main(report_dir: str | Path = PILOT_DIR) -> None:
     print(f"  {len(val) - len(bad)}/{len(val)} columns ok")
     print(bad if len(bad) else "  all columns within range, no NaN/Inf, none missing")
 
+    absent = absent_columns(report_dir)
+    print("\n== columns a run never logged (metric raised) ==")
+    print(absent[absent["runs_absent"] > 0] if absent["runs_absent"].any()
+          else f"  none: all {absent['n_runs'].iloc[0]} runs log every column")
+
     print("\n== hard identities ==")
     print(identity_report(traj))
 
     print("\n== direction vs theory (graded metrics) ==")
     print(trend_summary(trend_report(traj)).round(3))
 
-    print("\n== degeneracy (per metric, over the 1-run-per-cell pilot) ==")
+    print("\n== degeneracy (per metric, over every run) ==")
     print(degeneracy_summary(degeneracy_report(traj)).round(3))
 
     print("\n== redundancy: top |Spearman| pairs (exploratory) ==")
@@ -512,4 +533,4 @@ def _main(report_dir: str | Path = PILOT_DIR) -> None:
 if __name__ == "__main__":
     import sys
 
-    _main(sys.argv[1] if len(sys.argv) > 1 else PILOT_DIR)
+    _main(sys.argv[1] if len(sys.argv) > 1 else REPORTS_DIR)
