@@ -22,7 +22,7 @@ What not to do: do not read [`docs/research/2 - Decisiones.md`](docs/research/2%
 
 The single-run pipeline is complete: fixed stratified train/val/test split, per-epoch measurement of every metric on a fixed probe, and the full evaluation protocol (train optimizes, val monitors, test certifies once at the end). The eight gradient metrics and the baseline are implemented and tested, with 227 tests green. The calibration pilot has been run and read, and the per-dataset epoch budgets and accuracy thresholds are frozen from it.
 
-The matrix is finished. All 960 runs are done and their outputs are versioned under `reports/`, at a real cost of 121.7 hours of wall clock, 97.6 of training and 24.1 of instrumentation.
+The matrix is finished. All 960 runs are done and their outputs are versioned under `reports/`, at a real cost of 121.7 hours of wall clock, 97.6 of training and 24.1 of instrumentation. Those outputs carry one correction: `torch.sign(NaN)` is 0.0, so four columns recorded an exact zero for the 41 runs whose training touched NaN, where the fixed code emits NaN. Nothing was re-trained and no measurement was altered; the scope and the verification are in the entry of 2026-08-29 of the decision log.
 
 Pending: the analysis. There is no method yet. The pre-registered plan was withdrawn on 2026-08-25, after the matrix had already finished, so whatever method gets built now is posterior to the data and is presented as such. What `src/analysis.py` holds today is sanity diagnostics, not a confirmatory pipeline.
 
