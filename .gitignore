@@ -1,6 +1,4 @@
 data/
-reports_pilot/
-reports_validity/
 .DS_Store
 .obsidian
 PDFs/
@@ -9,5 +7,8 @@ pending/
 __pycache__/
 
 .vscode/
-CLAUDE.md
 .claude/
+
+# CLAUDE.md se queda fuera del repositorio a propósito (decisión del 2026-08-29):
+# es un fichero de instrucciones para una IA y el repositorio acaba depositado.
+CLAUDE.md

@@ -20,9 +20,11 @@ What not to do: do not read [`docs/research/2 - Decisiones.md`](docs/research/2%
 
 ## Status
 
-The single-run pipeline is complete: fixed stratified train/val/test split, per-epoch measurement of every metric on a fixed probe, and the full evaluation protocol (train optimizes, val monitors, test certifies once at the end). The eight gradient metrics and the baseline are implemented and tested, with 228 tests green. The calibration pilot has been run and read, and the per-dataset epoch budgets and accuracy thresholds are frozen from it. The statistical analysis plan was frozen and committed before any result existed, so the git history itself certifies that the plan precedes the data.
+The single-run pipeline is complete: fixed stratified train/val/test split, per-epoch measurement of every metric on a fixed probe, and the full evaluation protocol (train optimizes, val monitors, test certifies once at the end). The eight gradient metrics and the baseline are implemented and tested, with 227 tests green. The calibration pilot has been run and read, and the per-dataset epoch budgets and accuracy thresholds are frozen from it.
 
-Pending: launching the 960-run matrix (about 147 GPU-hours, roughly six continuous days on a single GPU) and writing the confirmatory analysis pipeline, which today exists only as sanity diagnostics.
+The matrix is finished. All 960 runs are done and their outputs are versioned under `reports/`, at a real cost of 121.7 hours of wall clock, 97.6 of training and 24.1 of instrumentation.
+
+Pending: the analysis. There is no method yet. The pre-registered plan was withdrawn on 2026-08-25, after the matrix had already finished, so whatever method gets built now is posterior to the data and is presented as such. What `src/analysis.py` holds today is sanity diagnostics, not a confirmatory pipeline.
 
 ## Metrics
 
@@ -46,9 +48,9 @@ src/config.py     the source of truth: run knobs + frozen matrix axes
 src/train.py      one run end to end
 src/metrics/      the gradient metrics (start at src/metrics/README.md)
 src/run_matrix.py the 960-run sweep; src/run_pilot.py the calibration pilot
-src/analysis.py   sanity diagnostics backend for the notebooks
+src/analysis.py   sanity diagnostics backend
 tests/            one test file per metric plus shared fixtures
-docs/research/    the research vault: design, decisions, progress, frozen plan
+docs/research/    the research vault: design, decisions, progress
 thesis/           the thesis itself (LaTeX, ETSINF-UPV template, Spanish)
 experiments/      the 24 cell YAMLs
 data/, reports/   datasets (git-ignored) and run outputs
@@ -60,7 +62,7 @@ Always run Python through `uv`. Dependencies live in the uv-managed `.venv` and 
 
 ```bash
 uv sync                                  # install dependencies into .venv
-uv run pytest                            # the full suite (228 tests)
+uv run pytest                            # the full suite
 uv run python src/load_data.py           # download datasets to data/
 uv run python src/run_matrix.py --status # how many of the 960 runs are done
 ```

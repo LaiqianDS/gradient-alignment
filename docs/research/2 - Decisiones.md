@@ -20,6 +20,23 @@ El 2026-08-27 se retiró de este log la tanda de decisiones del 2026-08-26, la q
 
 ### 2026-08-29
 
+#### El `README.md` certificaba lo contrario de la verdad; el pilot pasa a versionado y `CLAUDE.md` no se versiona nunca
+
+**El `README.md` afirmaba que el plan de análisis precedía a los datos**, con estas palabras: "the git history itself certifies that the plan precedes the data". Cuatro líneas más arriba, el mismo fichero dice que el plan se retiró el 2026-08-25. Es la misma afirmación que el barrido de hoy quitó del vault, y sobrevivió porque aquel barrido miró `docs/` y `thesis/` y no la puerta de entrada del repositorio. Corregido con la cronología escrita: la matriz terminó el 22 y el plan se retiró el 25, así que el método es posterior a los datos. Del mismo párrafo salen tres datos caducados: la matriz no está pendiente, los tests son 227 y el plan congelado ya no está en el vault.
+
+**`reports_pilot/` pasa a versionado.** Son 2,5 MB y 120 ficheros, con los seis `testfix_40ep/` de Tiny dentro y los seis `summary.json` que se auto-declaran corruptos con la clave `_tiny_test_note`. Es la evidencia que justifica los presupuestos y umbrales de `config.py::DATASET_BUDGET` y hasta hoy vivía en un solo disco. Sale con él `reports_validity/` del `.gitignore`, que era un resto de la primera pasada retirada de la fase A y habría dejado sin versionar en silencio cualquier salida futura con ese nombre.
+
+**`CLAUDE.md` no se versiona nunca (decisión de Lai).** Es un fichero de instrucciones para una IA y el repositorio acaba depositado. Se queda en `.gitignore` con el motivo escrito al lado, para que nadie lo "arregle" más adelante. Consecuencia asumida: sus 13 KB de arquitectura existen solo en local, y la fuente autorizada del estado sigue siendo el vault, que sí está versionado.
+
+#### La fase A cuenta pero no excluye, y su veredicto se parte en dos en la memoria
+
+**La fase A cuenta, no excluye.** Un run clavado en el azar tiene accuracy de test, así que entra en el recuento. Si además se descarta, eso es método y es fase B. Mezclar las dos cosas convertiría el recuento en una decisión tomada mirando los datos y sin registrarla.
+
+**Dónde vive el veredicto en la memoria (decisión de Lai): partido en dos.** Los números van a una sección nueva al principio de `resultados.tex`, porque son algo calculado sobre la matriz. La regla que se derive de ellos, la población de análisis, va a §Protocolo de análisis y la escribe la fase B. Separa el dato del método, que es la frontera que ya usa el resto de la memoria. Se descarta meter las dos cosas en Metodología, que pondría resultados calculados en el capítulo que describe lo que se va a hacer.
+
+- **Trampa que parece romper la regla de un lado cada vez y no la rompe.** El punto 5, la concordancia entre validación y test, sí es una correlación, pero entre dos variables dependientes. No entra ninguna métrica de gradiente, así que no toca la relación que la fase A tiene prohibido mirar.
+- **El punto 1 se ejecuta sobre los 960, sin excluir a nadie.** Un chequeo de validez tiene que ver los casos patológicos, que es donde aparecen los fallos: los 154 clavados en el azar son justo donde una métrica emite un valor sin sentido, y de hecho ahí `gwa/score_mean` vale cero exacto.
+
 #### Se retiran los últimos criterios de decisión supervivientes, y `Métricas.md` se pone al día con el código
 
 Desde el 2026-08-25 el proyecto afirma que ninguna hipótesis tiene criterio de decisión, y **no era cierto**: quedaban cinco restos del plan retirado. [[1 - Diseño]] fijaba un corte en |ρ| < 0,3 como falsación, prometía "Spearman + Pearson con corrección FDR" en el diagrama del procedimiento, prescribía tratar el censurado como peor rango, y prescribía estandarizar dentro de condición o usar efectos mixtos para agregar; `resultados.tex:15` llevaba el último FDR de la memoria. Los cinco se retiran y el método vuelve a estar entero por definir.
