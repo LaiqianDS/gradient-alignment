@@ -10,9 +10,9 @@ La eficiencia se entiende como tres constructos: velocidad de convergencia (VD1-
 
 ## Hipótesis operativa
 
-La variabilidad y/o alineación de los gradientes, medida a través de distintas métricas en una fracción inicial del entrenamiento, correlaciona significativamente con indicadores de eficiencia del entrenamiento completo, bajo variaciones de learning rate y optimizador, en arquitecturas de visión por computador.
+La variabilidad y/o alineación de los gradientes, medida a través de distintas métricas en una fracción inicial del entrenamiento, se asocia con indicadores de eficiencia del entrenamiento completo, bajo variaciones de learning rate y optimizador, en arquitecturas de visión por computador.
 
-Hipótesis falsada si las correlaciones son débiles (|ρ| < 0.3) o inestables entre configuraciones en la mayoría de condiciones. Un resultado negativo con análisis robusto sigue siendo contribución válida.
+Hipótesis falsada si las correlaciones son débiles o inestables entre configuraciones en la mayoría de condiciones. Con qué cuenta concreta se decide eso está por definir: el plan de análisis se retiró el 2026-08-25 y ninguna hipótesis tiene hoy criterio de decisión. Un resultado negativo con análisis robusto sigue siendo contribución válida.
 
 ## Hipótesis a contrastar
 
@@ -23,7 +23,7 @@ Formalización de la hipótesis operativa en seis afirmaciones falsables. Aquí 
 - **H3 (qué familia gana).** Una de las dos familias, alineación o variabilidad, es sistemáticamente más predictiva que la otra. El título apuesta por alineación; es una pregunta empírica abierta, ligada al riesgo de coherencia entre título y contenido.
 - **H4 (suficiencia temprana).** El poder predictivo satura pronto: medir en una fracción temprana del entrenamiento predice tan bien como medir más tarde. Beneficio práctico: permite decidir antes.
 - **H5 (invariancia cross-optimizador).** El signo de la correlación métrica↔eficiencia se preserva entre SGD y Adam. *Corregido el 2026-08-01:* la redacción anterior presentaba esto como "consecuencia comprobable de la decisión raw-grad", y no lo es. Computar la métrica sobre ∇L bruto y nunca sobre el update preacondicionado hace comparable la **métrica** entre optimizadores, que es la condición que hace la pregunta formulable; no implica en absoluto que su **correlación con la eficiencia** conserve el signo, porque Adam cambia la dinámica del entrenamiento. H5 es una afirmación empírica independiente, y de hecho más interesante así.
-- **H6 (mecanismo, con signo).** Cada métrica trae una predicción *con signo* de su paper: alta stiffness intra-clase, alta m-coherence y baja gradient confusion → convergencia más rápida; NGV/GNS altos → más lento o batch mayor; GWA alto → mejor generalización. Que el signo observado coincida con el predicho es prueba más exigente que la magnitud.
+- **H6 (mecanismo, con signo).** Cada métrica trae una predicción *con signo* de su paper: alta stiffness intra-clase, alta m-coherence y baja gradient confusion → convergencia más rápida; NGV/GNS altos → más lento o batch mayor; GWA alta → mejor generalización **en el artículo, que define el gradiente como $-\nabla\ell$; aquí se mide sobre $\nabla\ell$ bruto, así que la predicción heredada es la contraria, una GWA baja acompaña a mejor generalización** (la conversión está hecha en `fundamentos.tex:168`). Que el signo observado coincida con el predicho es prueba más exigente que la magnitud.
 
 ## Diseño experimental
 
@@ -70,7 +70,7 @@ Rejilla completa: cuatro datasets × tres arquitecturas × dos optimizadores = *
 - **Profundidad.** 8 LR × 5 seeds = 40 runs por celda → **~960 runs**, por encima del suelo n ≥ 30. La dispersión del predictor la dan los LR, no las seeds; de ahí que se priorice el nº de LR. Seeds compartidas {0,1,2,3,4} en todas las celdas para comparación pareada entre SGD y Adam (H5).
 - **Rejilla de LR (log-espaciada en medias décadas, por optimizador, no por modelo).** 8 puntos por optimizador, la misma rejilla para FC, CNN y ResNet-18 (decisión 2026-06-09 en [[2 - Decisiones]]). SGD (momentum 0,9): `{3e-4, 1e-3, 3e-3, 1e-2, 3e-2, 1e-1, 3e-1, 1.0}`. Adam: `{3e-5, 1e-4, 3e-4, 1e-3, 3e-3, 1e-2, 3e-2, 1e-1}`, misma forma, una década más abajo porque su paso efectivo va preescalado por 1/√v. El rango ancho (3,5 décadas) cubre los óptimos de las tres arquitecturas; los extremos divergen o no alcanzan el umbral por diseño, y esos runs censurados aportan rango al eje de eficiencia (VD1). El centro se recalibra tras el pilot si el óptimo de alguna celda queda descentrado.
 - **Hiperparámetros fijos (no se barren, para no añadir confusores).** `batch_size=128`, `weight_decay=0`, `momentum=0.9` (SGD) / betas por defecto (Adam), `probe_size=256`, `windows=[0.05, 0.10, 0.25, 0.50, 1.0]`. Las métricas leen ∇L de la pérdida (no el paso preacondicionado), así que el weight decay no entra en su valor; se fija a 0 solo para no introducir un eje de trayectoria extra. La justificación de cada valor, uno a uno, está en [[2 - Decisiones]].
-- **Presupuesto y umbral por dataset** (calibrados en el pilot el 2026-06-17, evidencia registrada en [[2 - Decisiones]]; sin data augmentation → por debajo del SOTA): MNIST 20 épocas / umbral acc 0,97; CIFAR-10 40 / 0,65; CIFAR-100 40 / 0,35; Tiny-ImageNet 40 / 0,20. FC sobre CIFAR-100 y Tiny-ImageNet apenas aprende: esas celdas quedan censuradas en VD1 y se analizan con las VD secundarias (AUC de val-loss, mejor val-loss).
+- **Presupuesto y umbral por dataset** (calibrados en el pilot el 2026-06-17, evidencia registrada en [[2 - Decisiones]]; sin data augmentation → por debajo del SOTA): MNIST 20 épocas / umbral acc 0,97; CIFAR-10 40 / 0,65; CIFAR-100 40 / 0,35; Tiny-ImageNet 40 / 0,20. FC no alcanza nunca su umbral fuera de MNIST, verificado sobre los 960 runs: las seis celdas de CIFAR-10, CIFAR-100 y Tiny-ImageNet, con los dos optimizadores, quedan censuradas en VD1 y se analizan con las VD secundarias (AUC de val-loss, mejor val-loss). La variable de velocidad trabaja por tanto con 18 de las 24 celdas.
 - **Métricas.** Se computa el conjunto completo de métricas implementadas en toda la rejilla. El barrido per-sample recorre **todos** los parámetros y se trocea en filas (`chunk_size`) para acotar la memoria; GWA es la única métrica que se calcula sobre la última capa. La lista *reportada* se poda luego por colinealidad con prueba (ver [[2 - Decisiones]]).
 
 ### Baselines
@@ -78,10 +78,10 @@ Rejilla completa: cuatro datasets × tres arquitecturas × dos optimizadores = *
 El baseline no es la métrica más simple ni la que diga el paper, sino *el mejor predictor obtenible sin instrumentar el gradiente*. Lo que da valor al estudio es el coste de medir el gradiente, así que el rival a batir es lo que se obtiene gratis de la curva de loss. Tres niveles:
 
 - **Nivel 0, sin gradiente (suelo).** TSE (suma o EMA de las train loss tempranas; coste cero, estándar en NAS) y, sobre todo, **`early-val-accuracy@f`** (val accuracy/loss medida en la misma fracción $f$). Este último es un predictor muy fuerte y casi gratis: si las métricas de gradiente no lo superan, no hay aporte que defender.
-- **Nivel 1, gradiente barato (benchmark interno).** Normalized variance (NGV) y gradient noise scale (GNS) en variabilidad; gradient disparity en alineación (Pearson 0,957 con test error sobre 220 configuraciones en Forouzesh & Thiran). Es el rival a batir para justificar una métrica de gradiente *cara*.
+- **Nivel 1, gradiente barato (benchmark interno).** Normalized variance (NGV) y gradient noise scale (GNS) en variabilidad; gradient disparity en alineación (Pearson 0,957 entre la disparidad train-train y la train-val sobre 220 configuraciones en Forouzesh & Thiran; la correlación con el error de test el paper solo la afirma en cualitativo). Es el rival a batir para justificar una métrica de gradiente *cara*.
 - **Nivel 2, retadoras.** Las caras o novedosas (gradient confusion, m-coherence, stiffness, GSNR, GWA) deben superar a los niveles 0 y 1. GWA es barato y a la vez el de mayor correlación reportada en la literatura (Pearson 0,99 en Hölzl 2025): si una métrica barata domina a las caras, la conclusión sería que *no hace falta instrumentación cara*.
 
-El resultado más valioso no es "quién predice mejor" sino "quién predice mejor por unidad de coste", esto es, un **frente de Pareto** de potencia predictiva frente a coste, no un único ganador.
+El resultado más valioso no es quién predice mejor a secas, sino quién predice mejor **dentro de su clase de coste** y frente al predictor de referencia, que no calcula ningún gradiente. Con coste asintótico el eje deja de ser continuo, así que no hay frente de Pareto que dibujar (decisión del 2026-08-27, ver [[2 - Decisiones]]).
 
 ## Procedimiento
 
@@ -91,7 +91,7 @@ flowchart LR
     B --> C["Logging métricas alineación + variabilidad\npor época"]
     C --> D["Registrar eficiencia\n(épocas-a-umbral, AUC, best loss)"]
     D --> E["Barrido ventana temprana\n5% / 10% / 25% / 50%"]
-    E --> F["Correlación Spearman + Pearson\ncon corrección FDR"]
+    E --> F["Análisis de correlación\n(método por definir)"]
     F --> G["Análisis robustez\ncross arch × dataset × LR × optimizador"]
     G --> H["Resultados y conclusiones"]
 ```
@@ -130,8 +130,8 @@ Extraído de [[Métricas]] y [[Corpus]]. Justifica el setup propuesto.
 
 ## Riesgos abiertos
 
-1. **Número de runs por condición.** Correlaciones con n pequeña son inútiles. Objetivo mínimo n ≥ 30 por celda (arquitectura × dataset × optimizador). Pendiente hacer cuentas de cómputo total y recortar condiciones antes de empezar si no cuadra.
-2. **Coste computacional de métricas caras** (gradient confusion, m-coherence). Posible abandono si el overhead es inviable.
+1. **Número de runs por condición. Cerrado.** Correlaciones con n pequeña son inútiles. Objetivo mínimo n ≥ 30 por celda (arquitectura × dataset × optimizador). La matriz completa da 40 entrenamientos por celda y los 960 están hechos, así que el suelo se cumple con margen. Lo que queda por medir, en la fase A, es cuántos de esos 40 sobreviven en cada celda para cada variable dependiente.
+2. **Coste computacional de métricas caras** (gradient confusion, m-coherence). **Cerrado el 2026-07-17:** se mantiene la medición completa de las ocho métricas, con un sobrecoste máximo medido de 2,048x sobre la matriz.
 3. **Diferenciación frente a literatura existente** (McCandlish 2018, Faghri 2020). Aporte a defender: comparativa rigurosa entre múltiples familias de métricas, barrido en fracciones tempranas, análisis de robustez cross-architecture/cross-dataset. Debe ser explícito en la intro.
 4. **Coherencia título-contenido.** El título actual enfatiza "alineación". Si el análisis acaba apoyándose más en métricas de variabilidad, revisar el título de la memoria (el de EBRON ya está comprometido).
 
@@ -139,6 +139,6 @@ Extraído de [[Métricas]] y [[Corpus]]. Justifica el setup propuesto.
 
 Amenazas a la validez del análisis correlacional que el diseño debe neutralizar (distintas de los riesgos de proyecto de arriba):
 
-- **Dificultad del dataset al agregar.** Juntar MNIST + CIFAR-10 + CIFAR-100 puede hacer que "fácil vs difícil" domine la correlación y esta desaparezca dentro de cada condición (paradoja de Simpson). De ahí el protocolo "por condición primero, agregado después"; para agregar, estandarizar dentro de condición o usar efectos mixtos.
+- **Dificultad del dataset al agregar.** Juntar MNIST + CIFAR-10 + CIFAR-100 puede hacer que "fácil vs difícil" domine la correlación y esta desaparezca dentro de cada condición (paradoja de Simpson). De ahí la necesidad de mirar primero dentro de cada condición y agregar después. Cómo se agrega es parte del método de análisis y está por definir.
 - **Colinealidad entre predictores.** No son independientes: GNS ≈ B·NGV por el TLC; m-coherence, stiffness y gradient confusion son funciones del mismo Gram de gradientes per-ejemplo; GSNR es la versión por parámetro de NGV. La dimensionalidad efectiva de las métricas es menor que su número; una matriz de correlación (o PCA) entre *predictores* es en sí misma un resultado, y permite podar las redundantes (ver [[2 - Decisiones]]).
-- **Censurado** en épocas-hasta-umbral: los runs que nunca alcanzan el umbral no son "infinito". Tratarlos como peor rango es aceptable; el análisis de supervivencia es alternativa a mencionar.
+- **Censurado** en épocas-hasta-umbral: los runs que nunca alcanzan el umbral no son "infinito". La convención de registro sí está fijada, un valor censurado se anota como ausente y nunca como el presupuesto; cómo entra en el contraste está por decidir y es trabajo de la fase B.

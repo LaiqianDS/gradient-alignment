@@ -137,6 +137,8 @@ Las ventanas `f`, la fracción del presupuesto de épocas en la que se leen las 
 
 Qué signo predice el paper de cada métrica frente a VD1 (épocas hasta el umbral, menos es más rápido). Es el material que sostiene H6, así que vive aquí y no en un documento de método.
 
+**Aviso antes de usar la tabla: los signos son los del artículo, y en GWA el nuestro es el contrario.** Hölzl define el gradiente como $-\nabla\ell$ y aquí se mide sobre $\nabla\ell$ bruto, así que el signo observado de GWA se invierte respecto a lo que dice esta tabla y respecto a lo que dice el artículo. La conversión está hecha en `fundamentos.tex:168` y en el enunciado de H6 de [[1 - Diseño]]. Contrastar contra esta tabla sin invertir daría a GWA el veredicto al revés.
+
 | Métrica | Signo | Base |
 |---|---|---|
 | gradient confusion | + | fuerte (Sankararaman et al.) |
