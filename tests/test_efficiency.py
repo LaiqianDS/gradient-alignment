@@ -21,10 +21,17 @@ def _write_run(
     name: str,
     *,
     dataset: str = "cifar10",
+    model: str = "cnn",
     best_val_acc: float = 0.7,
     train_loss: tuple[float, ...] = (1.0, 0.8, 0.6, 0.4),
     gwa_value: tuple[float, ...] = (0.3, 0.3, 0.2, 0.2),
     score_mean: tuple[float, ...] = (0.1, 0.1, 0.1, 0.1),
+    epochs_to_threshold: float | None = 3,
+    val_loss_auc: float = 2.0,
+    best_val_loss: float = 0.5,
+    final_test_acc: float = 0.7,
+    final_gap_loss: float = 0.1,
+    final_gap_acc: float = 0.05,
 ) -> None:
     """One run directory: a trajectory and the summary the loaders expect."""
     d = root / name
@@ -37,10 +44,38 @@ def _write_run(
         "gwa/score_mean": list(score_mean),
     }).to_parquet(d / "trajectory.parquet")
     (d / "summary.json").write_text(json.dumps({
-        "run_name": name, "dataset": dataset, "model": "cnn",
+        "run_name": name, "dataset": dataset, "model": model,
         "optimizer": "sgd", "lr": 0.1, "seed": 0,
         "best_val_acc": best_val_acc,
+        "epochs_to_threshold": epochs_to_threshold,
+        "val_loss_auc": val_loss_auc,
+        "best_val_loss": best_val_loss,
+        "final_test_acc": final_test_acc,
+        "final_gap_loss": final_gap_loss,
+        "final_gap_acc": final_gap_acc,
     }))
+
+
+def _diverged(root, name: str, **kw) -> None:
+    """A run that blew up: the loss went NaN and never came back.
+
+    Its loss-side VDs go absent because NaN propagates, and its two
+    accuracy-derived VDs keep a number that measures nothing.
+    """
+    _write_run(
+        root, name,
+        best_val_acc=0.1,
+        train_loss=(1.0, NAN, NAN, NAN),
+        gwa_value=(0.3, NAN, NAN, NAN),
+        score_mean=(0.1, 0.0, 0.0, 0.0),
+        epochs_to_threshold=None,
+        val_loss_auc=NAN,
+        best_val_loss=NAN,
+        final_gap_loss=NAN,
+        final_test_acc=0.1,
+        final_gap_acc=0.0,
+        **kw,
+    )
 
 
 def test_chance_level_is_one_over_classes():
@@ -137,6 +172,66 @@ def test_a_healthy_run_carries_no_signature(tmp_path):
     assert health.loc["fine", "learned"]
     assert health.loc["fine", "nan_frac"] == 0.0
     assert health.loc["fine", "acc_ratio"] == pytest.approx(7.0)
+
+
+def test_a_diverged_run_reports_accuracy_it_did_not_measure(tmp_path):
+    # the whole reason the map has three states and not two: after a divergence
+    # the loss-side fields go honestly absent, but argmax over NaN logits still
+    # returns a class, so the two accuracy-derived VDs come back with a number
+    _diverged(tmp_path, "boom")
+    _write_run(tmp_path, "fine")
+    status = E.vd_status(tmp_path).set_index(["run_name", "vd"])["status"]
+    assert status["boom", "final_test_acc"] == "suspect"
+    assert status["boom", "final_gap_acc"] == "suspect"
+    assert status["boom", "final_gap_loss"] == "absent"
+    assert status["boom", "val_loss_auc"] == "absent"
+    assert status["fine", "final_test_acc"] == "ok"
+
+
+def test_every_run_and_vd_lands_in_exactly_one_state(tmp_path):
+    _diverged(tmp_path, "boom")
+    _write_run(tmp_path, "fine")
+    _write_run(tmp_path, "censored", epochs_to_threshold=None)
+    status = E.vd_status(tmp_path)
+    assert len(status) == 3 * len(E.VD_FIELDS)
+    assert set(status["status"]) == {"ok", "absent", "suspect"}
+
+
+def test_the_map_counts_only_values_that_are_measurements(tmp_path):
+    _diverged(tmp_path, "boom")
+    _write_run(tmp_path, "fine")
+    _write_run(tmp_path, "censored", epochs_to_threshold=None)
+    cells = E.availability_by_cell(E.vd_status(tmp_path))
+    row = cells.iloc[0]
+    assert row["final_test_acc"] == 2  # 3 present, 1 of them not a measurement
+    assert row["epochs_to_threshold"] == 1  # one crossed, one censored, one blew up
+    assert row["final_gap_loss"] == 2
+    assert list(cells.columns) == list(E.VD_FIELDS)
+
+
+def test_censoring_costs_less_in_pairs_than_in_runs(tmp_path):
+    # 2 crossings out of 4 keep C(2,2) + 2*2 = 5 of the 6 pairs. Counted in runs
+    # the cell looks half empty; counted in the pairs a rank statistic actually
+    # consumes, it keeps five sixths
+    for i in range(2):
+        _write_run(tmp_path, f"crossed{i}", epochs_to_threshold=3)
+    for i in range(2):
+        _write_run(tmp_path, f"censored{i}", epochs_to_threshold=None)
+    info = E.vd1_information(E.vd_status(tmp_path)).iloc[0]
+    assert info["n_crossed"] == 2
+    assert info["n_censored"] == 2
+    assert info["pair_frac"] == pytest.approx(5 / 6)
+
+
+def test_distance_to_the_threshold_separates_the_two_censorings(tmp_path):
+    # cifar10's threshold is 0.65: one run stopped a hair short, the other was
+    # never going to get there. Both are censored and they do not mean the same
+    _write_run(tmp_path, "a_hair_short", epochs_to_threshold=None, best_val_acc=0.64)
+    _write_run(tmp_path, "nowhere_near", epochs_to_threshold=None, best_val_acc=0.10)
+    info = E.vd1_information(E.vd_status(tmp_path)).iloc[0]
+    assert info["n_crossed"] == 0
+    assert info["pair_frac"] == 0.0
+    assert info["median_short_by"] == pytest.approx((0.01 + 0.55) / 2)
 
 
 def test_by_cell_counts_every_run_once(tmp_path):

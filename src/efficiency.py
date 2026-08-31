@@ -25,7 +25,7 @@ import numpy as np
 import pandas as pd
 
 from analysis import REPORTS_DIR, SPECS, load_summaries, load_trajectories
-from config import NUM_CLASSES
+from config import DATASET_BUDGET, NUM_CLASSES
 
 # How far above the chance floor a run must reach to count as having learned
 # anything. A criterion of ours, not a property of the data: it lives here and
@@ -35,6 +35,22 @@ CHANCE_MARGIN = 1.25
 # The gradient metrics and the baseline, excluding the run's own learning curve:
 # a NaN here means the instrumentation had nothing to measure.
 _MEASURED = tuple(s.key for s in SPECS if s.family != "monitor")
+
+# The six efficiency indicators, VD1 to VD6 in design order (1 - Diseño
+# §Variables dependientes). VD1 is the only censored one: a run that never
+# reaches its dataset's accuracy threshold gets no value, never the budget.
+VD_FIELDS = (
+    "epochs_to_threshold",
+    "val_loss_auc",
+    "best_val_loss",
+    "final_test_acc",
+    "final_gap_loss",
+    "final_gap_acc",
+)
+
+# The two VDs that survive a divergence with a number instead of a NaN, because
+# they come from an argmax rather than from the loss.
+_SUSPECT_ON_DIVERGENCE = ("final_test_acc", "final_gap_acc")
 
 
 def chance_level(dataset: str) -> float:
@@ -100,6 +116,90 @@ def health_counts(health: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+def vd_status(
+    report_dir: str | Path = REPORTS_DIR,
+    margin: float = CHANCE_MARGIN,
+) -> pd.DataFrame:
+    """One row per run *and* dependent variable, in one of three states.
+
+    ``ok``: the value is there and is a measurement. ``absent``: it is not there.
+    ``suspect``: it is there and is not a measurement, which happens in exactly
+    one known place. A diverged run ends with NaN weights, and ``argmax`` over
+    NaN logits always returns index 0, so its test accuracy is the frequency of
+    class 0 and its accuracy gap is near zero for the same reason. The loss-side
+    fields go honestly absent instead, because NaN propagates through arithmetic
+    and does not survive an ``argmax``.
+
+    Three states and not two because ``final_test_acc`` and ``final_gap_acc`` are
+    the only columns where "nothing is missing" misleads. Nothing is dropped
+    here: phase A signals and phase B interprets (decision of 2026-08-29).
+    """
+    health = run_health(report_dir, margin)
+    wide = load_summaries(report_dir)[["run_name", *VD_FIELDS]]
+    long = wide.melt(id_vars="run_name", var_name="vd", value_name="value")
+
+    axes = ["run_name", "dataset", "model", "optimizer", "lr", "seed",
+            "best_val_acc", "failure"]
+    long = long.merge(health[axes], on="run_name")
+    suspect = long["vd"].isin(_SUSPECT_ON_DIVERGENCE) & (long["failure"] == "diverged")
+    long["status"] = np.where(
+        long["value"].isna(), "absent", np.where(suspect, "suspect", "ok")
+    )
+    return long
+
+
+def availability_by_cell(status: pd.DataFrame) -> pd.DataFrame:
+    """The map: per cell and dependent variable, how many runs carry a usable value.
+
+    This is the n every later correlation actually speaks with. The suspects are
+    not in it and are not lost either: they are the diverged runs, so
+    :func:`health_by_cell`'s ``n_diverged`` counts them cell by cell, and they can
+    only ever affect the two accuracy-derived columns.
+    """
+    return (
+        status.assign(usable=status["status"] == "ok")
+        .groupby(["dataset", "model", "optimizer", "vd"])["usable"]
+        .sum()
+        .unstack("vd", fill_value=0)
+        .reindex(columns=list(VD_FIELDS), fill_value=0)
+    )
+
+
+def vd1_information(status: pd.DataFrame) -> pd.DataFrame:
+    """How much of VD1 survives censoring, counted in pairs and not in runs.
+
+    A censored run is not a lost one. It cannot be ordered against another
+    censored run, but it can be ordered against every run that crossed, because
+    it took longer than the budget. What a rank statistic consumes is comparable
+    pairs, so the information a cell keeps is ``C(k,2) + k*(n-k)`` out of
+    ``C(n,2)``, not ``k`` out of ``n``: 15 crossings out of 40 keep 61.5% of the
+    pairs, not 37.5%.
+
+    ``median_short_by`` is how far the censored runs of the cell ended below the
+    threshold. It separates the two censorings without inventing a criterion: a
+    run a hair short ran out of budget, and a cell whose whole population sits
+    far below it was never going to cross at all.
+    """
+    vd1 = status[status["vd"] == "epochs_to_threshold"].copy()
+    vd1["crossed"] = vd1["status"] == "ok"
+    vd1["short_by"] = (
+        vd1["dataset"].map(lambda d: DATASET_BUDGET[d]["threshold_acc"])
+        - vd1["best_val_acc"]
+    )
+
+    cell = ["dataset", "model", "optimizer"]
+    g = vd1.groupby(cell)
+    n, k = g.size(), g["crossed"].sum()
+    out = pd.DataFrame({
+        "n_runs": n,
+        "n_crossed": k,
+        "n_censored": n - k,
+        "pair_frac": (k * (k - 1) / 2 + k * (n - k)) / (n * (n - 1) / 2),
+    })
+    out["median_short_by"] = vd1[~vd1["crossed"]].groupby(cell)["short_by"].median()
+    return out
+
+
 def health_by_cell(health: pd.DataFrame) -> pd.DataFrame:
     """Per cell: runs, how many learned, and which signatures showed up."""
     g = health.groupby(["dataset", "model", "optimizer"])
@@ -136,6 +236,17 @@ def _main(report_dir: str | Path = REPORTS_DIR) -> None:
     print("\n== cells that lost runs ==")
     cells = health_by_cell(health)
     print(cells[cells["n_learned"] < cells["n_runs"]])
+
+    status = vd_status(report_dir)
+    print("\n== the map: usable runs per cell and dependent variable ==")
+    print(availability_by_cell(status))
+
+    print("\n== present but not a measurement ==")
+    print(status[status["status"] == "suspect"]
+          .groupby(["dataset", "model", "optimizer"])["run_name"].nunique())
+
+    print("\n== VD1 under censoring ==")
+    print(vd1_information(status).round(3))
 
 
 if __name__ == "__main__":
