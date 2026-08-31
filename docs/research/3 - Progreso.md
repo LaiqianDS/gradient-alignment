@@ -80,37 +80,46 @@ Plan de ejecución. El código se reparte por unidad de observación, decidido e
 - [ ] Concordancia entre validación y test, que decide si las variables leídas sobre la curva de validación sirven.
 - [ ] **Criterio de cierre:** veredicto de validez escrito, mapa tabulado, y las decisiones que se deriven reflejadas en el `.tex`.
 
+**Las fases B a G son una máquina y seis consultas (visto el 2026-08-31).** No son seis trabajos. La fase B construye el contraste entero y lo estrena con OE1; las otras cinco añaden una idea cada una encima de la misma maquinaria, y OE6 no calcula nada nuevo, solo lee signos. La forma propuesta de esa máquina, las cinco elecciones que se toman una vez, está en [[2 - Decisiones]] §Pendientes, sin decidir. **Reordenación que sale de ahí:** la poda de métricas redundantes se adelanta de la fase D a antes de la fase B, porque decide qué columnas entran como predictor en *todos* los objetivos y no solo en OE3.
+
+Entrada común a todas: los predictores de `metrics_at_window.parquet` (5 filas por run, una por ventana), las seis VD de `summary.json`, y el mapa de la fase A para la n de cada casilla.
+
 ### Fase B: OE1, existencia
 
-- [ ] Decidir el método y registrarlo. Programarlo con pruebas sobre datos sintéticos de efecto conocido, antes de tocar `reports/`.
+- [ ] **Requisito previo, adelantado desde la fase D:** poda con prueba del par `noise_scale/simple` ≡ `mcoh/global` y del solape NGV/GSNR. Si se confirma al agregar, la familia de variabilidad podría quedarse en **una sola cantidad**, y una de sus tres métricas resulta ser de alineación. Eso es resultado propio y a la vez amenaza para OE3.
+- [ ] Decidir el método y registrarlo. Programarlo con pruebas sobre datos sintéticos de efecto conocido, antes de tocar `reports/`: un pipeline de correlación no validado contra un efecto que sabes que existe no distingue "no hay señal" de "tengo un bug".
 - [ ] Aquí se reconstruye la **prueba de hipótesis**, una sola vez y para todos los objetivos: qué se calcula dentro de cada celda, cómo se agregan las 24, cómo entra el censurado y cómo se corrige la multiplicidad.
+- [ ] **Trampa:** un coeficiente nulo tiene tres causas que desde fuera no se distinguen, que la métrica no prediga, que no varíe dentro de la celda más allá del ruido de semilla, o que el resultado ya hubiera ocurrido al medir. Las descartan los puntos 3 y 4 de la fase A, y por eso van antes.
 - [ ] **Texto:** §Hipótesis (H1) de `metodologia.tex`, hoy vacía, y la parte de contraste de §Protocolo de análisis, más su sección de resultados. Ahí entran también la población de análisis y el tratamiento del censurado, que no están escritos.
 - [ ] **Criterio de cierre:** H1 respondida con su número, su figura y su párrafo.
 
 ### Fase C: OE2, valor incremental (el decisivo)
 
-- [ ] Método para descontar el predictor de referencia (TSE y validación temprana), con la asimetría de §Problemas conocidos declarada por escrito.
+- [ ] Método para descontar el predictor de referencia (TSE, titular `tse/ema_0_999`, y la validación temprana), con la asimetría de §Problemas conocidos declarada por escrito. Vía principal propuesta: **comparación pareada por celda** del coeficiente de la métrica contra el del baseline, contrastada sobre las 24. Responde literalmente H2 y es lo más interpretable. La correlación parcial de rangos queda como comprobación secundaria.
 - [ ] El eje de coste tiene sección propia, §Coste y capacidad predictiva; aquí entra solo en cuanto OE2 pregunta si ese coste está justificado.
 - [ ] **Criterio de cierre:** H2 respondida sobre las seis VD, con la limitación de la velocidad declarada, no omitida.
 
 ### Fase D: OE3, comparación de familias
 
-- [ ] **Requisito previo:** poda con prueba del par `noise_scale/simple` ≡ `mcoh/global`, y del solape NGV/GSNR. Sin poda, este objetivo no es contestable.
+- [ ] La poda se hace antes, en la fase B. Aquí se documenta **como resultado propio**: demostrar que dos métricas de familias distintas son la misma cantidad es un hallazgo, no limpieza.
+- [ ] **Contingencia:** si la variabilidad queda en una métrica, comparar una familia de cuatro contra una de una no es lo que promete el objetivo. Habría que reformular OE3 como "qué métricas, ya podadas, predicen", declarando por qué.
 - [ ] **Criterio de cierre:** H3 respondida sobre la lista podada, y la poda documentada como resultado propio.
 
 ### Fase E: OE4, suficiencia temprana
 
-- [ ] Barrido de ventanas 5/10/25/50 %, teniendo en cuenta el solape medido en la fase A.
+- [ ] Barrido de ventanas 5/10/25/50 %, con el 100 % como ancla, teniendo en cuenta el solape medido en la fase A.
+- [ ] **Trampa:** comparar ventanas para VD1 está contaminado, porque en la del 25 % el cruce ya ha ocurrido en buena parte de los runs y la métrica "predice" el pasado. VD4, VD5 y VD6 se miden al final del run y no tienen ese problema, así que OE4 es limpio sobre esas tres y hay que declararlo sobre las de velocidad.
 - [ ] **Criterio de cierre:** H4 respondida, con la ventana mínima defendible dicha explícitamente.
 
 ### Fase F: OE5, robustez entre optimizadores
 
 - [ ] Comparación pareada sobre los 12 pares de celdas que solo difieren en el optimizador.
+- [ ] **Asimetría medida entre los dos brazos:** los 41 runs divergidos son todos de SGD, y Adam no divergió ni una vez en sus 480. Tenerlo delante al interpretar cualquier diferencia.
 - [ ] **Criterio de cierre:** H5 respondida, declarando que 12 pares dan poca potencia y que un no rechazo no prueba invariancia.
 
 ### Fase G: OE6, concordancia con la literatura
 
-- [ ] Contraste del signo observado contra el predicho por cada paper. La tabla de signos ya está verificada contra los PDFs (2026-07-17, [[Datos experimentales]] §5.3) y la salvedad de signo de GWA está en `fundamentos.tex:168`.
+- [ ] Contraste del signo observado contra el predicho por cada paper. La tabla de signos ya está verificada contra los PDFs (2026-07-17, [[Datos experimentales]] §5.3) y la salvedad de signo de GWA está en `fundamentos.tex:168`. **No calcula nada nuevo**, consume la salida de la fase B, así que cabe en cualquier hueco en cuanto B esté.
 - [ ] **Criterio de cierre:** H6 respondida, separando los signos que el paper afirma de los que esta memoria extrapola.
 
 ### Fase H: cierre de la memoria
