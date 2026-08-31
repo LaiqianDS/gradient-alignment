@@ -20,6 +20,21 @@ El 2026-08-27 se retiró de este log la tanda de decisiones del 2026-08-26, la q
 
 ### 2026-08-31
 
+#### El censo de runs cierra los cuatro recuentos: 154 nunca aprendieron y ninguno queda sin explicación
+
+**Qué etiqueta y qué no.** `src/efficiency.py::run_health` da a cada run dos columnas separadas. `learned` dice cómo acabó, si superó 1,25 veces el azar. `failure` dice qué firma apareció en alguna época, divergencia, colapso o ninguna. Las columnas `*_frac` dicen en qué proporción del run. No excluye a nadie, que es la regla de la fase.
+
+**Por qué dos columnas y no una.** La primera versión daba una sola etiqueta y clasificaba `resnet18_cifar100_sgd_lr1.0_seed2` como colapsado: colapsa en 5 de sus 40 épocas, se recupera y acaba a 24,7 veces el azar. Con una etiqueta, un run sano se leía como una ruina. Cómo acabó y qué le pasó son dos preguntas y piden dos columnas.
+
+**Los cuatro recuentos del vault eran correctos y les faltaba el adjetivo.** El mismo dato se lee distinto según se pregunte "roto en alguna época" o "roto en todas", y ninguna entrada decía cuál. Medido sobre los 960: **165** runs tienen firma en alguna época, 41 divergidos y 124 colapsados, y **133** la tienen en todas, 39 y 94. Los 124 y los 94 del cero exacto de GWA son ese mismo par. Desde ahora la extensión va en el dato, en `nan_frac`, y no en la prosa.
+
+**154 sin aprender, y ninguno sin causa conocida.** 115 colapsados más 39 divergidos dan exactamente los 154, y **cero runs se quedan en el azar sin firma mecánica**. El umbral tampoco importa: 1,2 y 1,25 seleccionan los mismos 154, así que la contradicción entre las entradas del 25 y del 27 no cambia ningún resultado ni toca el reparto por optimizador que sostiene la decisión de OE5.
+
+**ResNet-18 no perdió ni un run**, los 320 de sus ocho celdas. Es la única de las tres arquitecturas con normalización por lotes, y el único ResNet-18 que llegó a colapsar se recuperó solo.
+
+- **Trampa: el margen es una línea recta sobre un continuo.** Once runs muestran firma y aprenden igual, algunos por muy poco. `fc_cifar100_sgd_lr0.3_seed2` colapsa en el 92,5 % de sus épocas y acaba a 1,35 veces el azar, justo por encima de la línea. "Aprendió" no es lo mismo que "sirve", y esa segunda decisión es de la fase B.
+- **Trampa: en los divergidos la accuracy de test sigue sin ser una medición**, y este censo no la toca (ver la entrada del 2026-08-29). `learned` se lee sobre la curva de validación, que sí es real hasta la época en que el run revienta.
+
 #### El código de run y celda va a `efficiency.py`, y `analysis.py` se queda con las columnas
 
 **El corte va por unidad de observación.** `analysis.py` trabaja sobre columnas de `trajectory.parquet` y se queda tal cual. El código que mira runs y celdas, que lee `summary.json`, va a un módulo nuevo, `src/efficiency.py`, y lo crea el punto 1b. Son los cuatro puntos que quedan de la fase A: 1b, 2, 4 y 5.
