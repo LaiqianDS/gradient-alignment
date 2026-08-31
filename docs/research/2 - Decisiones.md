@@ -18,6 +18,30 @@ El 2026-08-27 se retiró de este log la tanda de decisiones del 2026-08-26, la q
 
 ## Tomadas (log)
 
+### 2026-08-31
+
+#### El código de run y celda va a `efficiency.py`, y `analysis.py` se queda con las columnas
+
+**El corte va por unidad de observación.** `analysis.py` trabaja sobre columnas de `trajectory.parquet` y se queda tal cual, incluida la primera línea de su docstring, que declara que es el backend del lado métrica. El código que mira runs y celdas, que lee `summary.json`, va a un módulo nuevo, `src/efficiency.py`, y lo crea el punto 1b. Son los cuatro puntos que quedan de la fase A: 1b, 2, 4 y 5. Esto se aparta de [[3 - Progreso]], que decía `analysis.py`, y allí queda corregido.
+
+**Por qué ahora y no más tarde.** Partir sale gratis hoy, porque **nada en `src/` importa `analysis`**: sus únicos consumidores son `tests/test_analysis.py` y su propio `_main` de consola. En cuanto la fase B empiece a importar de estos módulos, mover una función entre ellos ya tocará ficheros de terceros.
+
+**Por qué ese nombre.** Continúa vocabulario que ya existe en el código y en la memoria: las seis VD las produce `train.py::efficiency_summary` y se llaman indicadores de eficiencia. No inventa una palabra nueva para algo que ya la tiene.
+
+- **Debilidad asumida del nombre.** Describe bien los puntos 2, 4 y 5 y solo de refilón el 1b, que es validez y no eficiencia. Se acepta porque en un `src/` plano de doce ficheros se busca por nombre de función y por docstring, no por nombre de fichero, y porque partir en dos módulos para unas trescientas líneas es más estructura de la que el problema pide.
+- **Lo que ese módulo no va a contener:** ninguna correlación entre métrica y variable dependiente. Eso tendrá casa propia en la fase B, así que el nombre no encierra nada.
+
+#### El número de clases sube a `config.py`; el nivel de azar nunca ha existido en el código
+
+**`NUM_CLASSES` se define en `config.py` y `data.py` lo lee**, igual que ya hacía con `SPLIT_SEED`. Es un hecho del conjunto de datos que usan los dos lados del proyecto, y config es donde este repositorio ya guarda lo que usan los dos lados. Verificado: los cuatro valores de `DATASET_SPECS` no cambian y la suite pasa entera en 231. Descartado importar `data` desde el análisis, que cuesta 1,40 s frente a 0,03 s y ataría la capa de análisis a torch para siempre a cambio de un entero.
+
+**El nivel de azar 1/K y el factor 1,25 no suben a config**, porque no son diseño sino criterio nuestro, discutible y revisable. Viven en el módulo de análisis, para que cambiarlos no toque el diseño.
+
+**Y el hallazgo que obliga al punto 1b: ese criterio nunca ha estado en el código.** Buscado en `src/`, en `tests/` y en los dos únicos scripts de análisis que han existido, `plots.py` borrado el 2026-08-27 y `power_analysis.py` borrado el 2026-08-25: no aparece en ninguno. El recuento de 154 se calculó a mano en una sesión y solo sobrevivió el resultado, escrito en prosa. De ahí que el vault se contradiga a sí mismo: la entrada del 2026-08-25 escribe el umbral como 1,2 y la del 2026-08-27 como 1,25, y las dos dicen 154.
+
+- **Cuatro recuentos sueltos que no cuadran, y el 1b los deja en uno.** 133 runs con NaN, 154 clavados en el azar, 124 con la firma de `gwa/score_mean` a cero exacto y 115 de esos que acaban clavados. La entrada del 27 llama a 154 "el mismo recuento" que esa firma, que la del 25 cifra en 124.
+- **Trampa: el 154 sostiene una decisión ya tomada.** Con él se decidió el 2026-08-27 que OE5 compara las ocho posiciones de cada rejilla y no el solape de seis, apoyándose en 72 muertos de 480 en SGD frente a 82 de 480 en Adam. Si al recalcularlo el reparto cambia, hay que releer esa decisión y no solo corregir la cifra.
+
 ### 2026-08-29
 
 #### Punto 1 de la fase A: las columnas son válidas, y un cero falso que confirmaba la teoría

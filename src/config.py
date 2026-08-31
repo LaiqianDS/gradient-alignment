@@ -131,6 +131,16 @@ LR_GRID = {
     "adam": (3e-5, 1e-4, 3e-4, 1e-3, 3e-3, 1e-2, 3e-2, 1e-1),
 }
 
+# Classes per dataset: read by data.py to build DATASET_SPECS, and by the
+# analysis side, where 1/K is the chance-accuracy floor a run that learned
+# nothing sits on.
+NUM_CLASSES = {
+    "mnist": 10,
+    "cifar10": 10,
+    "cifar100": 100,
+    "tiny_imagenet": 200,
+}
+
 # Per-dataset epoch budget + the val-accuracy level for epochs-to-threshold.
 # Calibrated from the 2026-06-17 pilot: budgets cover the val-loss plateau plus
 # an overfitting horizon; thresholds sit below each dataset's best-tuned ceiling
