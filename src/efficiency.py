@@ -1,16 +1,12 @@
 """Run-level diagnostics: which runs are data points, and which are failures.
 
-The sibling of ``analysis.py``: that module's unit is the metric column, read
-from ``trajectory.parquet``; this one's unit is the run and the cell, read from
-``summary.json``. Its subject is the six efficiency indicators that
-``train.py::efficiency_summary`` writes.
+The unit is the run and the cell, read from ``summary.json`` and the
+trajectories; the subject is the six efficiency indicators ``train.py`` writes.
+A diverged or collapsed run still carries numbers in all six, so this module
+labels and counts them. It never drops a run.
 
-A run whose training diverged or collapsed still has numbers in every one of
-those six fields, so this census is what tells a measurement from a wreck. It
-labels and counts; it never drops a run.
-
-A run can be broken in some epoch or in every epoch. The ``*_frac`` columns
-carry the extent, so ``frac > 0`` and ``frac == 1`` are both askable.
+The ``*_frac`` columns carry the extent of a failure, so ``frac > 0`` and
+``frac == 1`` are both askable.
 """
 
 from __future__ import annotations
@@ -21,19 +17,17 @@ import numpy as np
 import pandas as pd
 
 from analysis import REPORTS_DIR, SPECS, load_summaries, load_trajectories
-from config import DATASET_BUDGET, NUM_CLASSES
+from config import NUM_CLASSES, THRESHOLD_ACC
+from train import median3
 
-# How far above the chance floor a run must reach to count as having learned
-# anything.
+# Multiple of the chance floor a run must reach to count as having learned.
 CHANCE_MARGIN = 1.25
 
-# The gradient metrics and the baseline, excluding the run's own learning curve:
-# a NaN here means the instrumentation had nothing to measure.
+# Metric and baseline columns, excluding the run's own learning curve.
 _MEASURED = tuple(s.key for s in SPECS if s.family != "monitor")
 
-# The six efficiency indicators, VD1 to VD6 in design order. VD1 is the only
-# censored one: a run that never reaches its dataset's accuracy threshold gets
-# no value, never the budget.
+# The six efficiency indicators. ``epochs_to_threshold`` (VD1) is the only
+# censored one: NaN when the run never reaches its threshold, never the budget.
 VD_FIELDS = (
     "epochs_to_threshold",
     "val_loss_auc",
@@ -43,13 +37,13 @@ VD_FIELDS = (
     "final_gap_acc",
 )
 
-# The two VDs that survive a divergence with a number instead of a NaN, because
-# they come from an argmax rather than from the loss.
+# The two indicators that come from an argmax, so a diverged run still returns
+# a number for them instead of a NaN.
 _SUSPECT_ON_DIVERGENCE = ("final_test_acc", "final_gap_acc")
 
 
 def chance_level(dataset: str) -> float:
-    """Accuracy of guessing: 1/K on these four balanced datasets."""
+    """Chance accuracy, 1/K; valid because the datasets are balanced."""
     return 1.0 / NUM_CLASSES[dataset]
 
 
@@ -59,11 +53,9 @@ def run_health(
 ) -> pd.DataFrame:
     """One row per run: how far it got, what broke, and for how long.
 
-    Outcome and cause are separate columns. ``learned`` is the outcome: did the
-    run ever beat ``margin`` times chance. ``failure`` is the signature seen in
-    any epoch. ``diverged``: the loss itself went NaN, so the gradients did too.
-    ``collapsed``: the loss stayed finite but the hidden activations died, seen
-    as ``gwa/score_mean`` exactly 0.0. ``none``: neither.
+    ``learned``: the run beat ``margin`` times chance. ``failure`` is the
+    signature seen in any epoch: ``diverged`` when ``train_loss`` went NaN,
+    ``collapsed`` when ``gwa/score_mean`` was exactly 0.0, else ``none``.
     """
     traj = load_trajectories(report_dir)
     per_run = traj.groupby("run_name")
@@ -104,23 +96,47 @@ def health_counts(health: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+def vd1_epochs(report_dir: str | Path = REPORTS_DIR) -> pd.Series:
+    """Epochs to threshold per run (1-indexed), recomputed from the val curve.
+
+    Not read from ``summary.json``, whose stored field is stale. The threshold
+    is keyed by (dataset, model) and the smoothing is ``train.median3``, the
+    same one that produced ``best_val_acc``, so a run crosses here exactly when
+    ``best_val_acc >= tau``.
+
+    NaN where the run never reaches its threshold, never the budget.
+    """
+    traj = load_trajectories(report_dir)
+    epochs = {}
+    for name, g in traj.sort_values("epoch").groupby("run_name"):
+        row = g.iloc[0]
+        tau = THRESHOLD_ACC[(row["dataset"], row["model"])]
+        hit = g["epoch"][median3(g["val_acc"]) >= tau]
+        epochs[name] = float(hit.iloc[0]) + 1 if len(hit) else np.nan  # 1-indexed
+    return pd.Series(epochs, name="epochs_to_threshold").rename_axis("run_name")
+
+
 def vd_status(
     report_dir: str | Path = REPORTS_DIR,
     margin: float = CHANCE_MARGIN,
 ) -> pd.DataFrame:
     """One row per run and dependent variable, in one of three states.
 
-    ``ok``: the value is there and is a measurement. ``absent``: it is not there.
-    ``suspect``: it is there and is not a measurement. A diverged run ends with
-    NaN weights, and ``argmax`` over NaN logits always returns index 0, so its
-    test accuracy is the frequency of class 0 and its accuracy gap is near zero
-    for the same reason. The loss-side fields go absent instead, because NaN
-    propagates through arithmetic and does not survive an ``argmax``.
+    ``ok``: the value is present and is a measurement. ``absent``: NaN.
+    ``suspect``: present but not a measurement. A diverged run ends with NaN
+    weights, and ``argmax`` over NaN logits always returns index 0, so its test
+    accuracy is the frequency of class 0 and its accuracy gap is near zero. The
+    loss-side fields go absent instead, since NaN propagates through arithmetic
+    but not through an ``argmax``.
+
+    ``epochs_to_threshold`` comes from :func:`vd1_epochs`, not from the summary,
+    whose stored value is stale. The other five are read as written.
 
     Nothing is dropped here.
     """
     health = run_health(report_dir, margin)
-    wide = load_summaries(report_dir)[["run_name", *VD_FIELDS]]
+    wide = load_summaries(report_dir)[["run_name", *VD_FIELDS]].copy()
+    wide["epochs_to_threshold"] = wide["run_name"].map(vd1_epochs(report_dir))
     long = wide.melt(id_vars="run_name", var_name="vd", value_name="value")
 
     axes = ["run_name", "dataset", "model", "optimizer", "lr", "seed",
@@ -136,9 +152,7 @@ def vd_status(
 def availability_by_cell(status: pd.DataFrame) -> pd.DataFrame:
     """Per cell and dependent variable, how many runs carry a usable value.
 
-    Suspect values are excluded. They are the diverged runs, counted cell by
-    cell by :func:`health_by_cell`'s ``n_diverged``, and they can only ever
-    affect the two accuracy-derived columns.
+    Counts ``status == "ok"`` only, so suspect values are excluded.
     """
     return (
         status.assign(usable=status["status"] == "ok")
@@ -150,22 +164,19 @@ def availability_by_cell(status: pd.DataFrame) -> pd.DataFrame:
 
 
 def vd1_information(status: pd.DataFrame) -> pd.DataFrame:
-    """How much of VD1 survives censoring, counted in pairs and not in runs.
+    """How much of ``epochs_to_threshold`` survives censoring, counted in pairs.
 
-    A censored run cannot be ordered against another censored run, but it can be
-    ordered against every run that crossed, since it took longer than the budget.
-    A rank statistic consumes comparable pairs, so ``pair_frac`` is
-    ``C(k,2) + k*(n-k)`` over ``C(n,2)``, with ``k`` crossings out of ``n`` runs.
+    Two censored runs cannot be ordered against each other, but a censored run
+    can be ordered against every run that crossed, so ``pair_frac`` is
+    ``(C(k,2) + k*(n-k)) / C(n,2)`` with ``k`` crossings out of ``n`` runs.
 
-    ``median_short_by`` is how far the censored runs of the cell ended below the
+    ``median_short_by`` is how far the cell's censored runs ended below the
     threshold.
     """
     vd1 = status[status["vd"] == "epochs_to_threshold"].copy()
     vd1["crossed"] = vd1["status"] == "ok"
-    vd1["short_by"] = (
-        vd1["dataset"].map(lambda d: DATASET_BUDGET[d]["threshold_acc"])
-        - vd1["best_val_acc"]
-    )
+    tau = pd.Series(list(zip(vd1["dataset"], vd1["model"])), index=vd1.index)
+    vd1["short_by"] = tau.map(THRESHOLD_ACC) - vd1["best_val_acc"]
 
     cell = ["dataset", "model", "optimizer"]
     g = vd1.groupby(cell)

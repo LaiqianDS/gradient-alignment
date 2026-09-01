@@ -1,24 +1,11 @@
-"""Calibration pilot: one extended run per matrix cell, before the real sweep.
+"""Calibration pilot launcher: one extended run per matrix cell.
 
-One run per cell (24 total) at the center of the LR grid (SGD 1e-2, Adam 1e-3),
-seed 0, with a doubled epoch budget, so the curves show where val loss flattens.
+One run per cell (24 total) at the center of the LR grid, seed 0, with a
+doubled epoch budget.
 
 Pilot runs write to ``reports_pilot/``, never ``reports/``: run_matrix counts
 a grid point as done iff ``reports/<run_name>/summary.json`` exists, so a
 pilot run leaking there would later be skipped as a finished grid run.
-
-Reading ``--report``, per dataset:
-
-* epoch budget: where the val loss flattens. Budget = plateau + margin,
-  rounded to a multiple of 20 (keeps the ``windows`` snap exact).
-* threshold_acc: ``thr@`` recomputes the crossing of the CURRENT threshold on
-  the smoothed val curve (the summaries' ``epochs_to_threshold`` used the
-  threshold in force when the pilot ran) and prints it as a fraction of the
-  candidate budget.
-* cost: ``metric%`` (metric_seconds / total_seconds) is the share of
-  wall-clock the instrumentation costs.
-
-After the pilot, update the cell YAMLs *and* ``config.py::DATASET_BUDGET``.
 
 Usage::
 
@@ -26,7 +13,7 @@ Usage::
     python src/run_pilot.py --status   # done/pending table
     python src/run_pilot.py --dry-run  # print commands, run nothing
     python src/run_pilot.py --report   # calibration table from finished runs
-    python src/run_pilot.py --dataset cifar10   # restrict to one dataset (grid slice)
+    python src/run_pilot.py --dataset cifar10   # restrict to one dataset
 """
 
 from __future__ import annotations
@@ -41,7 +28,14 @@ from pathlib import Path
 
 import pandas as pd
 
-from config import DATASET_BUDGET, DATASETS, LR_GRID, MODELS, OPTIMIZERS
+from config import (
+    DATASET_BUDGET,
+    DATASETS,
+    LR_GRID,
+    MODELS,
+    OPTIMIZERS,
+    THRESHOLD_ACC,
+)
 from run_matrix import ROOT, TRAIN_SCRIPT, cell_path, child_env, run_name_for
 
 PILOT_DIR = ROOT / "reports_pilot"
@@ -50,7 +44,7 @@ EPOCHS_FACTOR = 2
 
 
 def center_lr(optimizer: str) -> float:
-    """Center of the 8-point LR grid: 1e-2 for SGD(+momentum), 1e-3 for Adam."""
+    """Center of the optimizer's LR grid."""
     grid = LR_GRID[optimizer]
     return grid[(len(grid) - 1) // 2]
 
@@ -104,9 +98,9 @@ def build_command(run: PilotRun) -> list[str]:
         "--config", str(run.config),
         "--lr", str(run.lr),
         "--seed", str(PILOT_SEED),
-        "--epochs", str(run.epochs),     # doubled budget: the only knob override
+        "--epochs", str(run.epochs),
         "--run-name", run.name,
-        "--out-dir", str(PILOT_DIR),     # isolated from reports/ (resume collision)
+        "--out-dir", str(PILOT_DIR),
     ]
 
 
@@ -154,20 +148,14 @@ def execute(runs: list[PilotRun], dry_run: bool = False) -> list[PilotRun]:
 
 
 def plateau_epoch(epoch_df: pd.DataFrame, tol: float = 0.02) -> int:
-    """First (1-indexed) epoch whose val loss is within ``tol`` of the run's best.
-
-    Past this epoch the remaining budget buys less than ``tol`` relative
-    improvement.
-    """
+    """First (1-indexed) epoch whose val loss is within ``tol`` of the run's best."""
     best = epoch_df["val_loss"].min()
     ok = epoch_df[epoch_df["val_loss"] <= best * (1.0 + tol)]
     return int(ok["epoch"].iloc[0]) + 1
 
 
 def recommend_budget(max_plateau: int, margin: float = 0.2, step: int = 20) -> int:
-    """Suggested 1x budget: the latest cell plateau plus ``margin``, rounded UP
-    to a multiple of ``step`` (keeps the ``windows`` snap exact).
-    """
+    """``max_plateau`` plus ``margin``, rounded up to a multiple of ``step``."""
     return int(math.ceil(max_plateau * (1.0 + margin) / step) * step)
 
 
@@ -181,18 +169,15 @@ def fmt_params(n: int) -> str:
 
 
 def calibration_table(runs: list[PilotRun]) -> pd.DataFrame:
-    """The pilot's calibration evidence as data: one row per finished run.
+    """One row per finished run; :func:`print_report` only formats this frame.
 
-    :func:`print_report` formats this frame and adds nothing to it.
-
-    Run facts are read from disk, never derived from the current config: the
-    pilot ran under the budgets in force at the time, and calibration edits
-    ``DATASET_BUDGET``. ``threshold_epoch`` recomputes the crossing of the
-    current threshold on the smoothed val curve (same 3-epoch centred median as
-    ``train.median3``).
+    ``ran_epochs`` comes from the trajectory, not from ``DATASET_BUDGET``, and
+    ``threshold_epoch`` recomputes the crossing of the current threshold on the
+    smoothed val curve (same 3-epoch centred median as ``train.median3``), not
+    from the stored ``epochs_to_threshold``.
 
     ``test_fields_valid`` is False when the summary carries a ``_tiny_test_note``
-    key, which marks its test/gap fields as invalid. Its val-side and timing
+    key, which marks its test/gap fields as invalid; its val-side and timing
     fields stay sound.
     """
     rows = []
@@ -201,12 +186,12 @@ def calibration_table(runs: list[PilotRun]) -> pd.DataFrame:
             continue
         traj = pd.read_parquet(r.dir / "trajectory.parquet").sort_values("epoch")
         s = json.loads((r.dir / "summary.json").read_text())
-        budget = DATASET_BUDGET[r.dataset]
-        candidate = budget["epochs"]
+        candidate = DATASET_BUDGET[r.dataset]["epochs"]
+        threshold = THRESHOLD_ACC[(r.dataset, r.model)]
 
         plateau = plateau_epoch(traj)
         smooth_acc = traj["val_acc"].rolling(3, center=True, min_periods=1).median()
-        crossed = traj[smooth_acc >= budget["threshold_acc"]]
+        crossed = traj[smooth_acc >= threshold]
         hit = int(crossed["epoch"].iloc[0]) + 1 if not crossed.empty else None
 
         total, metric = s.get("total_seconds"), s.get("metric_seconds")
@@ -215,7 +200,7 @@ def calibration_table(runs: list[PilotRun]) -> pd.DataFrame:
             "run_name": r.name,
             "ran_epochs": len(traj),
             "candidate_epochs": candidate,
-            "threshold_acc": budget["threshold_acc"],
+            "threshold_acc": threshold,
             "plateau_epoch": plateau,
             "plateau_frac": plateau / len(traj),
             "threshold_epoch": hit,
@@ -240,13 +225,11 @@ TESTFIX_DIR = "testfix_40ep"
 
 
 def testfix_table(runs: list[PilotRun]) -> pd.DataFrame:
-    """The valid test/gap reference stored in each affected run's ``testfix_40ep/``.
+    """The test/gap reference stored in each run's ``testfix_40ep/`` subdirectory.
 
-    A different run, not a repair of the row beside it: same cell, center LR and
-    seed, but trained to the calibrated budget instead of the pilot's doubled
-    one. It gets its own frame so nothing joins it onto
-    :func:`calibration_table` as though the two horizons were the same run.
-    Only the test-side fields are carried.
+    A separate run of the same cell at a different epoch budget, so it gets its
+    own frame and must not be joined onto :func:`calibration_table`. Only the
+    test-side fields are carried.
     """
     rows = []
     for r in runs:
@@ -267,18 +250,12 @@ def testfix_table(runs: list[PilotRun]) -> pd.DataFrame:
 
 
 def print_report(runs: list[PilotRun]) -> None:
-    """Per-dataset results + calibration tables, then the one-line roll-up.
+    """Per-dataset ``results`` and ``calib`` tables, then a one-line roll-up.
 
-    Two narrow tables per dataset, both formatted from :func:`calibration_table`.
-    ``results``: best val plus final test acc/F1/loss and the generalization gap
-    (train_acc - test_acc). ``calib``: ``plateau@`` (val-loss knee, as a share of
-    the run's recorded epochs), ``thr@`` (crossing of the current threshold_acc,
-    as a share of the candidate 1x budget), ``metric%``, wall time and parameter
-    count. The one-line roll-up proposes a 1x budget.
-
-    A ``*`` on a ``results`` row carries ``test_fields_valid`` into the printed
-    text. The ``testfix`` block below prints :func:`testfix_table` when a
-    reference exists, each row labelled with the budget it ran.
+    Both tables are formatted from :func:`calibration_table`. A ``*`` on a
+    ``results`` row marks ``test_fields_valid`` False. The ``testfix`` block
+    prints :func:`testfix_table` when a reference exists, each row labelled with
+    the budget it ran.
     """
     table = calibration_table(runs)
     by_dataset: dict[str, list[PilotRun]] = {}
@@ -294,8 +271,8 @@ def print_report(runs: list[PilotRun]) -> None:
     )
 
     for dataset, cell_runs in by_dataset.items():
-        budget = DATASET_BUDGET[dataset]
-        candidate = budget["epochs"]
+        candidate = DATASET_BUDGET[dataset]["epochs"]
+        thresholds = "/".join(str(THRESHOLD_ACC[(dataset, m)]) for m in MODELS)
 
         sub = table[table["dataset"] == dataset] if len(table) else table
         pending = [r for r in cell_runs if not r.is_done()]
@@ -304,13 +281,13 @@ def print_report(runs: list[PilotRun]) -> None:
         ran_label = ("/".join(str(e) for e in ran) if ran
                      else f"{cell_runs[0].epochs} (planned)")
 
-        print(f"\n{dataset}  |  budget {candidate} ep  |  thr {budget['threshold_acc']}"
-              f"  |  pilot ran {ran_label} ep")
+        print(f"\n{dataset}  |  budget {candidate} ep  |  thr {thresholds} "
+              f"({'/'.join(MODELS)})  |  pilot ran {ran_label} ep")
         if not len(sub):
             print("  (no finished runs yet)")
             continue
 
-        # results: the model-quality numbers
+        # results: model quality
         print(f"  {'results':<9}{'model':<9}{'opt':<4}{'test_acc':>9}{'test_f1':>9}"
               f"{'test_loss':>10}{'val_acc':>9}{'gap_acc':>9}")
         for row in sub.itertuples():
@@ -339,7 +316,7 @@ def print_report(runs: list[PilotRun]) -> None:
                       f"{row.final_test_loss:>10.3f}{'':>9}"
                       f"{row.final_gap_acc:>9.4f}")
 
-        # calib: the tuning evidence (budget / threshold / cost)
+        # calib: budget / threshold / cost
         print(f"  {'calib':<9}{'model':<9}{'opt':<4}{'plateau@':>11}{'thr@':>11}"
               f"{'metric%':>9}{'time':>8}{'params':>8}")
         for row in sub.itertuples():

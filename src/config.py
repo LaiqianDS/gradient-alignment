@@ -1,11 +1,10 @@
 """Experiment configuration: typed knobs with YAML-file + CLI overrides.
 
-One run = one :class:`Config`. Precedence, lowest to highest::
+Precedence, lowest to highest::
 
     Config defaults  <  --config FILE.yaml  <  individual --flag overrides
 
-Scalar knobs are exposed as CLI flags; the list/tuple knob (``windows``)
-is YAML-only.
+Scalar knobs are exposed as CLI flags; ``windows`` is YAML-only.
 """
 
 from __future__ import annotations
@@ -19,7 +18,7 @@ import yaml
 
 @dataclass
 class Config:
-    # --- data & model: the headline knobs -------------------------------
+    # --- data & model ---------------------------------------------------
     dataset: str = "cifar10"   # mnist | cifar10 | cifar100 | tiny_imagenet
     model: str = "cnn"         # fc | cnn | resnet18
 
@@ -35,13 +34,12 @@ class Config:
     seed: int = 42
 
     # --- metric probing -------------------------------------------------
-    # probe_size is M, the per-sample gradient batch: it sets the estimator's
-    # sample count, and stays fixed across the grid (see FIXED_KNOBS).
+    # probe_size is M, the per-sample gradient count. Also pinned in FIXED_KNOBS.
     probe_size: int = 256
 
     # chunk_size is rows-per-chunk for the streamed per-sample-grad sweeps. The
-    # streamed statistics are chunk-invariant, so it only caps the GPU peak at
-    # [chunk_size, P] instead of the full [M, P] Jacobian. Lower it on a tight GPU.
+    # streamed statistics are chunk-invariant, so it only caps the device peak at
+    # [chunk_size, P] instead of the full [M, P] Jacobian.
     chunk_size: int = 32
 
     # --- efficiency target ----------------------------------------------
@@ -78,8 +76,7 @@ def parse_config(argv: list[str] | None = None) -> Config:
         file_data = yaml.safe_load(Path(known.config).read_text()) or {}
     base = Config(**file_data)
 
-    # Each CLI flag defaults to the YAML/default value, so unset flags
-    # leave the YAML choice untouched.
+    # Each flag defaults to the YAML/dataclass value, so an unset flag leaves it.
     p = argparse.ArgumentParser(
         parents=[pre], description="Train one model and log gradient metrics."
     )
@@ -107,9 +104,7 @@ def config_to_dict(cfg: Config) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Experiment-matrix definition: the static axes of the full grid swept by
-# ``run_matrix.py``. The launcher, the tests and the analysis side import these
-# constants instead of duplicating the values.
+# Static axes of the grid swept by ``run_matrix.py``.
 # ---------------------------------------------------------------------------
 
 DATASETS = ("mnist", "cifar10", "cifar100", "tiny_imagenet")
@@ -117,8 +112,8 @@ MODELS = ("fc", "cnn", "resnet18")
 OPTIMIZERS = ("sgd", "adam")
 SEEDS = (0, 1, 2, 3, 4)
 
-# Fixed train/val split seed (used by data.py): one shared partition for every
-# run, independent of the run seed.
+# Train/val split seed: one shared partition for every run, independent of the
+# run seed.
 SPLIT_SEED = 42
 
 # Per-optimizer learning-rate grids: 8 half-decade points each.
@@ -127,8 +122,7 @@ LR_GRID = {
     "adam": (3e-5, 1e-4, 3e-4, 1e-3, 3e-3, 1e-2, 3e-2, 1e-1),
 }
 
-# Classes per dataset: read by data.py to build DATASET_SPECS, and by
-# efficiency.py, where 1/K is the chance-accuracy floor.
+# Classes per dataset.
 NUM_CLASSES = {
     "mnist": 10,
     "cifar10": 10,
@@ -136,17 +130,29 @@ NUM_CLASSES = {
     "tiny_imagenet": 200,
 }
 
-# Per-dataset epoch budget and the val-accuracy level for epochs-to-threshold.
+# Epoch budget per dataset; it does not depend on the architecture.
 DATASET_BUDGET = {
-    "mnist": {"epochs": 20, "threshold_acc": 0.97},
-    "cifar10": {"epochs": 40, "threshold_acc": 0.65},
-    "cifar100": {"epochs": 40, "threshold_acc": 0.35},
-    "tiny_imagenet": {"epochs": 40, "threshold_acc": 0.20},
+    "mnist": {"epochs": 20},
+    "cifar10": {"epochs": 40},
+    "cifar100": {"epochs": 40},
+    "tiny_imagenet": {"epochs": 40},
 }
 
-# Knobs held fixed across every cell. They mirror the Config defaults on
-# purpose: writing them into each generated cell YAML pins the design even if a
-# Config default later drifts.
+# Val-accuracy level for epochs-to-threshold, keyed by (dataset, model) and
+# shared across optimizers. Each value is the highest round level that at least
+# 60% of the cell's runs that learned reach. The ``epochs_to_threshold`` stored
+# in every summary.json predates these values and must not be read;
+# efficiency.py recomputes it from the val curve.
+THRESHOLD_ACC = {
+    ("mnist", "fc"): 0.975, ("mnist", "cnn"): 0.98, ("mnist", "resnet18"): 0.99,
+    ("cifar10", "fc"): 0.50, ("cifar10", "cnn"): 0.60, ("cifar10", "resnet18"): 0.75,
+    ("cifar100", "fc"): 0.20, ("cifar100", "cnn"): 0.30, ("cifar100", "resnet18"): 0.40,
+    ("tiny_imagenet", "fc"): 0.08, ("tiny_imagenet", "cnn"): 0.22,
+    ("tiny_imagenet", "resnet18"): 0.36,
+}
+
+# Knobs held fixed across every cell. They are written into each generated cell
+# YAML, so a later change to a Config default does not move them.
 FIXED_KNOBS = {
     "batch_size": 128,
     "momentum": 0.9,

@@ -24,11 +24,41 @@ Tamaño del problema de multiplicidad, para tenerlo presente al decidir: `metric
 
 **Riesgo que invalidaría la segunda elección:** todo esto supone relación monótona. Con un barrido de LR de 3,5 décadas una relación en U es posible, y cualquier estadístico de rangos la leería como ausencia de señal. Antes de fijar el estadístico hay que mirar nubes de puntos, y eso no se ha hecho.
 
-**El umbral de VD1, en consulta con el tutor (abierto el 2026-08-31).** Los umbrales de val-accuracy son por dataset y no por modelo (0,97 / 0,65 / 0,35 / 0,20), calibrados sobre el pilot el 2026-06-17 y por tanto sobre datos distintos de los que se analizan. La consecuencia medida es que 466 de 960 runs quedan censurados y que las seis celdas de FC fuera de MNIST no tienen VD1 en ningún run. Tres caminos, cada uno con su precio. **Dejarlo y tratar la censura en el estadístico**, con concordancia sobre pares comparables: precio, esas seis celdas se declaran como limitación y se cubren con VD2 y VD3. **Umbral por modelo**: rescataría FC, pero subiría el umbral de ResNet-18 hacia su techo y le quitaría la cobertura casi completa que hoy tiene (35 y 40 cruces de 40 en CIFAR-10), y cambiaría el constructo de VD1 de "épocas hasta resolver la tarea" a "épocas hasta llegar al techo de esta arquitectura", con reescritura de diseño y metodología. **Bajar el umbral por dataset**: menos censura, pero adelanta los cruces y agrava el solape con la ventana de medida, que es justo lo que hace contestable OE4. El intercambio no tiene óptimo: el mismo knob juega en contra de sí mismo. **Cambiar de idea es barato en cómputo**, porque ninguna métrica depende del umbral y VD1 se recalcula desde la curva de val guardada en `trajectory.parquet` sin reentrenar; lo caro es el texto, `config.py`, los 24 YAML, [[1 - Diseño]] y `metodologia.tex`. Mientras esté abierta, el mapa de la fase A se calcula con los umbrales actuales y se recalcula si cambian.
-
 El 2026-08-27 se retiró de este log la tanda de decisiones del 2026-08-26, la que abría la primera pasada de la fase A, junto con el código y el texto que produjo. La fase A se rehace después de la fase 0, así que sus decisiones se vuelven a tomar entonces y se registran aquí con la fecha en que se tomen. Lo único que sobrevive de aquella pasada es la **convención de registro** del censurado, que `metodologia.tex` §Variables declara: un valor censurado se anota como ausente y nunca como el presupuesto. La población de análisis y el tratamiento del censurado en el contraste **no** están escritos en ninguna parte, y son trabajo de la fase B (corregido el 2026-08-29; esta entrada daba por escritas las dos cosas).
 
 ## Tomadas (log)
+
+### 2026-09-01
+
+#### El umbral de VD1 pasa a ser por conjunto de datos y arquitectura
+
+**Qué se decidió.** El umbral de val-accuracy τ deja de ser uno por conjunto de datos y pasa a ser uno por conjunto de datos y arquitectura, doce valores. Se comparte entre optimizadores a propósito.
+
+| conjunto de datos | FC | CNN | ResNet-18 | τ anterior |
+|---|---|---|---|---|
+| MNIST | 0,975 | 0,98 | 0,99 | 0,97 |
+| CIFAR-10 | 0,50 | 0,60 | 0,75 | 0,65 |
+| CIFAR-100 | 0,20 | 0,30 | 0,40 | 0,35 |
+| Tiny-ImageNet | 0,08 | 0,22 | 0,36 | 0,20 |
+
+**Por qué.** Un umbral por conjunto de datos era una vara que FC no alcanzaba nunca fuera de MNIST y que ResNet-18 saltaba de inmediato. Como la correlación se calcula siempre dentro de una celda, y dentro de una celda la arquitectura es constante, un umbral por arquitectura es más coherente con el análisis que uno compartido. Se comparte entre optimizadores porque OE5 compara los doce pares de celdas que solo difieren en el optimizador, y un umbral por brazo mediría cosas distintas en cada uno.
+
+**El criterio es una norma, y no es preinscripción.** τ es el **valor redondo más alto que alcanza al menos el 60 % de los entrenamientos que aprendieron**. Redondo significa múltiplo de 0,05, y de 0,005 en MNIST y 0,02 en Tiny-ImageNet, donde el recorrido de accuracy es un orden de magnitud más estrecho; se redondea hacia abajo, así que el redondeo nunca quita cobertura. El 60 % no está elegido a gusto: es la cobertura más alta a la que **ninguna celda degenera**, porque al 65 % Tiny-ImageNet con FC manda dos tercios de sus cruces a la primera época y ahí VD1 deja de ordenar. La norma se fijó el 2026-09-01 mirando los datos, como todo lo posterior al 2026-08-22, así que no es preinscripción; lo que sí es, y una tabla elegida a mano no era, es **reproducible**: los doce valores salen de ejecutar la frase sobre `reports/`.
+
+**Qué entra en ese 60 % y qué no.** El denominador son los **806 runs que aprendieron**, no los 960. Un run aprendió si su mejor val-accuracy suavizada llega a **1,25 veces el azar** de su conjunto de datos, que es la columna `learned` de `efficiency.py::run_health` y la constante `CHANCE_MARGIN`. Excluir a los otros 154 no es conveniencia: los 154 tienen firma mecánica diagnosticada, **115 de colapso** (`gwa/score_mean` exactamente 0,0) y **39 de divergencia** (`train_loss` en NaN), ninguno se queda en el azar sin causa conocida, y ninguno cruzaría un umbral por bajo que se pusiera. El margen tampoco es un filo: 1,2 y 1,25 seleccionan exactamente los mismos 154.
+
+**La norma promete un mínimo, no una cuota.** Las coberturas reales van del 62 % en Tiny-ImageNet con ResNet-18 al 89 % en MNIST con ResNet-18, porque cada celda tiene una forma de distribución distinta: en MNIST los runs sanos se apiñan cerca del techo y un umbral redondo por debajo los recoge casi todos. Enunciarlo como "el 60 %" sería falso en once de las doce celdas.
+
+**Evidencia medida sobre los 960.** Los cruces pasan de 494 a **571** y las celdas con VD1 de 18 a **24**. Por celda de análisis, mínimo 15, mediana 22, y 22 de 24 llegan a 20 o más; en pares comparables, mínimo 0,615 y mediana 0,815. El peor reparto dentro de una celda es el **13 %** de cruces en la primera época, frente al 48 % que daba MNIST con ResNet-18 con el umbral único. La contaminación de la ventana del 5 %, la fracción de cruces ya ocurridos al medirla, cae del 30 % al **11 %**, y la del 10 % del 56 % al **35 %**.
+
+**Dónde vive el umbral.** VD1 se recalcula en la capa de análisis desde la curva de val de `trajectory.parquet`. `reports/` no se toca y sigue siendo el registro crudo, de modo que volver a cambiar el umbral no cuesta cómputo. **Trampa: el campo `epochs_to_threshold` de los 960 `summary.json` queda obsoleto**, calculado con los umbrales viejos, y ningún código de análisis puede volver a leerlo.
+
+- **Trampa: la calibración pasa a hacerse sobre los datos que se analizan.** El pilot calibró sobre runs distintos; esto usa los mismos 960. τ se eligió mirando la distribución de resultados y las épocas de cruce, nunca la relación entre una métrica y VD1, así que no puede inflar una correlación. Lo que sí hace es escoger la versión de la variable dependiente con más varianza, y eso ayuda a cualquier predictor. Va escrito en la memoria, no omitido.
+- **Trampa: el constructo cambia de nombre.** VD1 pasa de "épocas hasta resolver la tarea" a "épocas hasta llegar al nivel propio de esta arquitectura". Dentro de una celda no cambia nada; leer VD1 entre arquitecturas en términos absolutos deja de significar algo.
+- **Trampa: las celdas que llegan al suelo de n ≥ 30 bajan de 8 a 3, y esa cuenta engañaba.** Las ocho de antes eran las de ResNet-18, y llegaban porque el umbral les quedaba tan bajo que VD1 valía casi lo mismo en los 40 runs. Se cambia cuenta por variación.
+- **Las dos celdas más flojas, fichadas.** Tiny-ImageNet con FC y Adam se queda en 15 de 40, y sus 35 cruces sobre los 80 runs de esa arquitectura toman solo 6 valores distintos de VD1, el peor rango dinámico de la tabla. Tiny con CNN y Adam se queda en 19 de 40.
+- **Sigue sin cumplirse el criterio de calibración preescrito del pilot**, que pedía que CNN y ResNet-18 con el LR central cruzaran hacia el 30-60 % del presupuesto. Con esta tabla las medianas van del 8 % al 25 %. `metodologia.tex:196` lo enuncia como si se hubiera cumplido, y hay que reescribirlo diciendo que no se alcanzó.
+- **`fundamentos.tex:233` compromete un tratamiento que no está decidido.** Afirma que el valor censurado "se trata como el peor resultado posible", lo que contradice la convención de registro de `metodologia.tex:40` y se adelanta a una decisión que es de la fase B.
 
 ### 2026-08-31
 
