@@ -35,7 +35,7 @@ $s$                   & submuestras del \emph{batch} de medición en la disparid
 $\bar{g}^{(a)}$       & gradiente medio de la submuestra $a$              & Sec.~\ref{sec:def-alineacion} \\
 $K$                   & submuestras del \emph{batch} de medición en la NGV    & Sec.~\ref{sec:def-variabilidad} \\
 $T$                   & presupuesto de \emph{epochs}                             & Sec.~\ref{sec:eficiencia} \\
-$\tau$                & umbral de \emph{accuracy} de validación                  & Sec.~\ref{sec:eficiencia} \\
+$\tau$                & umbral de \emph{accuracy} de validación de la celda      & Sec.~\ref{sec:eficiencia} \\
 $t^\star$             & \emph{epochs} hasta el umbral                            & Sec.~\ref{sec:eficiencia} \\
 $f$                   & fracción temprana del presupuesto                 & Cap.~\ref{ch:metodologia} \\
 $W$                   & pesos de la última capa lineal                    & Cap.~\ref{ch:desarrollo} \\
@@ -223,14 +223,14 @@ agregado por la media sobre los parámetros, nunca por la suma, que sería incom
 Las métricas anteriores son las variables predictoras. Las que siguen son las variables a predecir, esto es, lo que en este trabajo se entiende por eficiencia del entrenamiento. Se leen sobre la curva de validación a lo largo del presupuesto de \emph{epochs} $T$. El protocolo concreto, incluido el suavizado de la curva, la separación entrenamiento/validación/test y el tratamiento del censurado en el análisis, se especifica en el Capítulo~\ref{ch:metodologia}.
 
 \paragraph{Epochs hasta el umbral (indicador primario).} El número de \emph{epochs} que tarda la
-\emph{accuracy} de validación en alcanzar un nivel objetivo $\tau$ propio de cada conjunto de datos,
+\emph{accuracy} de validación en alcanzar un nivel objetivo $\tau$ propio de cada conjunto de datos y arquitectura,
 
 \begin{equation}
 t^\star = \min\{\, t \le T : \mathrm{acc}_{\text{val}}(t) \ge \tau \,\}.
 \label{eq:epochs-to-threshold}
 \end{equation}
 
-Si el \emph{accuracy} no cruza el umbral dentro del presupuesto, el valor queda \emph{censurado}. No se descarta, sino que se trata como el peor resultado posible. Los extremos de la rejilla de \emph{learning rates} no alcanzan el umbral por diseño, de modo que descartar esos entrenamientos sesgaría la muestra. Un $t^\star$ menor indica un entrenamiento más rápido.
+Si el \emph{accuracy} no cruza el umbral dentro del presupuesto, el valor queda \emph{censurado} y se anota como ausente, nunca como el valor del presupuesto. Los extremos de la rejilla de \emph{learning rates} no alcanzan el umbral por diseño, así que descartar esos entrenamientos sesgaría la muestra. Un $t^\star$ menor indica un entrenamiento más rápido.
 
 \paragraph{AUC del \emph{loss} de validación.} El área bajo la curva de \emph{loss} de validación
 dentro del presupuesto, aproximada por la regla trapezoidal sobre el eje de \emph{epochs}. Resume toda la trayectoria en un escalar. Cuanto menor es el área, más rápido desciende el \emph{loss}.
