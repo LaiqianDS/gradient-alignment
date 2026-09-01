@@ -22,6 +22,8 @@ def _write_run(
     *,
     dataset: str = "cifar10",
     model: str = "cnn",
+    optimizer: str = "sgd",
+    lr: float = 0.1,
     best_val_acc: float = 0.7,
     val_acc: tuple[float, ...] | None = None,
     train_loss: tuple[float, ...] = (1.0, 0.8, 0.6, 0.4),
@@ -57,7 +59,7 @@ def _write_run(
     }).to_parquet(d / "trajectory.parquet")
     (d / "summary.json").write_text(json.dumps({
         "run_name": name, "dataset": dataset, "model": model,
-        "optimizer": "sgd", "lr": 0.1, "seed": 0,
+        "optimizer": optimizer, "lr": lr, "seed": 0,
         "best_val_acc": best,
         "epochs_to_threshold": stale_vd1,
         "val_loss_auc": val_loss_auc,
@@ -239,6 +241,24 @@ def test_censoring_costs_less_in_pairs_than_in_runs(tmp_path):
     assert info["n_crossed"] == 2
     assert info["n_censored"] == 2
     assert info["pair_frac"] == pytest.approx(5 / 6)
+
+
+def test_the_same_rate_is_a_different_grid_position_in_each_optimizer(tmp_path):
+    # 0,1 is the sixth rate of the SGD grid and the eighth of the Adam one
+    _write_run(tmp_path, "with_sgd", optimizer="sgd", lr=0.1)
+    _write_run(tmp_path, "with_adam", optimizer="adam", lr=0.1)
+    frac = E.crossing_by_lr(E.vd_status(tmp_path))
+    assert frac.loc[("sgd", "cifar10", "cnn"), 6] == 1.0
+    assert frac.loc[("adam", "cifar10", "cnn"), 8] == 1.0
+
+
+def test_the_window_averages_the_runs_of_one_grid_position(tmp_path):
+    _write_run(tmp_path, "crossed", lr=1e-2, best_val_acc=0.70)
+    _write_run(tmp_path, "censored", lr=1e-2, best_val_acc=0.55)
+    row = E.crossing_by_lr(E.vd_status(tmp_path)).loc[("sgd", "cifar10", "cnn")]
+    assert row[4] == 0.5  # 1e-2 is the fourth rate of the SGD grid
+    assert list(row.index) == list(range(1, 9))
+    assert row.drop(4).isna().all()  # a position with no run stays absent
 
 
 def test_distance_to_the_threshold_separates_the_two_censorings(tmp_path):

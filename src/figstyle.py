@@ -32,21 +32,28 @@ CYCLE = cycler(color=PALETTE) + cycler(linestyle=DASHES)
 
 
 def _serif_name() -> str:
-    """Register TeX Gyre Pagella and return its family name."""
-    pattern = "*/texmf-dist/fonts/opentype/public/tex-gyre/texgyrepagella-regular.otf"
+    """Register the TeX Gyre Pagella faces and return the family name.
+
+    All four faces, so that italic figure text (anglicisms, as in the body) is
+    the body's own italic instead of a substitute.
+    """
+    pattern = "*/texmf-dist/fonts/opentype/public/tex-gyre/texgyrepagella-*.otf"
     for root in ("/usr/local/texlive", "/usr/share/texlive", "/opt/texlive"):
-        for path in Path(root).glob(pattern):
-            font_manager.fontManager.addfont(path)
-            return font_manager.FontProperties(fname=path).get_name()
+        faces = sorted(Path(root).glob(pattern))
+        if faces:
+            for path in faces:
+                font_manager.fontManager.addfont(path)
+            return font_manager.FontProperties(fname=faces[0]).get_name()
     print("[figstyle] TeX Gyre Pagella not found; figure text will not match the body")
     return "DejaVu Serif"
 
 
 def apply() -> None:
     """Install the rcParams. Called on import."""
+    serif = _serif_name()
     plt.rcParams.update({
         "font.family": "serif",
-        "font.serif": [_serif_name()],
+        "font.serif": [serif],
         "font.size": BODY_PT - 1,
         "axes.labelsize": BODY_PT - 1,
         "xtick.labelsize": BODY_PT - 2,

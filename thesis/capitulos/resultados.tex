@@ -12,6 +12,26 @@
 % instrumentación se da medido sobre la matriz, 2,048x en el peor caso, y el coste por métrica en
 % notación asintótica. Presentarlo como paso de calibración, no como hallazgo.
 
+\section{Qué variables quedan medidas}
+\label{sec:res-cobertura}
+
+Cinco de las seis variables dependientes se leen sin compararlas contra ningún umbral, y la matriz las entrega casi completas, entre 919 y 921 valores utilizables de 960. Lo que falta procede siempre del mismo sitio, los 41 entrenamientos cuyo \emph{loss} se fue a NaN y no volvió, todos ellos con SGD, 28 con la red \emph{fully connected} y 13 con la convolucional. Ninguna ResNet-18 divergió, y la celda peor servida conserva 30 de sus 40 entrenamientos.
+
+El \emph{accuracy} de test y el \emph{gap} de \emph{accuracy} no pierden ningún valor, y aun así 41 de los suyos no son mediciones. Una red divergida termina con pesos NaN, y el \emph{argmax} sobre logits NaN devuelve siempre el índice cero, de modo que la cifra registrada es la frecuencia de la clase cero en el conjunto de test. Las variables que se leen del \emph{loss} no arrastran ese problema, porque el NaN se propaga por la aritmética y no por un \emph{argmax}. Esos 41 valores se cuentan aparte y quedan fuera de todo análisis posterior.
+
+La sexta variable, las \emph{epochs} hasta el umbral, es la única que se censura. La definen 571 entrenamientos de los 960, entre 15 y 37 por celda, y 22 de las 24 celdas llegan a 20. Contada en entrenamientos, esa pérdida parece grave. La unidad, sin embargo, la exagera. Una correlación de rangos consume pares comparables, y un entrenamiento censurado sí se puede ordenar contra cualquiera que haya cruzado, porque tardó más que él. Medida en pares, cada celda conserva entre el 62 \% y el 99 \% de los suyos, con mediana del 82 \% y 10 celdas por encima del 85 \%. La más pobre es Tiny-ImageNet con la red \emph{fully connected} y Adam, que cruza 15 veces y aun así conserva el 62 \% de sus pares.
+
+Los entrenamientos censurados tampoco están repartidos al azar por la rejilla. La Figura~\ref{fig:ventana-lr} recorre los ocho \emph{learning rates} de cada optimizador y muestra cuántos de los cinco entrenamientos de cada uno cruzan el umbral. Cada fila lleva el suyo, tomado de la Tabla~\ref{tab:umbrales}, porque la posición y la anchura de su tramo dependen de él. En las 24 celdas los cruces ocupan un tramo contiguo, sin un solo hueco, y ese tramo se desplaza hacia los valores mayores a medida que la red gana profundidad. La red \emph{fully connected} cruza en la mitad baja de la rejilla, la convolucional en el centro y la ResNet-18 alcanza el extremo superior. Los dos optimizadores dibujan la misma escalera. El desplazamiento no se puede atribuir solo a la arquitectura, porque el umbral sube también con la profundidad y a la red más honda se le pide más \emph{accuracy}. Las dos causas empujan en el mismo sentido, y esta figura no las separa.
+
+\begin{figure}[ht]
+\centering
+\includegraphics{ventana-lr}
+\caption{Ventana de \emph{learning rates} donde $t^\star$ existe.}
+\label{fig:ventana-lr}
+\end{figure}
+
+La censura resulta así una consecuencia del diseño. Los extremos de la rejilla existen para producir entrenamientos malos, como expone la Sección~\ref{sec:matriz}, y son precisamente ellos los que no alcanzan el umbral. Descartar los entrenamientos censurados dejaría solo el centro de cada rejilla, y retiraría de la muestra la variación que la matriz se construyó para crear.
+
 \section{Correlaciones por condición}
 \label{sec:res-por-condicion}
 % rho por celda (arq x dataset x opt) para H1; el método y la corrección de multiplicidad los fija la fase B.

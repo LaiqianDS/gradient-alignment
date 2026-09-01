@@ -30,6 +30,19 @@ El 2026-08-27 se retiró de este log la tanda de decisiones del 2026-08-26, la q
 
 ### 2026-09-01
 
+#### La figura de la fase A deja de ser el mapa de disponibilidad y pasa a ser la ventana de learning rates
+
+**Qué se decidió.** El mapa de 24 celdas por 6 variables dependientes se retira entero, con su PDF y su función. En su sitio queda una figura sola, `ventana-lr`, que recorre los ocho learning rates de cada optimizador y marca cuántos de los cinco entrenamientos de cada uno cruzan el umbral. La leyenda es discreta, con un bloque por recuento posible, porque el dato solo puede tomar seis valores y una rampa continua prometería una precisión que no existe. Los recuentos del mapa pasan a prosa, en `resultados.tex` §Qué variables quedan medidas, y `efficiency.py::availability_by_cell` los sigue calculando.
+
+**Por qué se retira.** Su afirmación murió con el umbral por arquitectura, porque dibujaba seis celdas sin VD1 y ahora no hay ninguna. Cinco de sus seis columnas dicen el mismo número, de 919 a 921 utilizables de 960, así que gastaba 144 números impresos en una frase. La sexta estaba además en la unidad que la entrada del 2026-08-31 prohíbe, porque contaba runs cuando la censura de VD1 se mide en pares.
+
+**Qué afirma la figura nueva, medido sobre los 960.** Los entrenamientos con VD1 ocupan un **tramo contiguo de learning rates en las 24 celdas, sin un solo hueco**, y el tramo se desplaza hacia los valores mayores según la red gana profundidad. FC vive en la mitad baja de la rejilla, CNN en el centro y ResNet-18 llega al extremo superior. Los dos optimizadores dibujan la misma escalera. La censura queda así como una consecuencia del diseño, y descartar los censurados dejaría solo el centro de cada rejilla, que es justo la parte sin variación.
+
+- **Trampa: el desplazamiento de la escalera está confundido con el umbral.** τ sube con la profundidad en los cuatro conjuntos, así que a la red más honda se le pide más accuracy y los learning rates pequeños se le quedan cortos antes. Profundidad y umbral empujan el tramo en el mismo sentido y la figura no los separa. Por eso τ va escrito en cada fila.
+- **Trampa: los dos paneles no comparten el eje x.** La rejilla de Adam es la de SGD dividida entre 10, así que dos columnas alineadas a la vista no son la misma tasa. El eje lleva las ocho tasas reales de cada panel, inclinadas, justo para que eso se vea en lugar de esconderse detrás de un número de orden.
+- **Trampa: contar en pares no añade un dato, añade una escala.** Con n = 40 en las 24 celdas, `pair_frac` es una función estrictamente creciente del número de cruces, de modo que los dos números dicen lo mismo y no valen como dos evidencias.
+- **Trampa: la figura agrega los cinco entrenamientos de cada posición.** Una casilla en 1 es un entrenamiento de cinco y la figura no dice cuál; el detalle run a run está en `efficiency.py::vd_status`.
+
 #### El umbral de VD1 pasa a ser por conjunto de datos y arquitectura
 
 **Qué se decidió.** El umbral de val-accuracy τ deja de ser uno por conjunto de datos y pasa a ser uno por conjunto de datos y arquitectura, doce valores. Se comparte entre optimizadores a propósito.

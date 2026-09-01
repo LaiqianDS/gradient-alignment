@@ -3,26 +3,27 @@ the numbers and stay plotting-free."""
 
 from __future__ import annotations
 
+import math
+from itertools import product
 from pathlib import Path
 
-from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.colors import BoundaryNorm, LinearSegmentedColormap, ListedColormap
 
 import figstyle
 from analysis import REPORTS_DIR
-from efficiency import availability_by_cell, vd_status
+from config import DATASETS, LR_GRID, MODELS, OPTIMIZERS, SEEDS, THRESHOLD_ACC
+from efficiency import crossing_by_lr, vd_status
 
-# White to the palette's darkest blue: monotone in luminance, so the ramp keeps
-# its order in a greyscale print.
-CMAP = LinearSegmentedColormap.from_list("count", ["#ffffff", figstyle.PALETTE[0]])
+# Light grey to the palette's darkest blue: monotone in luminance, so the ramp
+# keeps its order in a greyscale print. The floor is not white, or a zero cell
+# would vanish into the page and stop reading as a cell.
+_RAMP = LinearSegmentedColormap.from_list("count", ["#e8e8e8", figstyle.PALETTE[0]])
 
-VD_LABELS = {
-    "epochs_to_threshold": "VD1\népocas\nal umbral",
-    "val_loss_auc": "VD2\nAUC\nval loss",
-    "best_val_loss": "VD3\nmejor\nval loss",
-    "final_test_acc": "VD4\nacc. de\ntest",
-    "final_gap_loss": "VD5\ngap de\nloss",
-    "final_gap_acc": "VD6\ngap de\nacc.",
-}
+# One step per possible number of seeds, because the fraction drawn cannot take
+# any other value; a continuous ramp would promise a precision that is not there.
+_STEPS = len(SEEDS) + 1
+CMAP = ListedColormap([_RAMP(i / len(SEEDS)) for i in range(_STEPS)])
+NORM = BoundaryNorm([(i - 0.5) / len(SEEDS) for i in range(_STEPS + 1)], _STEPS)
 
 DATASET_LABELS = {
     "mnist": "MNIST",
@@ -34,57 +35,86 @@ MODEL_LABELS = {"fc": "FC", "cnn": "CNN", "resnet18": "ResNet-18"}
 OPTIMIZER_LABELS = {"sgd": "SGD", "adam": "Adam"}
 
 
-def computable_map(
+def _rate_label(lr: float) -> str:
+    """A learning rate in plain decimal, with the comma the body text uses.
+
+    Ten decimals then trimmed, so the binary noise of a rate such as 0,0003
+    never reaches the tick.
+    """
+    return f"{lr:.10f}".rstrip("0").rstrip(".").replace(".", ",")
+
+
+def _threshold_label(tau: float) -> str:
+    """Two decimals, three when the third is not a zero, as the table prints them."""
+    text = f"{tau:.3f}"
+    return (text[:-1] if text.endswith("0") else text).replace(".", ",")
+
+
+def lr_window(
     report_dir: str | Path = REPORTS_DIR,
     out_dir: Path = figstyle.IMG_DIR,
 ) -> Path:
-    """Usable runs per cell and dependent variable, as an annotated grid."""
-    counts = availability_by_cell(vd_status(report_dir))
-    values = counts.to_numpy()
-    n_rows, n_cols = values.shape
+    """Where VD1 survives across the learning-rate grid, one panel per optimizer."""
+    frac = crossing_by_lr(vd_status(report_dir))
+    present = set(frac.index.get_level_values("optimizer"))
+    optimizers = [o for o in OPTIMIZERS if o in present]
+    order = {cell: i for i, cell in enumerate(product(DATASETS, MODELS))}
 
-    fig, ax = figstyle.figure(width="full", ratio=0.88)
-    ax.imshow(values, cmap=CMAP, vmin=0, vmax=40, aspect="auto")
+    fig, _ = figstyle.figure(width="full", ratio=0.66, ncols=len(optimizers))
+    panels = list(fig.axes)
+    for ax, opt in zip(panels, optimizers):
+        block = frac.xs(opt, level="optimizer")
+        block = block.loc[sorted(block.index, key=order.get)]
+        im = ax.imshow(block.to_numpy(), cmap=CMAP, norm=NORM, aspect="auto")
 
-    for i in range(n_rows):
-        for j in range(n_cols):
-            v = values[i, j]
-            ax.text(j, i, str(v), ha="center", va="center", fontsize=7,
-                    color="white" if v > 24 else "black")
+        grid = LR_GRID[opt]
+        ax.set_title(OPTIMIZER_LABELS[opt], fontsize=figstyle.BODY_PT - 1)
+        ax.set_xticks(range(block.shape[1]))
+        ax.set_xticklabels(
+            [_rate_label(grid[p - 1]) for p in block.columns],
+            fontsize=7, rotation=45, ha="right", rotation_mode="anchor",
+        )
+        if ax is panels[0]:
+            ax.set_yticks(range(len(block)))
+            # Each row has its own threshold, and the window cannot be read
+            # without it, so it travels with the label.
+            ax.set_yticklabels(
+                [f"{DATASET_LABELS[d]} {MODEL_LABELS[m]}  "
+                 f"τ = {_threshold_label(THRESHOLD_ACC[(d, m)])}"
+                 for d, m in block.index],
+                fontsize=7,
+            )
+        else:
+            ax.set_yticks([])
+        ax.tick_params(axis="y", length=0)
+        ax.tick_params(axis="x", length=2, width=0.6, color="#666666", pad=1)
+        for spine in ax.spines.values():
+            spine.set_visible(False)
 
-    ax.set_xticks(range(n_cols))
-    ax.set_xticklabels([VD_LABELS[c] for c in counts.columns], fontsize=7)
-    ax.set_yticks(range(n_rows))
-    ax.set_yticklabels(
-        [f"{MODEL_LABELS[m]} {OPTIMIZER_LABELS[o]}" for _, m, o in counts.index],
-        fontsize=7,
+        # A rule where the dataset changes, so the four blocks read as blocks.
+        for i, (d, _) in enumerate(block.index):
+            if i and d != block.index[i - 1][0]:
+                ax.axhline(i - 0.5, color="white", linewidth=1.6)
+
+    counts = range(_STEPS)
+    bar = fig.colorbar(
+        im, ax=panels, ticks=[i / len(SEEDS) for i in counts],
+        pad=0.02, aspect=30, drawedges=True,
     )
-    ax.tick_params(length=0)
-    for spine in ax.spines.values():
-        spine.set_visible(False)
-
-    # Dataset name once per block of rows: a right-hand axis, which the layout
-    # engine reserves room for, plus a rule between blocks.
-    starts = [i for i, (d, _, _) in enumerate(counts.index)
-              if i == 0 or d != counts.index[i - 1][0]]
-    for i in starts[1:]:
-        ax.axhline(i - 0.5, color="white", linewidth=1.6)
-
-    ax2 = ax.twinx()
-    ax2.set_ylim(ax.get_ylim())
-    ax2.set_yticks([i + 2.5 for i in starts])
-    ax2.set_yticklabels(
-        [DATASET_LABELS[counts.index[i][0]] for i in starts], fontsize=8
+    bar.set_ticklabels([str(i) for i in counts])
+    # The comparison the count comes from, verbatim: median3(val_acc) >= tau.
+    bar.set_label(
+        "val accuracy ≥ τ", fontsize=figstyle.BODY_PT - 1, fontstyle="italic"
     )
-    ax2.tick_params(length=0)
-    for spine in ax2.spines.values():
-        spine.set_visible(False)
-
-    ax.set_xlabel("runs utilizables de los 40 de cada celda")
-    ax.xaxis.set_label_position("top")
-    ax.xaxis.tick_top()
-    return figstyle.save(fig, "mapa-computable", out_dir)
+    bar.outline.set_visible(False)
+    bar.dividers.set(color="white", linewidth=0.8)
+    bar.ax.minorticks_off()  # the gaps already separate the blocks
+    bar.ax.tick_params(length=0, pad=3)
+    fig.supxlabel(
+        "learning rate", fontsize=figstyle.BODY_PT - 1, fontstyle="italic"
+    )
+    return figstyle.save(fig, "ventana-lr", out_dir)
 
 
 if __name__ == "__main__":
-    print(computable_map())
+    print(lr_window())

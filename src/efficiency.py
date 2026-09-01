@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 
 from analysis import REPORTS_DIR, SPECS, load_summaries, load_trajectories
-from config import NUM_CLASSES, THRESHOLD_ACC
+from config import LR_GRID, NUM_CLASSES, THRESHOLD_ACC
 from train import median3
 
 # Multiple of the chance floor a run must reach to count as having learned.
@@ -191,6 +191,26 @@ def vd1_information(status: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def crossing_by_lr(status: pd.DataFrame) -> pd.DataFrame:
+    """Fraction of runs that carry VD1, per cell and learning-rate position.
+
+    The two optimizers sweep different rates, so the axis is the position in
+    ``LR_GRID`` and not the value; position 1 is each optimizer's smallest.
+    """
+    pos = {(o, lr): i + 1 for o, grid in LR_GRID.items() for i, lr in enumerate(grid)}
+    vd1 = status[status["vd"] == "epochs_to_threshold"].copy()
+    vd1["pos"] = pd.Series(
+        list(zip(vd1["optimizer"], vd1["lr"])), index=vd1.index
+    ).map(pos)
+    return (
+        vd1.assign(crossed=vd1["status"] == "ok")
+        .groupby(["optimizer", "dataset", "model", "pos"])["crossed"]
+        .mean()
+        .unstack("pos")
+        .reindex(columns=range(1, max(len(g) for g in LR_GRID.values()) + 1))
+    )
+
+
 def health_by_cell(health: pd.DataFrame) -> pd.DataFrame:
     """Per cell: runs, how many learned, and which signatures showed up."""
     g = health.groupby(["dataset", "model", "optimizer"])
@@ -238,6 +258,9 @@ def _main(report_dir: str | Path = REPORTS_DIR) -> None:
 
     print("\n== VD1 under censoring ==")
     print(vd1_information(status).round(3))
+
+    print("\n== VD1 across the learning-rate grid ==")
+    print(crossing_by_lr(status).round(2))
 
 
 if __name__ == "__main__":
