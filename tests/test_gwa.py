@@ -36,10 +36,8 @@ def test_gaussian_excess_kurtosis_denominator_is_beta():
 
 
 def test_constant_cosines_m2_zero_is_nan():
-    # All gammas equal => m2 = 0 and the kurtosis is mathematically undefined.
-    # The aggregate reports NaN for kurt and value (honest, filterable post-hoc
-    # in the parquet) while score_mean stays defined. The old EPS guard instead
-    # produced kurt=0 and a *negative* value for a perfectly coherent probe.
+    # All gammas equal => m2 = 0 and the kurtosis is undefined. kurt and value
+    # come back NaN; score_mean stays defined.
     out = _gwa_aggregate(torch.full((8,), 0.7))
     assert abs(out["gwa/score_mean"] - 0.7) < 1e-7
     assert math.isnan(out["gwa/kurt"])
@@ -48,9 +46,9 @@ def test_constant_cosines_m2_zero_is_nan():
 
 def test_small_cosine_spread_kurtosis_not_distorted():
     # Kurtosis is invariant under affine maps: kurt(0.5 + 1e-3·z) == kurt(z)
-    # exactly. With spread σ ≈ 1e-3, m2² ≈ 1e-12 — float32 moments or an
-    # additive EPS on m2² would crush the tiny-spread kurtosis toward 0 (and
-    # could flip the sign of gwa/value); the float64 path must preserve it.
+    # exactly. With spread σ ≈ 1e-3, m2² ≈ 1e-12: float32 moments or an additive
+    # EPS on m2² would crush the tiny-spread kurtosis toward 0 (and could flip
+    # the sign of gwa/value), so the float64 path must preserve it.
     z = torch.randn(512, generator=torch.Generator().manual_seed(0), dtype=torch.float64)
     well = _gwa_aggregate(z)
     tiny = _gwa_aggregate(0.5 + 1e-3 * z)
@@ -89,9 +87,9 @@ def _two_mass_shifted(p: float, shift: float, n: int = 900) -> torch.Tensor:
 
 def test_denominator_eps_guard_is_finite_and_sign_stable():
     # Excess kurt = 1/p - 3, so p = 1/1.8 puts denom = kurt+1.2 exactly at 0 in
-    # real arithmetic — at that knife edge the float64 denominator is rounding
-    # noise around 0 and its sign is not meaningful; the guard's job is only to
-    # keep the value finite (no inf/nan).
+    # real arithmetic. At that knife edge the float64 denominator is rounding
+    # noise around 0 and its sign is not meaningful; the guard only has to keep
+    # the value finite (no inf/nan).
     edge = _gwa_aggregate(_two_mass_shifted(1 / 1.8, shift=2.0))
     assert math.isfinite(edge["gwa/value"])
 
@@ -154,7 +152,7 @@ def test_compute_excludes_bias_and_uses_weight_only_layout():
     w = mod.weight.detach().reshape(-1)
     b = mod.bias.detach().reshape(-1)
 
-    # γ dimension is out*in exactly — the bias (length out) is not concatenated in.
+    # γ dimension is out*in exactly: the bias (length out) is not concatenated in.
     assert gw.shape[1] == mod.out_features * mod.in_features
 
     def cos_mean(g, v):

@@ -1,30 +1,18 @@
 """Post-hoc sanity diagnostics for the logged metric trajectories.
 
-This module is the shared, plotting-free backend of the metric side. It loads the
-per-run Parquet/JSON that ``train.py`` writes (see ``logger.py``) and answers one
-question, *before* any hypothesis test: **do the metrics make sense?** Four
-diagnostics, all returning tidy DataFrames:
+Loads the per-run Parquet/JSON that ``train.py`` writes (see ``logger.py``) and
+returns tidy DataFrames:
 
-* :func:`validity_report` / :func:`identity_report` -- are the values in their
-  theoretically valid range (cosines in [-1, 1], variances >= 0, m-coherence in
-  [0, M], ...) and do the hard cross-column identities hold (eta = -min_cos,
-  min_cos <= p05 <= median, gsnr median <= p95, TSE cumulative non-decreasing)?
-* :func:`degeneracy_report` -- does each metric actually *move* inside a run, or
-  is its apparent movement just epoch-to-epoch jitter carrying no signal?
-* :func:`trend_report` -- does each metric drift over training in the direction
-  its source paper predicts (stiffness decays to 0, NGV/GNS up, ...)? Metrics
-  with no robust trajectory prediction (GSNR, gradient disparity) are reported
-  ungraded.
-* :func:`redundancy_matrix` -- which metrics move together (exploratory map for
-  the later "prune redundant metrics" decision -- NOT a confirmatory test).
+* :func:`validity_report` / :func:`identity_report`: values inside their
+  theoretical range, and the hard cross-column identities.
+* :func:`degeneracy_report`: whether a metric moves inside a run or only jitters.
+* :func:`trend_report`: the direction each metric drifts over training.
+* :func:`redundancy_matrix`: which metrics move together.
 
-Scope note. Nothing here is a confirmatory test; these are the checks that run
-before one exists. The loaders default to the full matrix in ``reports/`` and
-take any report directory, so the same functions still read ``reports_pilot/``.
-
-The single source of truth for *what each column means* is :data:`SPECS`: its
-valid range and the expected sign of its trajectory. Add a metric there and every
-diagnostic picks it up.
+The loaders default to ``reports/`` and accept any report directory.
+:data:`SPECS` says what each logged column means: its valid range and the
+expected sign of its trajectory. Add a metric there and every diagnostic picks
+it up.
 """
 
 from __future__ import annotations
@@ -43,13 +31,13 @@ ROOT = Path(__file__).resolve().parent.parent
 PILOT_DIR = ROOT / "reports_pilot"
 REPORTS_DIR = ROOT / "reports"
 
-# Frozen probe size M: the per-sample gradient count, and the hard upper bound of
+# Probe size M: the per-sample gradient count, and the upper bound of
 # m-coherence (alpha in [0, M]).
 PROBE_SIZE = int(FIXED_KNOBS["probe_size"])
 
-# Signal-to-jitter of a trajectory that is white noise around a constant. For
+# Signal-to-jitter of a trajectory that is white noise around a constant: for
 # such a series std(diff) = sqrt(2) * std(values), so the ratio is 1/sqrt(2).
-# It is the reference line of :func:`degeneracy_report`, not a tuned threshold.
+# The reference line of :func:`degeneracy_report`.
 NOISE_RATIO = float(1.0 / np.sqrt(2.0))
 
 
@@ -57,11 +45,10 @@ NOISE_RATIO = float(1.0 / np.sqrt(2.0))
 class MetricSpec:
     """One logged column: its meaning, hard range and expected training trend.
 
-    ``lo``/``hi`` are *theoretical* bounds (``None`` = unbounded); a value outside
-    them is a bug, not a finding. ``trend`` is the sign of Spearman(value, epoch)
-    a healthy run should show, per the source paper (``None`` = no directional
-    claim, reported but not graded). ``headline`` marks the one primary scalar per
-    metric used for the redundancy/trend summaries.
+    ``lo``/``hi`` are theoretical bounds (``None`` = unbounded). ``trend`` is the
+    expected sign of Spearman(value, epoch) (``None`` = not graded).
+    ``headline`` marks the one primary scalar per metric used for the
+    redundancy/trend summaries.
     """
 
     key: str
@@ -77,12 +64,8 @@ class MetricSpec:
 # variances / distances / GSNR / TSE -> [0, inf); fractions -> [0, 1]; m-coherence
 # -> [0, M]; GWA excess kurtosis -> [-2, inf).
 SPECS: tuple[MetricSpec, ...] = (
-    # --- the run's own learning curve: anchors (a run whose val-acc does not
-    #     climb is broken, full stop) ----------------------------------------
+    # --- the run's own learning curve ---------------------------------------
     MetricSpec("train_loss", "train_loss", "monitor", 0.0, None, -1),
-    # val_loss U-shapes under the 2x budget (falls then overfitting lifts it), so
-    # it has no monotone trend over the full run; reported, ungraded. train_loss
-    # (monotone down) and val_acc are the graded run-health anchors.
     MetricSpec("val_loss", "val_loss", "monitor", 0.0, None, None, headline=True),
     MetricSpec("val_acc", "val_acc", "monitor", 0.0, 1.0, +1, headline=True),
     # --- TSE baseline predictor (level 0) -----------------------------------
@@ -95,10 +78,6 @@ SPECS: tuple[MetricSpec, ...] = (
     MetricSpec("var/avg", "ngv", "variability", 0.0, None, -1),
     MetricSpec("noise_scale/simple", "gns", "variability", 0.0, None, +1, headline=True),
     MetricSpec("noise_scale/tr_sigma", "gns", "variability", 0.0, None, -1),
-    # GSNR has no robust monotone-over-training prediction: Liu et al. tie *high*
-    # GSNR to better generalization (cross-config / OSGR), not a rise over time.
-    # Near convergence the mean gradient -> 0 while variance persists, so GSNR
-    # falls (observed: argmax at ~3% of the run, down in 22/24). Reported, ungraded.
     MetricSpec("gsnr/mean", "gsnr", "variability", 0.0, None, None, headline=True),
     MetricSpec("gsnr/median", "gsnr", "variability", 0.0, None, None),
     MetricSpec("gsnr/p95", "gsnr", "variability", 0.0, None, None),
@@ -110,9 +89,6 @@ SPECS: tuple[MetricSpec, ...] = (
     MetricSpec("stiffness/sign_within", "stiffness", "alignment", -1.0, 1.0, -1),
     MetricSpec("stiffness/sign_global", "stiffness", "alignment", -1.0, 1.0, None),
     MetricSpec("stiffness/sign_between", "stiffness", "alignment", -1.0, 1.0, None),
-    # gradient disparity is non-monotone over training: it rises early (batches
-    # differentiate) then falls as gradient magnitude shrinks (observed sign flip
-    # +0.62 early -> -0.66 full). No robust trajectory sign; reported, ungraded.
     MetricSpec("gd/scalar", "gd", "alignment", 0.0, None, None, headline=True),
     MetricSpec("confusion/eta", "confusion", "alignment", -1.0, 1.0, None, headline=True),
     MetricSpec("confusion/min_cos", "confusion", "alignment", -1.0, 1.0, None),
@@ -133,13 +109,12 @@ def metric_columns() -> list[str]:
 
 
 def headline_columns() -> list[str]:
-    """The one primary scalar per metric (plus the level-0 baselines): the set
-    used for the cross-metric redundancy map and the trend summary."""
+    """The one primary scalar per metric, plus the level-0 baselines."""
     return [s.key for s in SPECS if s.headline]
 
 
 # ---------------------------------------------------------------------------
-# Loaders -- concatenate the per-run files of a report directory into one frame.
+# Loaders: concatenate the per-run files of a report directory into one frame.
 # ---------------------------------------------------------------------------
 
 def _run_dirs(report_dir: str | Path) -> list[Path]:
@@ -170,10 +145,9 @@ def load_windows(report_dir: str | Path = REPORTS_DIR) -> pd.DataFrame:
 def load_summaries(report_dir: str | Path = REPORTS_DIR) -> pd.DataFrame:
     """One row per run: the ``summary.json`` scalars (final test/val/gap, timing).
 
-    Caveat for ``PILOT_DIR`` only: there the ``tiny_imagenet`` test/gap fields are
-    the pre-fix corrupt ones and say so via a ``_tiny_test_note`` key; val-side
-    and timing fields are valid, and ``run_pilot.testfix_table`` owns that story.
-    No run under ``reports/`` carries the key.
+    Under ``PILOT_DIR`` the ``tiny_imagenet`` test/gap fields are invalid and
+    declare it with a ``_tiny_test_note`` key; their val-side and timing fields
+    are valid. No run under ``reports/`` carries that key.
     """
     rows = [
         json.loads((d / "summary.json").read_text())
@@ -192,8 +166,8 @@ def absent_columns(
     """Per known column, in how many runs its Parquet file does not contain it.
 
     Concatenating runs fills a column a run lacks with NaN, so the stacked frame
-    cannot tell "the metric failed in every epoch" from "the metric returned
-    NaN". Reading the schemas can.
+    cannot tell an absent column from one that returned NaN. Reading the
+    per-run schemas can.
     """
     runs = [d for d in _run_dirs(report_dir) if (d / filename).exists()]
     absent = dict.fromkeys(metric_columns(), 0)
@@ -209,21 +183,17 @@ def absent_columns(
 
 
 # ---------------------------------------------------------------------------
-# Diagnostic 1a -- validity & ranges (NaN / Inf / out-of-theoretical-bound).
+# Diagnostic 1a: validity & ranges (NaN / Inf / out-of-theoretical-bound).
 # ---------------------------------------------------------------------------
 
 def validity_report(traj: pd.DataFrame, tol: float = 1e-6) -> pd.DataFrame:
     """One row per known metric column: observed range, bad-value counts, status.
 
-    A metric is structurally sound when it is present in every run, never NaN/Inf,
-    and never escapes its theoretical bound. ``status`` reads ``ok`` or a
-    semicolon list of issues (``missing`` / ``all_nan`` / ``nan`` / ``inf`` /
-    ``below`` / ``above``).
-
-    ``missing`` means no run logged the column at all. ``all_nan`` means some run
-    logged it and every one of that run's values is NaN, which is a fact about
-    those runs and not about the instrumentation: use :func:`absent_columns` to
-    tell a metric that failed from one that returned NaN.
+    ``status`` reads ``ok`` or a semicolon list of issues (``missing`` /
+    ``all_nan`` / ``nan`` / ``inf`` / ``below`` / ``above``). ``missing`` means
+    no run logged the column at all; ``all_nan`` means some run logged it and
+    every one of that run's values is NaN. Use :func:`absent_columns` to tell a
+    metric that failed from one that returned NaN.
     """
     n_runs = traj["run_name"].nunique()
     out = []
@@ -242,7 +212,6 @@ def validity_report(traj: pd.DataFrame, tol: float = 1e-6) -> pd.DataFrame:
         finite = v[np.isfinite(v)]
         n_below = int((finite < s.lo - tol).sum()) if s.lo is not None else 0
         n_above = int((finite > s.hi + tol).sum()) if s.hi is not None else 0
-        # runs that logged the column and never put a value in it
         runs_all_nan = int(
             traj.groupby("run_name")[s.key].apply(lambda c: c.isna().all()).sum()
         )
@@ -270,18 +239,16 @@ def validity_report(traj: pd.DataFrame, tol: float = 1e-6) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------------------
-# Diagnostic 1b -- hard cross-column identities that must hold every row.
+# Diagnostic 1b: hard cross-column identities that must hold every row.
 # ---------------------------------------------------------------------------
 
 def identity_report(traj: pd.DataFrame, tol: float = 1e-5) -> pd.DataFrame:
     """Deterministic invariants between columns, aggregated over all rows.
 
-    These are exact-by-construction, so any violation is an implementation bug:
-
-    * ``eta = -min_cos`` -- gradient confusion eta is defined as -min cosine.
-    * ``min_cos <= p05_cos <= median_cos`` -- order statistics of one cosine set.
-    * ``gsnr median <= p95`` -- a percentile ordering.
-    * ``tse/cumulative non-decreasing`` -- a running sum of non-negative losses.
+    * ``eta = -min_cos``: gradient confusion eta is defined as -min cosine.
+    * ``min_cos <= p05_cos <= median_cos``: order statistics of one cosine set.
+    * ``gsnr median <= p95``: a percentile ordering.
+    * ``tse/cumulative non-decreasing``: a running sum of non-negative losses.
     """
     checks: list[tuple[str, np.ndarray]] = []  # (name, per-row violation >= 0)
 
@@ -297,7 +264,7 @@ def identity_report(traj: pd.DataFrame, tol: float = 1e-5) -> pd.DataFrame:
     if {"gsnr/median", "gsnr/p95"} <= set(traj.columns):
         checks.append(("gsnr median <= p95", col("gsnr/median") - col("gsnr/p95")))
     if "tse/cumulative" in traj.columns:
-        # per-run first difference; a drop is a violation
+        # a drop is a violation, hence the sign flip below
         drops = traj.sort_values("epoch").groupby("run_name")["tse/cumulative"].diff()
         checks.append(("tse/cumulative non-decreasing", (-drops).to_numpy()))
 
@@ -316,7 +283,7 @@ def identity_report(traj: pd.DataFrame, tol: float = 1e-5) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------------------
-# Diagnostic 2 -- degeneracy: does a metric move inside a run at all?
+# Diagnostic 2: degeneracy, does a metric move inside a run at all?
 # ---------------------------------------------------------------------------
 
 def degeneracy_report(
@@ -327,27 +294,13 @@ def degeneracy_report(
 
     The statistic is ``signal_to_jitter = std(values) / std(first differences)``
     over the run's epoch-ordered values. Both terms scale linearly with the
-    metric and are unaffected by an offset, so the ratio is free of units *and*
-    of scale: multiplying a metric by a million leaves it unchanged. That is the
-    property this diagnostic needs and the reason it is not a normalised
-    standard deviation -- normalising by any across-run reference makes the
-    statistic a ranking of scales, so every mnist run looks flat next to a
-    Tiny-ImageNet run measuring the same quantity in bigger units.
+    metric and ignore an offset, so the ratio is free of units and of scale.
+    Pure epoch-to-epoch noise around a constant gives exactly
+    :data:`NOISE_RATIO`. Two boundary cases: a constant trajectory scores 0, and
+    a perfectly linear one has no jitter and scores infinity.
 
-    It also comes with a reference value rather than an arbitrary threshold. A
-    trajectory that is pure epoch-to-epoch noise around a constant satisfies
-    ``std(diff) = sqrt(2) * std(values)``, so its ratio is exactly
-    :data:`NOISE_RATIO`. Well above it the metric drifts systematically; near it,
-    what looks like movement is jitter. Two boundary cases: a constant trajectory
-    scores 0, and a perfectly linear one has no jitter and scores infinity.
-
-    ``below_noise`` records the plain comparison against that reference and is
-    deliberately *not* called degenerate. The reference is the asymptotic value,
-    so a genuinely noise-only metric scatters around it and lands on either side
-    about half the time; a boolean verdict would read as a decision the statistic
-    cannot support on a single run. Nothing keys off it: it is descriptive, and
-    what carries the reading is the whole distribution across runs against the
-    reference line.
+    ``below_noise`` is the plain comparison against that reference, descriptive
+    only: nothing keys off it.
     """
     keys = keys or [k for k in metric_columns() if k in traj.columns]
     rows = []
@@ -394,7 +347,7 @@ def degeneracy_summary(detail: pd.DataFrame) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------------------
-# Diagnostic 3 -- direction: does the trajectory drift as the theory predicts?
+# Diagnostic 3: direction, does the trajectory drift as the spec predicts?
 # ---------------------------------------------------------------------------
 
 def trend_report(
@@ -402,21 +355,18 @@ def trend_report(
 ) -> pd.DataFrame:
     """Spearman(value, epoch) per run for every metric with a directional claim.
 
-    Only specs with a non-``None`` ``trend`` are graded (the rest have no robust
-    training-time prediction). ``agree`` is ``True`` when the measured monotone
-    drift is non-trivial (``|rho| >= deadband``) and matches the expected sign.
-    Returns one row per (run, key); see :func:`trend_summary` for the roll-up.
+    Only specs with a non-``None`` ``trend`` are graded. ``agree`` is ``True``
+    when the measured drift is non-trivial (``|rho| >= deadband``) and matches
+    the expected sign. Returns one row per (run, key); see :func:`trend_summary`
+    for the roll-up.
 
-    ``rho_signed = rho * expected`` is the column to compare *across* metrics.
-    Seven of the graded specs expect a fall and four expect a rise, so a raw rho
-    of -0.8 means "agrees" in one column and "contradicts" in the next; after the
-    sign flip, positive always means the metric behaves as its paper predicts.
+    ``rho_signed = rho * expected`` is the column comparable across metrics:
+    positive always means the metric drifts as its spec predicts.
 
-    The paper predictions describe the *training* phase, but the pilot runs 2x
-    budget deep into overfitting; pass ``progress_max`` to grade only the early
-    window (rows with ``progress_frac <= progress_max``). In pilot terms the frozen
-    1x budget is ``progress_frac`` 0.5, so the logged windows f in {0.05, 0.10,
-    0.25, 0.50} map to ``progress_max`` {0.025, 0.05, 0.125, 0.25}.
+    ``progress_max`` restricts grading to rows with
+    ``progress_frac <= progress_max``. In pilot terms the 1x budget is
+    ``progress_frac`` 0.5, so the logged windows f in {0.05, 0.10, 0.25, 0.50}
+    map to ``progress_max`` {0.025, 0.05, 0.125, 0.25}.
     """
     if progress_max is not None:
         traj = traj[traj["progress_frac"] <= progress_max]
@@ -460,7 +410,7 @@ def trend_summary(detail: pd.DataFrame) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------------------
-# Diagnostic 4 -- redundancy: which metrics move together (EXPLORATORY).
+# Diagnostic 4: redundancy, which metrics move together.
 # ---------------------------------------------------------------------------
 
 def redundancy_matrix(
@@ -468,13 +418,11 @@ def redundancy_matrix(
     keys: list[str] | None = None,
     within_run: bool = True,
 ) -> pd.DataFrame:
-    """Cross-metric Spearman correlation map. **Exploratory, not confirmatory.**
+    """Cross-metric Spearman correlation map.
 
     With ``within_run=True`` (default) it averages the per-run Spearman matrices,
-    so the correlation reflects co-movement *over training inside each run* and is
-    not manufactured by between-run scale differences (a Simpson guard). This is a
-    redundancy preview for the later metric-pruning decision; it is NOT a
-    metric<->efficiency test and feeds no hypothesis test.
+    so the correlation reflects co-movement over training inside each run and is
+    not manufactured by between-run scale differences (a Simpson guard).
     """
     keys = keys or [k for k in headline_columns() if k in traj.columns]
     if not within_run:
@@ -496,7 +444,7 @@ def top_redundant_pairs(corr: pd.DataFrame, n: int = 12) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------------------
-# Console smoke report -- `uv run python src/analysis.py [report_dir]`.
+# Console smoke report: `uv run python src/analysis.py [report_dir]`.
 # ---------------------------------------------------------------------------
 
 def _main(report_dir: str | Path = REPORTS_DIR) -> None:

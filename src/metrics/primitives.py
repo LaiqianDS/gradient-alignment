@@ -1,9 +1,7 @@
 """Shared gradient primitives, computed once and reused across metrics.
 
-The per-sample sweep is the dominant probe cost, so it is computed once and
-shared; centralising it here also means the ``torch.func`` per-sample path is
-implemented and tested once instead of nine times. Everything operates on the
-raw loss gradient ∇L so values stay comparable across optimisers.
+The per-sample sweep is the dominant probe cost, so it is computed once here and
+shared. Everything operates on the raw loss gradient ∇L.
 """
 
 from __future__ import annotations
@@ -16,12 +14,11 @@ from torch.func import functional_call, grad, vmap
 
 EPS = 1e-12
 
-# Default rows-per-chunk for the streaming per-sample-grad sweeps. Operational
-# only: the streamed statistics are chunk-invariant (same value for any
-# chunk_size), so this never enters the science -- it just caps the device peak
-# at [chunk_size, P] instead of the full [M, P] Jacobian. Lower it on a tight
-# GPU, raise it on a roomy one. ``train.py`` overrides it per run from
-# ``Config.chunk_size`` via :func:`set_chunk_size`; the streamers resolve a
+# Default rows-per-chunk for the streaming per-sample-grad sweeps. The streamed
+# statistics are chunk-invariant (same value for any chunk_size); this only caps
+# the device peak at [chunk_size, P] instead of the full [M, P] Jacobian. Lower
+# it on a tight GPU, raise it on a roomy one. ``train.py`` overrides it per run
+# from ``Config.chunk_size`` via :func:`set_chunk_size`; the streamers resolve a
 # ``chunk_size=None`` argument against this module global *at call time* (a
 # function default would freeze the value at import).
 DEFAULT_CHUNK_SIZE = 32
@@ -203,13 +200,12 @@ def split_batches(X, y, k):
 
 
 def named_last_linear(model) -> tuple[str, nn.Linear]:
-    """Return ``(qualified_name, module)`` of the last ``nn.Linear`` — the head.
+    """Return ``(qualified_name, module)`` of the last ``nn.Linear``, the head.
 
-    Useful for last-layer-only variants (gwa, stiffness on big
-    nets). Param names follow as ``f"{name}.weight"`` / ``f"{name}.bias"``.
+    Param names follow as ``f"{name}.weight"`` / ``f"{name}.bias"``.
     "Last" follows **registration order** (``named_modules``), not forward
-    order — correct for the fc/cnn/resnet18 models of this study, but not for
-    arbitrary models that define the head before other Linear layers.
+    order: correct for the fc/cnn/resnet18 models here, but not for a model
+    that defines its head before other Linear layers.
     """
     last = None
     for name, mod in model.named_modules():
@@ -233,15 +229,15 @@ def named_last_linear(model) -> tuple[str, nn.Linear]:
 class SharedSweep:
     """Products of one per-sample ∇L sweep, shared across the six per-sample metrics.
 
-    * ``S``, ``Q``, ``M`` -- the two per-column float64 moments (Σ gᵢ, Σ gᵢ²)
+    * ``S``, ``Q``, ``M``: the two per-column float64 moments (Σ gᵢ, Σ gᵢ²)
       and the sample count, exactly as :func:`stream_grad_moments` returns them
       (consumed by ``gns_simple`` / ``gsnr`` / ``m_coherence``).
-    * ``gram``, ``norms`` -- the ``[M, M]`` Gram and ``[M]`` row norms, exactly as
+    * ``gram``, ``norms``: the ``[M, M]`` Gram and ``[M]`` row norms, exactly as
       :func:`stream_gram` returns them (consumed by ``stiffness`` /
       ``gradient_confusion``).
-    * ``gwa_cos`` -- the ``[M]`` per-sample cosines ``cos(gᵢ, w_T)`` to the
+    * ``gwa_cos``: the ``[M]`` per-sample cosines ``cos(gᵢ, w_T)`` to the
       normalised last-layer weight, the input ``gwa._gwa_aggregate`` reduces.
-    * ``y`` -- the probe labels the sweep was computed over, so a ``reduce`` is a
+    * ``y``: the probe labels the sweep was computed over, so a ``reduce`` is a
       pure function of the sweep alone (only ``stiffness`` needs them, for its
       within/between-class pair masks).
     """
@@ -261,7 +257,7 @@ def stream_shared(model, X, y, loss_fn, chunk_size: int | None = None) -> Shared
     Streams the probe in row-chunks exactly as :func:`stream_grad_moments` and
     :func:`stream_gram`, but computes :func:`per_sample_grads` **once** per chunk
     and derives the moments, the host-assembled ``[M, P]`` for the Gram, and the
-    gwa last-layer cosines from that single dict -- so the expensive
+    gwa last-layer cosines from that single dict, so the expensive
     ``vmap(grad(functional_call))`` runs once per chunk instead of once per metric.
     Device peak is ``[chunk_size, P]`` and host peak the full ``[M, P]`` f32,
     matching a single ``stream_gram`` call. The products are the same the

@@ -94,8 +94,8 @@ def test_zero_mean_rows_large_ngv():
 
 
 def test_plug_in_estimator_saturates_at_k():
-    # DESIGN NOTE (module docstring): the plug-in denominator ‖mean of K grads‖²
-    # is biased up by tr(Cov)/K, so for a zero-mean gradient population the
+    # See the module docstring: the plug-in denominator ‖mean of K grads‖² is
+    # biased up by tr(Cov)/K, so for a zero-mean gradient population the
     # estimated NGV reads ≈K rather than blowing up. K=10 rows of pure noise
     # with P=512 concentrate tightly around 10.
     G = torch.randn(10, 512, generator=torch.Generator().manual_seed(0))

@@ -45,10 +45,8 @@ from seed import set_seed
 def resolve_device(choice: str) -> torch.device:
     """Map ``auto`` to the best available backend: CUDA → MPS → CPU.
 
-    Every per-sample metric runs through ``torch.func`` ``vmap(grad(functional_call))``;
-    this path was unreliable on Apple's Metal backend in older PyTorch but is correct
-    as of torch 2.11 (verified against a CPU reference on fc/cnn/resnet18). An explicit
-    ``--device`` (cpu/cuda/mps) is always honoured verbatim."""
+    An explicit ``--device`` (cpu/cuda/mps) is honoured verbatim.
+    """
     if choice != "auto":
         return torch.device(choice)
     if torch.cuda.is_available():
@@ -67,7 +65,7 @@ def device_sync(device: torch.device) -> None:
 
 
 def build_optimizer(cfg: Config, model: nn.Module) -> torch.optim.Optimizer:
-    """SGD or Adam on raw ∇L (metrics stay comparable across the two)."""
+    """Build the run's optimizer: SGD or Adam, per ``cfg.optimizer``."""
     if cfg.optimizer == "sgd":
         return torch.optim.SGD(
             model.parameters(), lr=cfg.lr, momentum=cfg.momentum,
@@ -88,12 +86,10 @@ def warn_probe_memory(num_params: int, probe_size: int, chunk_size: int) -> floa
     """Print the streamed per-sample-grad memory profile and warn if it is large.
 
     The dense [M, P] Jacobian is never materialised: per-sample grads stream in
-    row-chunks, so the *device* peak is [chunk_size, P], and only the pairwise
-    metrics assemble the full [M, P] in *host* RAM to form the [M, M] Gram. Both
-    are surfaced so a too-tight GPU (lower --chunk-size) or host (smaller probe
-    / model) is diagnosable up front. We never silently cap M: it is a scientific
-    knob, and changing it between runs would make cross-model comparisons
-    apples-to-oranges.
+    row-chunks, so the device peak is [chunk_size, P], and only the pairwise
+    metrics assemble the full [M, P] in host RAM to form the [M, M] Gram. Both
+    are printed so a too-tight GPU (lower --chunk-size) or host (smaller probe
+    or model) is diagnosable up front. M is never capped silently.
     """
     device_gb = chunk_size * num_params * 4 / 1e9
     host_gb = probe_size * num_params * 4 / 1e9
@@ -109,11 +105,10 @@ def warn_probe_memory(num_params: int, probe_size: int, chunk_size: int) -> floa
 def epoch_mean_losses(step_losses: list[float], steps_per_epoch: int) -> list[float]:
     """Collapse per-step losses into per-epoch means ℓ̄_1..ℓ̄_t for the TSE baseline.
 
-    TSE is defined over *epochs* of mean batch losses (Ru et al. 2021, Eq. 1);
-    feeding raw per-step losses would turn TSE-E(E=1) into the TLmini baseline
-    the paper rejects and shrink the EMA half-life by a factor of
-    ``steps_per_epoch``. The trailing partial epoch contributes its running
-    mean, keeping the helper defined for any loss-history length.
+    TSE is defined over epochs of mean batch losses (Ru et al. 2021, Eq. 1).
+    Feeding it raw per-step losses instead shrinks the EMA half-life by a factor
+    of ``steps_per_epoch``. The trailing partial epoch contributes its running
+    mean, so the helper is defined for any loss-history length.
     """
     full = len(step_losses) // steps_per_epoch
     means = [
@@ -169,11 +164,7 @@ def evaluate_test(model, loader, loss_fn, device, num_classes: int) -> dict:
 
 
 def snap_windows(df: pd.DataFrame, windows) -> pd.DataFrame:
-    """Pick, per window fraction, the epoch row whose progress is closest to it.
-
-    Implements the 5/10/25/50/100% snapshots used for the early-vs-late
-    correlation analysis -- chosen post-hoc from the full logged trajectory.
-    """
+    """Pick, per window fraction, the epoch row whose progress is closest to it."""
     epoch_df = df
     if epoch_df.empty:
         return pd.DataFrame()
@@ -231,12 +222,12 @@ def efficiency_summary(df: pd.DataFrame, cfg: Config) -> dict:
 
 def train(cfg: Config) -> dict:
     """Run one training job end to end; return its efficiency summary."""
-    # Set before the first CUDA allocation (model.to below): expandable_segments
-    # lets the caching allocator grow segments instead of fragmenting, which is
-    # what makes the per-sample sweeps OOM on the fc x tiny_imagenet cell. import
-    # torch does not init CUDA, so here -- ahead of resolve_device's is_available
-    # -- is early enough. Allocator strategy only; metric values are unaffected.
-    # ``setdefault`` keeps a shell value (or run_matrix.child_env) authoritative.
+    # Must be set before the first CUDA allocation (the model.to below):
+    # expandable_segments lets the caching allocator grow segments instead of
+    # fragmenting. Importing torch does not init CUDA, so here, ahead of
+    # resolve_device's is_available, is early enough. Allocator strategy only;
+    # metric values are unaffected. ``setdefault`` keeps a shell value (or
+    # run_matrix.child_env) authoritative.
     os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
     run_start = time.perf_counter()
     set_seed(cfg.seed)
@@ -254,7 +245,7 @@ def train(cfg: Config) -> dict:
     probe_X, probe_y = build_probe(train_loader.dataset, cfg.probe_size, cfg.seed, device)
     loss_fn = nn.CrossEntropyLoss()
     optimizer = build_optimizer(cfg, model)
-    metrics = dict(REGISTRY)  # always all of them; discard post-hoc, never up front
+    metrics = dict(REGISTRY)
     set_chunk_size(cfg.chunk_size)  # cap the per-sample-grad device peak
 
     num_params = sum(p.numel() for p in model.parameters())
@@ -273,9 +264,9 @@ def train(cfg: Config) -> dict:
     def probe_metrics() -> dict:
         """One instrumentation block (gradient metrics + TSE baseline), timed.
 
-        The sync brackets keep async GPU kernels honestly attributed: pending
-        training work drains before the clock starts, the probe's own kernels
-        finish before it stops.
+        The sync brackets keep async GPU kernels correctly attributed: pending
+        training work drains before the clock starts, and the probe's own
+        kernels finish before it stops.
         """
         nonlocal metric_seconds
         device_sync(device)

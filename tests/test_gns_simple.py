@@ -100,8 +100,8 @@ def test_single_batch_noise_nonnegative():
 def test_deterministic_sigma_recovery():
     # Rows {mu + d·e_j, mu - d·e_j} for j = 1..P: the sample mean is exactly mu
     # and every row deviates by exactly d in one coordinate, so the plug-in
-    # tr_sigma = mean_i ‖g_i − mu‖² = d² and simple = d²/‖mu‖², both exact —
-    # no statistical tolerance needed.
+    # tr_sigma = mean_i ‖g_i − mu‖² = d² and simple = d²/‖mu‖², both exact, so
+    # no statistical tolerance is needed.
     P, d = 4, 0.5
     mu = torch.tensor([1.0, -2.0, 0.5, 3.0])
     rows = []

@@ -102,7 +102,7 @@ def test_tiny_imagenet_val_labels_align_with_train(tmp_path):
     )
     assert train.class_to_idx["n00000003"] == 2  # sorted wnids -> last index
     _, label = test[0]
-    assert label == 2  # the bug gave 0 here
+    assert label == 2
 
 
 def _fake_dataset(n=50, dim=3):

@@ -146,9 +146,8 @@ _SHARED_METRICS = [GNS, GSNR, MCOH, STIFF, CONF, GWA]
 
 @pytest.mark.parametrize("metric", _SHARED_METRICS)
 def test_shared_reduce_matches_standalone_compute(probe, metric):
-    # The shared-sweep reduce() must equal the metric's own compute(): same keys,
-    # same values. This is the contract that makes the measure() optimization a
-    # pure speedup with no effect on the logged metric values.
+    # The shared-sweep reduce() must equal the metric's own compute(), same keys
+    # and same values, so the measure() optimization cannot move a logged value.
     model, X, y, lf, _G = probe
     primitives.set_chunk_size(7)  # force genuine multi-chunk streaming on both paths
     sweep = stream_shared(model, X, y, lf)

@@ -3,13 +3,13 @@
 The paper's **gradient confusion bound** is ``η ≥ 0`` on raw inner products:
 ``⟨∇f_i, ∇f_j⟩ ≥ -η`` for all ``i ≠ j`` (Def. 2.1). Empirically it is estimated
 through the normalised (cosine) variant the paper introduces in §8,
-``η̂ = -min_{i≠j} cos(∇f_i, ∇f_j) ∈ [-1, 1]`` — a different object from the
+``η̂ = -min_{i≠j} cos(∇f_i, ∇f_j) ∈ [-1, 1]``, a different object from the
 definitional ``η``. Large ``η̂`` means gradients disagree (confused);
 ``η̂ ≈ -1`` means all pairs are positively aligned.
 
-Because ``min`` is a noisy extreme-value estimator, the full density of the
-off-diagonal cosines is logged alongside it (``median``, ``p05``, ``frac_neg``).
-Operates on the raw loss gradient ∇L (see ``base.py``).
+``min`` is a noisy extreme-value estimator, so the density of the off-diagonal
+cosines is logged alongside it (``median``, ``p05``, ``frac_neg``). Operates on
+the raw loss gradient ∇L (see ``base.py``).
 """
 
 from __future__ import annotations
@@ -33,8 +33,8 @@ def _confusion_from_gram(gram: torch.Tensor, norms: torch.Tensor) -> dict[str, f
     off = cos[~torch.eye(M, dtype=torch.bool, device=gram.device)]  # [M*(M-1)] off-diagonal
 
     min_cos = off.min()
-    # NaN < 0 is False, so a diverged run would report frac_neg = 0 where nothing
-    # was measured. Keep the NaN, as min/median/quantile already do.
+    # NaN < 0 is False, which would report frac_neg = 0 for NaN gradients. Keep
+    # the NaN, as min/median/quantile already do.
     neg = torch.where(off.isnan(), off, (off < 0).to(off.dtype))
     return {
         "confusion/min_cos": min_cos.item(),
@@ -49,7 +49,7 @@ def _confusion_core(G: torch.Tensor) -> dict[str, float]:
     """Gradient-confusion stats over all ordered pairs ``i != j`` of rows of ``G``.
 
     Forms the ``[M, M]`` Gram and per-row norms, then delegates to
-    :func:`_confusion_from_gram` -- one shared math path for both the full-matrix
+    :func:`_confusion_from_gram`: one shared math path for both the full-matrix
     (tested) and the streamed ``compute()`` routes.
     """
     return _confusion_from_gram(G @ G.T, G.norm(dim=1))

@@ -6,11 +6,11 @@ a loss history. This module wraps both so the training loop stays clean, and it
 isolates per-metric failures (e.g. an out-of-memory probe) so one bad metric
 does not abort the whole run.
 
-Six of the eight gradient metrics consume the same per-sample ∇L sweep -- the
-single dominant cost of a probe. Rather than let each recompute it, ``measure``
-runs the sweep **once** (``primitives.stream_shared``) and feeds each such metric
-its ``reduce``; metrics with no ``reduce`` (the batch-gradient
-``normalized_variance`` / ``gradient_disparity``) keep their own ``compute``.
+Six of the eight gradient metrics consume the same per-sample ∇L sweep, the
+dominant cost of a probe, so ``measure`` runs it once
+(``primitives.stream_shared``) and feeds each such metric its ``reduce``.
+Metrics with no ``reduce`` (the batch-gradient ``normalized_variance`` /
+``gradient_disparity``) keep their own ``compute``.
 """
 
 from __future__ import annotations
@@ -41,9 +41,8 @@ def measure(
     model.eval()
     row: dict[str, float] = {}
 
-    # One per-sample sweep shared by every reduce()-exposing metric. If it raises
-    # (e.g. OOM), leave it None: those metrics fall back to their own compute(),
-    # so a bad sweep never silently drops the whole per-sample family.
+    # If the shared sweep raises (e.g. OOM), leave it None: those metrics fall
+    # back to their own compute() instead of dropping out of the row.
     sweep = None
     if any(hasattr(m, "reduce") for m in metrics.values()):
         try:
@@ -57,7 +56,7 @@ def measure(
                 row.update(metric.reduce(sweep))
             else:
                 row.update(metric.compute(model, X, y, loss_fn))
-        except Exception as exc:  # noqa: BLE001 — one metric must not kill the run
+        except Exception as exc:  # noqa: BLE001
             print(f"[metrics_runner] metric '{name}' failed: {exc}")
     if was_training:
         model.train()

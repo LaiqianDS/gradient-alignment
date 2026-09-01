@@ -3,13 +3,13 @@
 Over all unordered pairs ``i < j`` of per-sample gradients we report two
 complementary statistics:
 
-  * ``S_cos  = mean cos(g_i, g_j)``   — preferred within-class,
-  * ``S_sign = mean sign(g_i · g_j)`` — more informative between-class,
+  * ``S_cos  = mean cos(g_i, g_j)``,
+  * ``S_sign = mean sign(g_i · g_j)``,
 
 each split into global, within-class (``y_i == y_j``) and between-class
-(``y_i != y_j``) regimes. Operates on the RAW loss gradient ∇L. The dynamic
-critical length ξ and the full class-stiffness matrix ``C(c_a, c_b)`` are out of
-scope for v1 — only the global + within/between scalars are emitted.
+(``y_i != y_j``) regimes. Operates on the RAW loss gradient ∇L. Only the global
+and within/between scalars are emitted: the dynamic critical length ξ and the
+full class-stiffness matrix ``C(c_a, c_b)`` are not computed.
 """
 
 from __future__ import annotations
@@ -40,15 +40,15 @@ def _stiffness_from_gram(
     """Pairwise stiffness from the ``[M, M]`` Gram and ``[M]`` row norms.
 
     ``cos_{ij} = ⟨g_i, g_j⟩ / (‖g_i‖‖g_j‖) = Gram_{ij}/(n_i n_j)`` and the sign
-    matrix is ``sign(Gram)`` -- algebraically identical to the row-normalised
+    matrix is ``sign(Gram)``: algebraically identical to the row-normalised
     ``Gn @ Gn.T`` / ``sign(G @ G.T)`` of :func:`_stiffness_core`, but expressed
     on the compact Gram so it can be fed by the streamed sweep. A zero-gradient
     row clamps to ``EPS`` and contributes cosine 0 (the paper's ΔL₂=0 convention).
     """
     n = norms.clamp_min(EPS)
     cos = gram / (n.unsqueeze(0) * n.unsqueeze(1))
-    # torch.sign(NaN) is 0.0, so a diverged run would report a clean zero where
-    # nothing was measured. Keep the NaN, as the cosine branch already does.
+    # torch.sign(NaN) is 0.0, which would report a clean zero for NaN gradients.
+    # Keep the NaN, as the cosine branch already does.
     sign = torch.where(gram.isnan(), gram, torch.sign(gram))
 
     same = y.unsqueeze(0) == y.unsqueeze(1)  # [M, M] within-class pair mask
@@ -69,7 +69,7 @@ def _stiffness_core(G: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
     """Pairwise stiffness over per-sample gradients ``G`` [M, P], labels ``y`` [M].
 
     Forms the ``[M, M]`` Gram and per-row norms, then delegates to
-    :func:`_stiffness_from_gram` -- one shared math path for both the full-matrix
+    :func:`_stiffness_from_gram`: one shared math path for both the full-matrix
     (tested) and the streamed ``compute()`` routes.
     """
     return _stiffness_from_gram(G @ G.T, G.norm(dim=1), y)

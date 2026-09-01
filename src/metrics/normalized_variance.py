@@ -2,17 +2,16 @@
 
 Two global scalars over ``K`` independent batch gradients of the frozen model:
 
-  * ``var/avg``        — Average Variance, the normalized trace of the gradient
+  * ``var/avg``: Average Variance, the normalized trace of the gradient
     covariance ``tr(Cov(g)) / d``: an absolute, scale-dependent variance
     (paper §4: the average per-coordinate variance).
-  * ``var/normalized`` — Normalized Gradient Variance (NGV),
+  * ``var/normalized``: Normalized Gradient Variance (NGV),
     ``tr(Cov(g)) / ||E[g]||^2``: the inverse of a signal-to-noise ratio, so
     values above 1 mean noise dominates the mean gradient. Cross-problem
-    comparable. **Deliberate adaptation**: the paper's literal definition is
-    the per-coordinate ratio ``V[g]/E[g²]`` (second *non-central* moment in
-    the denominator, bounded ≈1); this ratio-of-sums form is monotonically
-    related (``NV = NGV/(1+NGV)``) and matches the McCandlish-style usage in
-    ``gns_simple``, but the "above 1" reading only holds for *this* form.
+    comparable. This is not the paper's literal definition, which is the
+    per-coordinate ratio ``V[g]/E[g²]`` (second *non-central* moment in the
+    denominator, bounded ≈1); the two are monotonically related
+    (``NV = NGV/(1+NGV)``), but the "above 1" reading only holds for this form.
 
 Estimator caveat: the plug-in denominator ``||mean of K grads||²`` is biased
 upward by ``tr(Cov)/K``, so the estimated NGV saturates at ≈K (with K=10 a

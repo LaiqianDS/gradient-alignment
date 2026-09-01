@@ -2,8 +2,7 @@
 
 The logger only does IO. It buffers measurement rows (one flat dict per probe)
 and writes them as Parquet, plus saves the resolved config and a run summary.
-All domain logic — window snapping, efficiency indicators — lives in
-``train.py``; here we just persist what we are handed.
+All domain logic (window snapping, efficiency indicators) lives in ``train.py``.
 """
 
 from __future__ import annotations
@@ -43,9 +42,9 @@ class RunLogger:
         """Write ``obj`` to ``<name>.json`` atomically and return its path.
 
         ``summary.json`` is the marker the launchers read as "this run
-        finished", so a half-written one would mark a dead run as done. We
-        write a sibling temp file and rename it into place: ``os.replace`` is
-        atomic, so the target is either absent or complete, never truncated.
+        finished", so a half-written one would mark a dead run as done. The
+        write goes to a sibling temp file and is renamed into place:
+        ``os.replace`` is atomic, so the target is either absent or complete.
         """
         path = self.dir / f"{name}.json"
         tmp = path.with_name(path.name + ".tmp")

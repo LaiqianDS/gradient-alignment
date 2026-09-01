@@ -1,34 +1,24 @@
 """Calibration pilot: one extended run per matrix cell, before the real sweep.
 
-The frozen matrix fixes per-dataset epoch budgets and accuracy thresholds as
-*starting points* to be calibrated by a pilot. This launcher runs that pilot:
-ONE run per cell (24 total) at the center of the LR grid (SGD 1e-2, Adam 1e-3,
-the canonical defaults), seed 0, with a DOUBLED epoch budget, so the curves show
-where val loss actually flattens. Cutting a generous curve afterwards is free;
-relaunching a too-short matrix is not (budgets define ``progress_frac``,
-windows and AUC).
+One run per cell (24 total) at the center of the LR grid (SGD 1e-2, Adam 1e-3),
+seed 0, with a doubled epoch budget, so the curves show where val loss flattens.
 
 Pilot runs write to ``reports_pilot/``, never ``reports/``: run_matrix counts
 a grid point as done iff ``reports/<run_name>/summary.json`` exists, so a
-pilot run leaking there would later be (wrongly) skipped as a finished grid
-run trained under the old budget.
+pilot run leaking there would later be skipped as a finished grid run.
 
 Reading ``--report``, per dataset:
 
-* epoch budget -- where the well-tuned val loss flattens. Budget = plateau
-  + margin, rounded to a multiple of 20 (keeps the ``windows`` snap exact).
-* threshold_acc -- CNN/ResNet center-LR runs should cross it at ~30-60% of
-  the budget: crossed in epoch 1 it cannot discriminate speed; crossed by
-  almost nobody it censors half the matrix. ``thr@`` recomputes the crossing
-  of the CURRENT threshold on the smoothed val curve (the summaries'
-  ``epochs_to_threshold`` was computed with the threshold in force when the
-  pilot ran) and prints it as a fraction of the candidate budget so the
-  30-60% rule reads off directly.
-* cost -- ``metric%`` (metric_seconds / total_seconds) is the share of
+* epoch budget: where the val loss flattens. Budget = plateau + margin,
+  rounded to a multiple of 20 (keeps the ``windows`` snap exact).
+* threshold_acc: ``thr@`` recomputes the crossing of the CURRENT threshold on
+  the smoothed val curve (the summaries' ``epochs_to_threshold`` used the
+  threshold in force when the pilot ran) and prints it as a fraction of the
+  candidate budget.
+* cost: ``metric%`` (metric_seconds / total_seconds) is the share of
   wall-clock the instrumentation costs.
 
-The report prints the evidence; the budget/threshold decision stays with the
-researcher (update the cell YAMLs *and* ``config.py::DATASET_BUDGET``).
+After the pilot, update the cell YAMLs *and* ``config.py::DATASET_BUDGET``.
 
 Usage::
 
@@ -166,8 +156,8 @@ def execute(runs: list[PilotRun], dry_run: bool = False) -> list[PilotRun]:
 def plateau_epoch(epoch_df: pd.DataFrame, tol: float = 0.02) -> int:
     """First (1-indexed) epoch whose val loss is within ``tol`` of the run's best.
 
-    Crude knee finder: past this epoch the remaining budget buys < tol
-    relative improvement, so it marks where the budget stops paying.
+    Past this epoch the remaining budget buys less than ``tol`` relative
+    improvement.
     """
     best = epoch_df["val_loss"].min()
     ok = epoch_df[epoch_df["val_loss"] <= best * (1.0 + tol)]
@@ -176,8 +166,7 @@ def plateau_epoch(epoch_df: pd.DataFrame, tol: float = 0.02) -> int:
 
 def recommend_budget(max_plateau: int, margin: float = 0.2, step: int = 20) -> int:
     """Suggested 1x budget: the latest cell plateau plus ``margin``, rounded UP
-    to a multiple of ``step`` (keeps the ``windows`` snap exact). The researcher
-    still owns the call; this is the starting point the pilot evidence implies.
+    to a multiple of ``step`` (keeps the ``windows`` snap exact).
     """
     return int(math.ceil(max_plateau * (1.0 + margin) / step) * step)
 
@@ -194,21 +183,17 @@ def fmt_params(n: int) -> str:
 def calibration_table(runs: list[PilotRun]) -> pd.DataFrame:
     """The pilot's calibration evidence as data: one row per finished run.
 
-    This is the evidence behind the frozen budgets and thresholds, so it has to
-    be reachable as a table and not only as printed text. :func:`print_report`
-    formats this frame and adds nothing to it.
+    :func:`print_report` formats this frame and adds nothing to it.
 
-    Run facts are read from disk, never derived from today's config: the pilot
-    trained with 2x the budgets in force back then, and the calibration itself
-    edits ``DATASET_BUDGET``, so recomputing epochs or reusing the stored
-    ``epochs_to_threshold`` would describe runs that never happened.
-    ``threshold_epoch`` recomputes the crossing of the **current** threshold on
-    the smoothed val curve (same 3-epoch centred median as ``train.median3``).
+    Run facts are read from disk, never derived from the current config: the
+    pilot ran under the budgets in force at the time, and calibration edits
+    ``DATASET_BUDGET``. ``threshold_epoch`` recomputes the crossing of the
+    current threshold on the smoothed val curve (same 3-epoch centred median as
+    ``train.median3``).
 
-    ``test_fields_valid`` is False for the Tiny-ImageNet runs, whose summaries
-    self-declare via ``_tiny_test_note`` that their test/gap fields predate the
-    val-as-test labelling fix. Their val-side and timing fields are sound, which
-    is what the calibration used.
+    ``test_fields_valid`` is False when the summary carries a ``_tiny_test_note``
+    key, which marks its test/gap fields as invalid. Its val-side and timing
+    fields stay sound.
     """
     rows = []
     for r in runs:
@@ -255,17 +240,13 @@ TESTFIX_DIR = "testfix_40ep"
 
 
 def testfix_table(runs: list[PilotRun]) -> pd.DataFrame:
-    """The sound test/gap reference that lives inside each affected run dir.
+    """The valid test/gap reference stored in each affected run's ``testfix_40ep/``.
 
-    A *different* run, not a repair of the row beside it: same cell, center LR
-    and seed, but trained to the calibrated budget instead of the pilot's
-    doubled one, and after the val-as-test labelling fix. It gets its own frame
-    precisely so nothing can join it onto :func:`calibration_table` as though
-    the two horizons were the same run.
-
-    Only the test-side fields are carried. The pilot row's own val and timing
-    were never broken, so a second val column would only invite the reader to
-    treat this as a replacement.
+    A different run, not a repair of the row beside it: same cell, center LR and
+    seed, but trained to the calibrated budget instead of the pilot's doubled
+    one. It gets its own frame so nothing joins it onto
+    :func:`calibration_table` as though the two horizons were the same run.
+    Only the test-side fields are carried.
     """
     rows = []
     for r in runs:
@@ -289,17 +270,15 @@ def print_report(runs: list[PilotRun]) -> None:
     """Per-dataset results + calibration tables, then the one-line roll-up.
 
     Two narrow tables per dataset, both formatted from :func:`calibration_table`.
-    ``results`` is the model-quality story kept for the thesis: best val + final
-    test acc/F1/loss and the generalization gap (train_acc - test_acc).
-    ``calib`` is the throwaway tuning evidence: ``plateau@`` (val-loss knee, as
-    a share of the run's recorded epochs), ``thr@`` (crossing of the CURRENT
-    threshold_acc, as a share of the candidate 1x budget; want 30-60%),
-    ``metric%`` (instrumentation tax), wall time and parameter count. The
-    one-line roll-up proposes a 1x budget. A ``*`` on a ``results`` row carries
-    :func:`calibration_table`'s ``test_fields_valid`` into the printed text,
-    which is where a reader would otherwise cite those numbers as sound, and
-    the ``testfix`` block below it prints :func:`testfix_table` when a sound
-    reference exists, each row labelled with the budget it actually ran.
+    ``results``: best val plus final test acc/F1/loss and the generalization gap
+    (train_acc - test_acc). ``calib``: ``plateau@`` (val-loss knee, as a share of
+    the run's recorded epochs), ``thr@`` (crossing of the current threshold_acc,
+    as a share of the candidate 1x budget), ``metric%``, wall time and parameter
+    count. The one-line roll-up proposes a 1x budget.
+
+    A ``*`` on a ``results`` row carries ``test_fields_valid`` into the printed
+    text. The ``testfix`` block below prints :func:`testfix_table` when a
+    reference exists, each row labelled with the budget it ran.
     """
     table = calibration_table(runs)
     by_dataset: dict[str, list[PilotRun]] = {}
@@ -331,7 +310,7 @@ def print_report(runs: list[PilotRun]) -> None:
             print("  (no finished runs yet)")
             continue
 
-        # results -- the model-quality numbers kept for the thesis
+        # results: the model-quality numbers
         print(f"  {'results':<9}{'model':<9}{'opt':<4}{'test_acc':>9}{'test_f1':>9}"
               f"{'test_loss':>10}{'val_acc':>9}{'gap_acc':>9}")
         for row in sub.itertuples():
@@ -345,7 +324,7 @@ def print_report(runs: list[PilotRun]) -> None:
                   "summary predates the val-as-test labelling fix. Its val_acc "
                   "and its calib row below are sound.")
 
-        # testfix -- the post-fix test/gap reference, kept visibly apart
+        # testfix: the separate test/gap reference
         fix = testfix_table(cell_runs)
         if len(fix):
             print("  testfix: the same cells re-run after the fix, each at its "
@@ -360,7 +339,7 @@ def print_report(runs: list[PilotRun]) -> None:
                       f"{row.final_test_loss:>10.3f}{'':>9}"
                       f"{row.final_gap_acc:>9.4f}")
 
-        # calib -- the throwaway tuning evidence (budget / threshold / cost)
+        # calib: the tuning evidence (budget / threshold / cost)
         print(f"  {'calib':<9}{'model':<9}{'opt':<4}{'plateau@':>11}{'thr@':>11}"
               f"{'metric%':>9}{'time':>8}{'params':>8}")
         for row in sub.itertuples():

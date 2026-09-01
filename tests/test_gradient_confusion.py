@@ -116,8 +116,8 @@ def test_zero_norm_row_is_eps_guarded():
 
 def test_scale_invariance_per_row():
     # Cosines ignore per-row gradient magnitudes: rescaling each row by a
-    # positive factor leaves every stat unchanged — the defining property of
-    # the cosine variant (paper §8) vs the raw inner-product bound of Def. 2.1.
+    # positive factor leaves every stat unchanged: the defining property of the
+    # cosine variant (paper §8) vs the raw inner-product bound of Def. 2.1.
     g = torch.Generator().manual_seed(2)
     G = torch.randn(6, 10, generator=g)
     scales = torch.rand(6, 1, generator=g) * 5 + 0.1
@@ -139,8 +139,7 @@ def test_zero_row_does_not_mask_negative_pair():
 
 
 def test_nan_gradients_do_not_become_zero_frac_neg():
-    # a diverged run gives NaN gradients; NaN < 0 is False, which would publish
-    # frac_neg = 0 where nothing was measured
+    # NaN < 0 is False, which would otherwise publish frac_neg = 0
     out = _confusion_core(torch.full((4, 8), float("nan")))
     assert all(math.isnan(v) for v in out.values()), out
 

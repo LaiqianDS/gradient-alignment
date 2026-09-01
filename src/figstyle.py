@@ -69,9 +69,8 @@ def apply() -> None:
 def figure(width: str = "full", ratio: float = 0.62, nrows: int = 1, ncols: int = 1):
     """A figure at its final printed width. ``width`` is ``full`` or ``narrow``.
 
-    ``constrained_layout`` fits the content inside that width instead of trimming
-    to it, which is what ``bbox_inches="tight"`` would do -- and trimming would
-    change the saved size and defeat the point of fixing it.
+    ``constrained_layout`` fits the content inside that width. Do not save with
+    ``bbox_inches="tight"``: trimming changes the saved size.
     """
     w = FULL_CM if width == "full" else NARROW_CM
     return plt.subplots(
@@ -82,8 +81,7 @@ def figure(width: str = "full", ratio: float = 0.62, nrows: int = 1, ncols: int 
 def include_zero(*axes, axis: str = "y") -> None:
     """Extend limits so the axis reaches zero.
 
-    An axis cut above zero exaggerates the differences between values. Skip it
-    only where zero is meaningless (a log scale, an epoch count).
+    Skip it where zero is meaningless (a log scale, an epoch count).
     """
     for ax in axes:
         get, set_ = (ax.get_ylim, ax.set_ylim) if axis == "y" else (ax.get_xlim, ax.set_xlim)
@@ -92,11 +90,7 @@ def include_zero(*axes, axis: str = "y") -> None:
 
 
 def match_limits(axes, axis: str = "y") -> None:
-    """Give every axis the union of their limits.
-
-    Panels showing the same quantity must share a scale; drawing each on its own
-    range makes unequal values look equal.
-    """
+    """Give every axis the union of their limits, so panels share one scale."""
     lims = [ax.get_ylim() if axis == "y" else ax.get_xlim() for ax in axes]
     lo, hi = min(lo for lo, _ in lims), max(hi for _, hi in lims)
     for ax in axes:
@@ -104,11 +98,7 @@ def match_limits(axes, axis: str = "y") -> None:
 
 
 def save(fig, name: str, out_dir: Path = IMG_DIR) -> Path:
-    """Write ``name.pdf`` at its built size and return the path.
-
-    PDF only: the memoria embeds vector figures. A PNG is for screen preview and
-    never a deliverable.
-    """
+    """Write ``name.pdf`` at its built size and return the path. PDF only."""
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{name}.pdf"
     fig.savefig(path)

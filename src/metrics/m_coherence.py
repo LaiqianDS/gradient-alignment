@@ -36,8 +36,8 @@ def _mcoh_core(G: torch.Tensor) -> dict[str, float]:
 def _mcoh_from_moments(S: torch.Tensor, Q: torch.Tensor) -> dict[str, float]:
     """``_mcoh_core`` from the streamed moments ``S = Σg_i``, ``Q = Σg_i²``.
 
-    ``num = ‖S‖²`` and the denominator ``Σ_i‖g_i‖² = Q.sum()`` -- identical to
-    the full-matrix core, which is precisely ``‖G.sum(0)‖² / (G*G).sum()``.
+    ``num = ‖S‖²`` and the denominator ``Σ_i‖g_i‖² = Q.sum()``: identical to
+    the full-matrix core, which is ``‖G.sum(0)‖² / (G*G).sum()``.
     """
     return {"mcoh/global": float(S.dot(S) / (Q.sum() + EPS))}
 
@@ -52,7 +52,7 @@ class MCoherenceMetric:
         y: torch.Tensor,
         loss_fn: nn.Module,
     ) -> dict[str, float]:
-        model.eval()  # per-sample grads; mini-batches would inflate coherence
+        model.eval()
         S, Q, _ = stream_grad_moments(model, X, y, loss_fn)
         return _mcoh_from_moments(S, Q)
 

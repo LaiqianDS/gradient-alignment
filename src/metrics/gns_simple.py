@@ -5,12 +5,11 @@ Implements the simplified form under :math:`H \\propto I`,
 per-sample as :math:`\\tfrac{1}{M}\\sum_i \\|g_i - \\bar g\\|^2 / \\|\\bar g\\|^2`
 (algebraically :math:`(\\tfrac{1}{M}\\sum_i \\|g_i\\|^2 - \\|\\bar g\\|^2)/\\|\\bar g\\|^2`,
 but non-negative by construction in floating point). The numerator is the
-plug-in estimator of :math:`\\mathrm{tr}(\\Sigma)` — biased low by
-:math:`(M-1)/M`, deliberately uncorrected (≈0.4% at M=256; the paper itself
-concedes the ratio is not unbiased, App. A.1 fn. 12). It is logged as
+plug-in estimator of :math:`\\mathrm{tr}(\\Sigma)`, biased low by
+:math:`(M-1)/M` and left uncorrected (≈0.4% at M=256). It is logged as
 ``noise_scale/tr_sigma``; the key ``noise_scale/noise`` is reserved for the
-exact Hessian-weighted :math:`\\mathcal{B}_{\\text{noise}}`, which was dropped
-for cost. Operates on the raw loss gradient ∇L.
+exact Hessian-weighted :math:`\\mathcal{B}_{\\text{noise}}`, which this module
+does not compute. Operates on the raw loss gradient ∇L.
 """
 
 from __future__ import annotations
@@ -38,9 +37,8 @@ def _gns_from_moments(S: torch.Tensor, Q: torch.Tensor, M: int) -> dict[str, flo
     """``_gns_core`` from the streamed moments ``S = Σg_i``, ``Q = Σg_i²``.
 
     ``‖ḡ‖² = ‖S‖²/M²`` and ``tr Σ = (Σ‖g_i‖² − M‖ḡ‖²)/M = Q.sum()/M − ‖ḡ‖²``.
-    The difference-of-squares form is cancellation-prone in fp32; ``S``/``Q`` are
-    float64 (see :func:`stream_grad_moments`), matching the full-matrix core to
-    ~1e-7 — within the wiring test's 1e-6 tolerance.
+    The difference-of-squares form is cancellation-prone in fp32, so ``S``/``Q``
+    are float64 (see :func:`stream_grad_moments`).
     """
     gbar_sq = S.dot(S) / (M * M)
     tr_sigma = Q.sum() / M - gbar_sq

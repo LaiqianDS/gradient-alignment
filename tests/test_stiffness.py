@@ -156,12 +156,10 @@ def test_singleton_class_contributes_no_within_pairs():
 
 
 def test_within_aggregation_is_pooled_micro_not_macro():
-    # DESIGN NOTE: the paper's Eq. (7) summarises within/between as a *macro*
-    # mean over class-stiffness-matrix cells; this implementation pools over
-    # pairs (micro). Class sizes {3, 2} with within-cosines {1.0, 0.5} expose
-    # the difference: micro = (3·1 + 1·0.5)/4 = 0.875 vs macro = 0.75. Pinned
-    # here as a deliberate adaptation; with a balanced probe the two estimands
-    # nearly coincide.
+    # The paper's Eq. (7) summarises within/between as a *macro* mean over
+    # class-stiffness-matrix cells; this implementation pools over pairs
+    # (micro). Class sizes {3, 2} with within-cosines {1.0, 0.5} expose the
+    # difference: micro = (3·1 + 1·0.5)/4 = 0.875 vs macro = 0.75.
     p = 8
     a = torch.zeros(p)
     a[0] = 1.0
@@ -177,8 +175,8 @@ def test_within_aggregation_is_pooled_micro_not_macro():
 
 def test_empty_subset_emits_zero():
     # single class → no between-class pairs → between keys default to 0.0.
-    # DESIGN NOTE: 0.0 is also a legal sign-/cos-mean, so this sentinel is
-    # ambiguous; nan would be more honest. Locked here to pin current behaviour.
+    # 0.0 is also a legal cos/sign mean, so the sentinel is ambiguous; pinned
+    # here as the current behaviour.
     G = parallel_grads(m=4, p=16)
     y = torch.zeros(4, dtype=torch.long)
     out = _stiffness_core(G, y)

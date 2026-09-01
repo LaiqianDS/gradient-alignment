@@ -1,13 +1,13 @@
 """Gradient Signal-to-Noise Ratio (GSNR) of parameters (Liu et al., 2020).
 
 Per-parameter GSNR ``r_j = gbar_j² / Var_i[g_{i,j}]`` measures how consistent the
-raw loss gradient of parameter ``j`` is across samples: large signal (mean) over
-small noise (variance) is argued to predict good generalisation. We aggregate by
-**mean** (never sum, which is incomparable across architectures with different
-``P``), use the unbiased variance (``÷ M-1``), drop "dead" parameters (dead
-ReLUs, zero-init biases) by a threshold on ``‖g_j‖``, and additionally report
-**median** and **p95** because the heavy tail of ``r_j`` biases the mean. Shares
-the per-sample ∇L sweep with ``m_coherence`` and ``stiffness``.
+raw loss gradient of parameter ``j`` is across samples: signal (mean) over noise
+(variance). The aggregation is by **mean** (never sum, which is incomparable
+across architectures with different ``P``), over the unbiased variance
+(``÷ M-1``), after dropping "dead" parameters (dead ReLUs, zero-init biases) by
+a threshold on ``‖g_j‖``. **median** and **p95** are also reported: the heavy
+tail of ``r_j`` biases the mean. Shares the per-sample ∇L sweep with
+``m_coherence`` and ``stiffness``.
 """
 
 from __future__ import annotations

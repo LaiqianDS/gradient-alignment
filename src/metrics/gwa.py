@@ -3,8 +3,8 @@
 The per-sample score is the cosine similarity ``gamma(x_i) = cos(g_i, w_T)``
 between the per-sample gradient and the final classifier weight vector ``w_T``.
 The paper's convention is ``g = -∇L``; this pipeline operates on the RAW ∇L, so
-every cosine sign is flipped relative to the paper — we keep the raw values
-(ordering and magnitude are preserved) and do not negate (see ``compute``).
+every cosine sign is flipped relative to the paper. The raw values are kept and
+never negated (ordering and magnitude are preserved either way).
 
 The per-epoch aggregate corrects for excess kurtosis,
 
@@ -84,9 +84,7 @@ class GwaMetric:
         wn = w / w.norm().clamp_min(EPS)
 
         # cos(g_i, w) per sample, accumulated over streamed chunks (the head's
-        # weight grads are tiny, so only the [M] cosines survive). We keep raw
-        # ∇L: the paper's g = -∇L flips the sign, but negating w (or g) here would
-        # only flip every gamma in unison, leaving order/magnitude unchanged.
+        # weight grads are tiny, so only the [M] cosines survive).
         chunks = []
         for grads, _ in iter_per_sample_grad_dicts(model, X, y, loss_fn):
             g = grads[lname + ".weight"].flatten(start_dim=1)  # [c, W], bias excluded

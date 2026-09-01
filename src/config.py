@@ -5,7 +5,7 @@ One run = one :class:`Config`. Precedence, lowest to highest::
     Config defaults  <  --config FILE.yaml  <  individual --flag overrides
 
 Scalar knobs are exposed as CLI flags; the list/tuple knob (``windows``)
-is YAML-only to keep the parser small.
+is YAML-only.
 """
 
 from __future__ import annotations
@@ -35,15 +35,13 @@ class Config:
     seed: int = 42
 
     # --- metric probing -------------------------------------------------
-    # probe_size is M: the per-sample gradient batch. It is a *scientific* knob
-    # (it sets the estimator's sample count), so it stays fixed across the grid.
+    # probe_size is M, the per-sample gradient batch: it sets the estimator's
+    # sample count, and stays fixed across the grid (see FIXED_KNOBS).
     probe_size: int = 256
 
-    # chunk_size is rows-per-chunk for the streamed per-sample-grad sweeps. It is
-    # *operational only* — the streamed statistics are chunk-invariant, so it
-    # never enters the science; it just caps the GPU peak at [chunk_size, P]
-    # instead of the full [M, P] Jacobian. Lower it on a tight GPU. (Deliberately
-    # NOT in FIXED_KNOBS: it is not a confound axis.)
+    # chunk_size is rows-per-chunk for the streamed per-sample-grad sweeps. The
+    # streamed statistics are chunk-invariant, so it only caps the GPU peak at
+    # [chunk_size, P] instead of the full [M, P] Jacobian. Lower it on a tight GPU.
     chunk_size: int = 32
 
     # --- efficiency target ----------------------------------------------
@@ -78,7 +76,7 @@ def parse_config(argv: list[str] | None = None) -> Config:
     file_data: dict = {}
     if known.config:
         file_data = yaml.safe_load(Path(known.config).read_text()) or {}
-    base = Config(**file_data)  # defaults overlaid with YAML
+    base = Config(**file_data)
 
     # Each CLI flag defaults to the YAML/default value, so unset flags
     # leave the YAML choice untouched.
@@ -110,9 +108,8 @@ def config_to_dict(cfg: Config) -> dict:
 
 # ---------------------------------------------------------------------------
 # Experiment-matrix definition: the static axes of the full grid swept by
-# ``run_matrix.py``. Kept here, beside the per-run Config, so the launcher,
-# the tests, and downstream analysis import one shared definition rather than
-# duplicating the values.
+# ``run_matrix.py``. The launcher, the tests and the analysis side import these
+# constants instead of duplicating the values.
 # ---------------------------------------------------------------------------
 
 DATASETS = ("mnist", "cifar10", "cifar100", "tiny_imagenet")
@@ -124,16 +121,14 @@ SEEDS = (0, 1, 2, 3, 4)
 # run, independent of the run seed.
 SPLIT_SEED = 42
 
-# Per-optimizer learning-rate grids: 8 half-decade points each. Adam's grid is
-# shifted ~10x below SGD's because its effective step is pre-scaled by 1/sqrt(v).
+# Per-optimizer learning-rate grids: 8 half-decade points each.
 LR_GRID = {
     "sgd": (3e-4, 1e-3, 3e-3, 1e-2, 3e-2, 1e-1, 3e-1, 1.0),
     "adam": (3e-5, 1e-4, 3e-4, 1e-3, 3e-3, 1e-2, 3e-2, 1e-1),
 }
 
-# Classes per dataset: read by data.py to build DATASET_SPECS, and by the
-# analysis side, where 1/K is the chance-accuracy floor a run that learned
-# nothing sits on.
+# Classes per dataset: read by data.py to build DATASET_SPECS, and by
+# efficiency.py, where 1/K is the chance-accuracy floor.
 NUM_CLASSES = {
     "mnist": 10,
     "cifar10": 10,
@@ -141,11 +136,7 @@ NUM_CLASSES = {
     "tiny_imagenet": 200,
 }
 
-# Per-dataset epoch budget + the val-accuracy level for epochs-to-threshold.
-# Calibrated from the 2026-06-17 pilot: budgets cover the val-loss plateau plus
-# an overfitting horizon; thresholds sit below each dataset's best-tuned ceiling
-# so the strong models cross uncensored (cifar10 0.75->0.65 recovers cnn,
-# tiny_imagenet 0.25->0.20 widens cnn's margin; cifar100/tiny budgets trimmed).
+# Per-dataset epoch budget and the val-accuracy level for epochs-to-threshold.
 DATASET_BUDGET = {
     "mnist": {"epochs": 20, "threshold_acc": 0.97},
     "cifar10": {"epochs": 40, "threshold_acc": 0.65},
@@ -153,9 +144,9 @@ DATASET_BUDGET = {
     "tiny_imagenet": {"epochs": 40, "threshold_acc": 0.20},
 }
 
-# Knobs held fixed across every cell -- no confound axes (matrix decision).
-# These mirror the Config defaults on purpose: writing them explicitly into each
-# generated cell YAML pins the frozen design even if a Config default later drifts.
+# Knobs held fixed across every cell. They mirror the Config defaults on
+# purpose: writing them into each generated cell YAML pins the design even if a
+# Config default later drifts.
 FIXED_KNOBS = {
     "batch_size": 128,
     "momentum": 0.9,

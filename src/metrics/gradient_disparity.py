@@ -2,9 +2,9 @@
 
 The metric is the mean ℓ2 distance ``D_{i,j} = ‖g_i − g_j‖₂`` between the
 gradients of independent mini-batches, averaged over the ``C(s, 2)`` unordered
-pairs with ``s = 5``. It derives from a PAC-Bayes
-bound where ``KL(Q_1‖Q_2) = ½ (γ²/σ²) ‖g_1 − g_2‖₂²``, so the raw distance must
-*not* be normalised by ``‖g‖`` — doing so severs the theoretical link.
+pairs with ``s = 5``. It derives from a PAC-Bayes bound where
+``KL(Q_1‖Q_2) = ½ (γ²/σ²) ‖g_1 − g_2‖₂²``, so the raw distance must NOT be
+normalised by ``‖g‖``.
 
 Emits the global scalar ``gd/scalar`` only.
 """
@@ -23,7 +23,7 @@ def _gd_core(batch_grads: torch.Tensor) -> dict[str, float]:
     ``batch_grads`` is ``[s, P]`` (one flat gradient per batch). ``torch.pdist``
     gives the ``C(s, 2)`` pairwise distances directly on CUDA/CPU; MPS lacks that
     kernel (``aten::_pdist_forward``), so there the same pairs are enumerated by
-    hand. No ``‖g‖`` normalisation: that would break the paper's PAC-Bayes link.
+    hand.
     """
     if batch_grads.device.type == "mps":
         s = batch_grads.shape[0]

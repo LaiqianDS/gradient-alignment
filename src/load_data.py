@@ -1,9 +1,8 @@
 """Download the auto-downloadable datasets used by the pipeline to data/.
 
-The torchvision dataset classes and the on-disk path convention come from
-``data.py`` (its ``_TV_CLASSES`` map), so this bootstrap script never re-lists
-which datasets exist. Tiny ImageNet is not auto-downloadable and must be placed
-under ``data/tiny-imagenet-200/`` by hand.
+The dataset classes and the on-disk path convention come from ``data.py``
+(its ``_TV_CLASSES`` map). Tiny ImageNet is not auto-downloadable and must be
+placed under ``data/tiny-imagenet-200/`` by hand.
 """
 
 import torchvision.datasets as datasets

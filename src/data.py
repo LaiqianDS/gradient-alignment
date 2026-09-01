@@ -17,12 +17,8 @@ DATA_PATH = ROOT / "data"
 # Per-dataset spec: num_classes, in_shape=(C, H, W), normalization mean/std,
 # val_size = the dataset's conventional validation size, carved out of the
 # official train split (none of these datasets ships a labelled val).
-# mean/std are the per-channel pixel statistics of the *training* split, in the
-# [0, 1] range produced by ToTensor (population std over all pixels). Recomputing
-# them from scratch matches these constants to within 5e-5 for mnist/cifar10/
-# cifar100; tiny_imagenet matches to ~6e-4 (mean exact, std slightly lower across
-# all channels), the looser tolerance being consistent with JPEG-decoding
-# differences between libjpeg/Pillow versions.
+# mean/std are the per-channel pixel statistics of the training split, in the
+# [0, 1] range produced by ToTensor (population std over all pixels).
 DATASET_SPECS: dict[str, dict] = {
     "mnist": {
         "num_classes": NUM_CLASSES["mnist"],
@@ -71,7 +67,7 @@ def _check_dataset(dataset: str) -> dict:
 
 
 def _build_transform(spec: dict) -> transforms.Compose:
-    """ToTensor + Normalize. No augmentation (determinism-sensitive study)."""
+    """ToTensor + Normalize, no augmentation."""
     return transforms.Compose(
         [transforms.ToTensor(), transforms.Normalize(spec["mean"], spec["std"])]
     )
@@ -83,8 +79,8 @@ class _TinyImageNetVal(Dataset):
     The downloaded val/ is flat (val/images/*.JPEG + val_annotations.txt), not
     the per-class layout ImageFolder expects, so ImageFolder would map every
     image to a single class. This reads the annotations and labels each image
-    with the *train* ImageFolder's class_to_idx, so train and test share class
-    indices (any other ordering, e.g. wnids.txt, would permute the labels).
+    with the train ImageFolder's class_to_idx, so train and test share class
+    indices; any other ordering (wnids.txt, say) would permute the labels.
     """
 
     def __init__(self, val_root: Path, class_to_idx: dict[str, int], transform):
@@ -226,7 +222,10 @@ def build_probe(
 
 
 def build_train_eval_loader(train_set: Subset, batch_size: int, size: int) -> DataLoader:
-    """Fixed class-stratified train subset (test-sized, SPLIT_SEED so it is identical across runs) for the gap's train term."""
+    """Class-stratified train subset for the gap's train term.
+
+    Drawn with SPLIT_SEED, so it is identical across runs.
+    """
     targets = torch.as_tensor(train_set.dataset.targets)[train_set.indices]
     _, eval_idx = stratified_split_indices(targets, size, SPLIT_SEED)
     return DataLoader(

@@ -1,20 +1,16 @@
 """Run-level diagnostics: which runs are data points, and which are failures.
 
-The sibling of ``analysis.py``. That module's unit is the metric column, read
+The sibling of ``analysis.py``: that module's unit is the metric column, read
 from ``trajectory.parquet``; this one's unit is the run and the cell, read from
 ``summary.json``. Its subject is the six efficiency indicators that
-``train.py::efficiency_summary`` writes, and the first question about them is
-for which runs they mean anything at all.
+``train.py::efficiency_summary`` writes.
 
 A run whose training diverged or collapsed still has numbers in every one of
-those six fields, so nothing downstream can tell a measurement from a wreck
-without this census. It labels and counts; it never drops a run. Deciding which
-labels enter a correlation is method, and method is not phase A.
+those six fields, so this census is what tells a measurement from a wreck. It
+labels and counts; it never drops a run.
 
-Two readings of the same failure are kept apart on purpose, because conflating
-them is what made four scattered counts of the same matrix disagree: a run can
-be broken in *some* epoch or in *every* epoch. The ``*_frac`` columns carry the
-extent, so ``frac > 0`` and ``frac == 1`` are both askable.
+A run can be broken in some epoch or in every epoch. The ``*_frac`` columns
+carry the extent, so ``frac > 0`` and ``frac == 1`` are both askable.
 """
 
 from __future__ import annotations
@@ -28,17 +24,16 @@ from analysis import REPORTS_DIR, SPECS, load_summaries, load_trajectories
 from config import DATASET_BUDGET, NUM_CLASSES
 
 # How far above the chance floor a run must reach to count as having learned
-# anything. A criterion of ours, not a property of the data: it lives here and
-# not in config.py, which holds the frozen design.
+# anything.
 CHANCE_MARGIN = 1.25
 
 # The gradient metrics and the baseline, excluding the run's own learning curve:
 # a NaN here means the instrumentation had nothing to measure.
 _MEASURED = tuple(s.key for s in SPECS if s.family != "monitor")
 
-# The six efficiency indicators, VD1 to VD6 in design order (1 - Diseño
-# §Variables dependientes). VD1 is the only censored one: a run that never
-# reaches its dataset's accuracy threshold gets no value, never the budget.
+# The six efficiency indicators, VD1 to VD6 in design order. VD1 is the only
+# censored one: a run that never reaches its dataset's accuracy threshold gets
+# no value, never the budget.
 VD_FIELDS = (
     "epochs_to_threshold",
     "val_loss_auc",
@@ -64,13 +59,11 @@ def run_health(
 ) -> pd.DataFrame:
     """One row per run: how far it got, what broke, and for how long.
 
-    Outcome and cause are two columns, not one, because a run can show a failure
-    signature and still be a fine data point. ``learned`` is the outcome: did the
+    Outcome and cause are separate columns. ``learned`` is the outcome: did the
     run ever beat ``margin`` times chance. ``failure`` is the signature seen in
     any epoch. ``diverged``: the loss itself went NaN, so the gradients did too.
-    ``collapsed``: the loss stayed finite but the hidden activations died, which
-    shows up as ``gwa/score_mean`` being exactly 0.0 (an exact float zero does
-    not occur by chance). ``none``: neither.
+    ``collapsed``: the loss stayed finite but the hidden activations died, seen
+    as ``gwa/score_mean`` exactly 0.0. ``none``: neither.
     """
     traj = load_trajectories(report_dir)
     per_run = traj.groupby("run_name")
@@ -97,12 +90,7 @@ def run_health(
 
 def health_counts(health: pd.DataFrame) -> pd.DataFrame:
     """Per failure signature: how many runs show it, how many of those never
-    learned, and how many carried it in every epoch instead of in some.
-
-    That last column is the one that reconciles the counts in the vault: the
-    same matrix reads differently under "broken at some point" and "broken all
-    run long", and a count that does not say which is unreproducible.
-    """
+    learned, and how many carried it in every epoch instead of in some."""
     return (
         health.assign(whole_run=health["nan_frac"] == 1.0)
         .groupby("failure")
@@ -120,19 +108,16 @@ def vd_status(
     report_dir: str | Path = REPORTS_DIR,
     margin: float = CHANCE_MARGIN,
 ) -> pd.DataFrame:
-    """One row per run *and* dependent variable, in one of three states.
+    """One row per run and dependent variable, in one of three states.
 
     ``ok``: the value is there and is a measurement. ``absent``: it is not there.
-    ``suspect``: it is there and is not a measurement, which happens in exactly
-    one known place. A diverged run ends with NaN weights, and ``argmax`` over
-    NaN logits always returns index 0, so its test accuracy is the frequency of
-    class 0 and its accuracy gap is near zero for the same reason. The loss-side
-    fields go honestly absent instead, because NaN propagates through arithmetic
-    and does not survive an ``argmax``.
+    ``suspect``: it is there and is not a measurement. A diverged run ends with
+    NaN weights, and ``argmax`` over NaN logits always returns index 0, so its
+    test accuracy is the frequency of class 0 and its accuracy gap is near zero
+    for the same reason. The loss-side fields go absent instead, because NaN
+    propagates through arithmetic and does not survive an ``argmax``.
 
-    Three states and not two because ``final_test_acc`` and ``final_gap_acc`` are
-    the only columns where "nothing is missing" misleads. Nothing is dropped
-    here: phase A signals and phase B interprets (decision of 2026-08-29).
+    Nothing is dropped here.
     """
     health = run_health(report_dir, margin)
     wide = load_summaries(report_dir)[["run_name", *VD_FIELDS]]
@@ -149,12 +134,11 @@ def vd_status(
 
 
 def availability_by_cell(status: pd.DataFrame) -> pd.DataFrame:
-    """The map: per cell and dependent variable, how many runs carry a usable value.
+    """Per cell and dependent variable, how many runs carry a usable value.
 
-    This is the n every later correlation actually speaks with. The suspects are
-    not in it and are not lost either: they are the diverged runs, so
-    :func:`health_by_cell`'s ``n_diverged`` counts them cell by cell, and they can
-    only ever affect the two accuracy-derived columns.
+    Suspect values are excluded. They are the diverged runs, counted cell by
+    cell by :func:`health_by_cell`'s ``n_diverged``, and they can only ever
+    affect the two accuracy-derived columns.
     """
     return (
         status.assign(usable=status["status"] == "ok")
@@ -168,17 +152,13 @@ def availability_by_cell(status: pd.DataFrame) -> pd.DataFrame:
 def vd1_information(status: pd.DataFrame) -> pd.DataFrame:
     """How much of VD1 survives censoring, counted in pairs and not in runs.
 
-    A censored run is not a lost one. It cannot be ordered against another
-    censored run, but it can be ordered against every run that crossed, because
-    it took longer than the budget. What a rank statistic consumes is comparable
-    pairs, so the information a cell keeps is ``C(k,2) + k*(n-k)`` out of
-    ``C(n,2)``, not ``k`` out of ``n``: 15 crossings out of 40 keep 61.5% of the
-    pairs, not 37.5%.
+    A censored run cannot be ordered against another censored run, but it can be
+    ordered against every run that crossed, since it took longer than the budget.
+    A rank statistic consumes comparable pairs, so ``pair_frac`` is
+    ``C(k,2) + k*(n-k)`` over ``C(n,2)``, with ``k`` crossings out of ``n`` runs.
 
     ``median_short_by`` is how far the censored runs of the cell ended below the
-    threshold. It separates the two censorings without inventing a criterion: a
-    run a hair short ran out of budget, and a cell whose whole population sits
-    far below it was never going to cross at all.
+    threshold.
     """
     vd1 = status[status["vd"] == "epochs_to_threshold"].copy()
     vd1["crossed"] = vd1["status"] == "ok"
@@ -212,7 +192,7 @@ def health_by_cell(health: pd.DataFrame) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------------------
-# Console report -- `uv run python src/efficiency.py [report_dir]`.
+# Console report: `uv run python src/efficiency.py [report_dir]`.
 # ---------------------------------------------------------------------------
 
 def _main(report_dir: str | Path = REPORTS_DIR) -> None:

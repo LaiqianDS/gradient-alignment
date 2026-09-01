@@ -10,16 +10,16 @@ This script is the single source of truth for that grid. It does three things:
 * ``--init``    write any missing ``experiments/<dataset>_<model>_<optimizer>.yaml``
                 cell config (per-dataset epoch budget + frozen knobs). Existing
                 files are left untouched, so hand-edits survive.
-* ``--status``  print a done/pending table. A run is *done* iff its
-                ``reports/<run_name>/summary.json`` exists -- train.py writes that
+* ``--status``  print a done/pending table. A run is done iff its
+                ``reports/<run_name>/summary.json`` exists: train.py writes that
                 file last, so its presence marks a fully completed run.
-* (default)     run every *pending* grid point as an isolated subprocess, skipping
+* (default)     run every pending grid point as an isolated subprocess, skipping
                 the ones already done. Idempotent: re-run it to resume.
 
 Learning rate and seed are the sweep axes and are NOT stored in the cell YAMLs;
 they are injected per run via ``--lr``/``--seed`` overrides. The run name is fully
-determined by (model, dataset, optimizer, lr, seed) -- mirroring
-``train.default_run_name`` -- so the launcher can predict each output directory
+determined by (model, dataset, optimizer, lr, seed), mirroring
+``train.default_run_name``, so the launcher can predict each output directory
 and check it without any external bookkeeping.
 
 Examples::
@@ -65,8 +65,9 @@ def cell_path(dataset: str, model: str, optimizer: str) -> Path:
 
 
 def run_name_for(dataset: str, model: str, optimizer: str, lr: float, seed: int) -> str:
-    """Deterministic run name -- mirrors ``train.default_run_name`` exactly so the
-    launcher's predicted output dir matches what train.py would write."""
+    """Deterministic run name. Must stay identical to
+    ``train.default_run_name``, or the launcher's predicted output directory
+    stops matching what train.py writes."""
     return f"{model}_{dataset}_{optimizer}_lr{lr}_seed{seed}"
 
 
@@ -145,13 +146,10 @@ def build_command(run: Run) -> list[str]:
 def child_env() -> dict[str, str]:
     """Environment for a training subprocess (a copy of ours plus one knob).
 
-    Enables the CUDA caching allocator's ``expandable_segments`` so it can grow
-    segments instead of fragmenting: the per-sample gradient sweeps on the
-    fc x tiny_imagenet cell otherwise hit an OOM ("X GiB free but cannot
-    allocate Y") even though most of the reserved pool is idle. This is an
-    allocator *strategy* only -- it changes how GPU memory is requested, never
-    what is computed, so metric values are unaffected. A value already set in
-    the shell wins (``setdefault``), so it stays overridable without code edits.
+    Enables the CUDA caching allocator's ``expandable_segments`` so it grows
+    segments instead of fragmenting. Allocator strategy only: it changes how GPU
+    memory is requested, never what is computed. A value already set in the
+    shell wins (``setdefault``).
     """
     env = dict(os.environ)
     env.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
@@ -215,8 +213,6 @@ def execute(runs: list[Run], dry_run: bool = False, limit: int | None = None) ->
         if failed:
             print(f"[run_matrix] FAILED: {run.name} (left pending)")
             failures.append(run)
-        # No ETA on purpose: cell costs span ~35x, so an average-based estimate
-        # would be confidently wrong until the batch is deep into one cell.
         print(f"[run_matrix] {fmt_duration(run_elapsed)} this run | "
               f"{fmt_duration(time.monotonic() - batch_started)} elapsed, "
               f"{i}/{len(selected)} of this batch")

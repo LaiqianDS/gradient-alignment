@@ -49,7 +49,7 @@ def test_matches_naive_pairwise_definition():
 
 def test_anticorrelated_grads_alpha_zero():
     # {v, -v}: S = 0 so alpha = 0 (Theorem 1: alpha = 0 iff the mean gradient
-    # vanishes). The true range is [0, m] — 1 is the orthogonal *limit*, not a
+    # vanishes). The true range is [0, m]: 1 is the orthogonal *limit*, not a
     # lower bound (the paper observes values below 1 near 100% train accuracy).
     v = torch.randn(16, generator=torch.Generator().manual_seed(0))
     G = torch.stack([v, -v])

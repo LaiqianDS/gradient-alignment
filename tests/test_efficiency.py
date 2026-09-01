@@ -57,10 +57,10 @@ def _write_run(
 
 
 def _diverged(root, name: str, **kw) -> None:
-    """A run that blew up: the loss went NaN and never came back.
+    """A run whose loss went NaN and never came back.
 
-    Its loss-side VDs go absent because NaN propagates, and its two
-    accuracy-derived VDs keep a number that measures nothing.
+    Its loss-side VDs go absent because NaN propagates; its two accuracy-derived
+    VDs keep a number.
     """
     _write_run(
         root, name,
@@ -125,9 +125,8 @@ def test_collapse_is_the_exact_zero_and_nothing_near_it(tmp_path):
 
 
 def test_a_run_can_break_and_learn_anyway(tmp_path):
-    # measured in the matrix: resnet18_cifar100_sgd_lr1.0_seed2 collapses in 5
-    # of its 40 epochs and still ends at 24.7x chance. Outcome and cause are
-    # separate columns so this run is not filed as a wreck.
+    # measured: resnet18_cifar100_sgd_lr1.0_seed2 collapses in 5 of its 40
+    # epochs and still ends at 24.7x chance
     _write_run(
         tmp_path, "recovered",
         best_val_acc=0.7,
@@ -141,7 +140,7 @@ def test_a_run_can_break_and_learn_anyway(tmp_path):
 
 
 def test_partial_and_whole_run_failures_are_told_apart(tmp_path):
-    # the distinction that made four counts of the same matrix disagree
+    # a failure in some epochs and one in every epoch must read differently
     _write_run(
         tmp_path, "whole",
         best_val_acc=0.1,
@@ -175,9 +174,9 @@ def test_a_healthy_run_carries_no_signature(tmp_path):
 
 
 def test_a_diverged_run_reports_accuracy_it_did_not_measure(tmp_path):
-    # the whole reason the map has three states and not two: after a divergence
-    # the loss-side fields go honestly absent, but argmax over NaN logits still
-    # returns a class, so the two accuracy-derived VDs come back with a number
+    # after a divergence the loss-side fields go absent, but argmax over NaN
+    # logits still returns a class, so the two accuracy-derived VDs come back
+    # with a number
     _diverged(tmp_path, "boom")
     _write_run(tmp_path, "fine")
     status = E.vd_status(tmp_path).set_index(["run_name", "vd"])["status"]
@@ -210,9 +209,7 @@ def test_the_map_counts_only_values_that_are_measurements(tmp_path):
 
 
 def test_censoring_costs_less_in_pairs_than_in_runs(tmp_path):
-    # 2 crossings out of 4 keep C(2,2) + 2*2 = 5 of the 6 pairs. Counted in runs
-    # the cell looks half empty; counted in the pairs a rank statistic actually
-    # consumes, it keeps five sixths
+    # 2 crossings out of 4 keep C(2,2) + 2*2 = 5 of the 6 pairs
     for i in range(2):
         _write_run(tmp_path, f"crossed{i}", epochs_to_threshold=3)
     for i in range(2):
@@ -224,8 +221,8 @@ def test_censoring_costs_less_in_pairs_than_in_runs(tmp_path):
 
 
 def test_distance_to_the_threshold_separates_the_two_censorings(tmp_path):
-    # cifar10's threshold is 0.65: one run stopped a hair short, the other was
-    # never going to get there. Both are censored and they do not mean the same
+    # cifar10's threshold is 0.65: both runs are censored, one a hair short of
+    # it and one far below
     _write_run(tmp_path, "a_hair_short", epochs_to_threshold=None, best_val_acc=0.64)
     _write_run(tmp_path, "nowhere_near", epochs_to_threshold=None, best_val_acc=0.10)
     info = E.vd1_information(E.vd_status(tmp_path)).iloc[0]

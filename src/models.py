@@ -2,9 +2,9 @@
 
 Three families, all ending in an ``nn.Linear`` classifier head so downstream
 gradient metrics can locate the head as the last ``nn.Linear`` in the network:
-  * ``fc``       -- MLP (Faghri et al.): flatten -> 2 hidden layers -> logits.
-  * ``cnn``      -- 3-block conv net (Fort et al.), adaptive-pooled to any HxW.
-  * ``resnet18`` -- torchvision ResNet-18 with a small-image stem (CIFAR style).
+  * ``fc``:       MLP (Faghri et al.): flatten -> 2 hidden layers -> logits.
+  * ``cnn``:      3-block conv net (Fort et al.), adaptive-pooled to any HxW.
+  * ``resnet18``: torchvision ResNet-18 with a small-image stem (CIFAR style).
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ import torch
 import torch.nn as nn
 import torchvision
 
-from config import MODELS  # single source of truth for the model-name axis
+from config import MODELS
 
 
 def _build_fc(in_shape: tuple[int, int, int], num_classes: int) -> nn.Module:

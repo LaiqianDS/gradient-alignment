@@ -31,7 +31,7 @@ def test_command_overrides_epochs_and_isolates_output(tmp_path, monkeypatch):
     monkeypatch.setattr(run_pilot, "PILOT_DIR", tmp_path)
     cmd = run_pilot.build_command(run_pilot.PilotRun("cifar10", "cnn", "sgd"))
 
-    # Doubled budget, center LR, seed 0 -- and output kept away from reports/,
+    # Doubled budget, center LR, seed 0, and output kept away from reports/,
     # where run_matrix would mistake the pilot for a finished grid run.
     assert cmd[cmd.index("--epochs") + 1] == "80"
     assert cmd[cmd.index("--lr") + 1] == "0.01"
@@ -51,24 +51,22 @@ def test_is_done_tracks_summary_json_in_pilot_dir(tmp_path, monkeypatch):
 
 
 def test_calibration_table_reads_run_facts_from_disk(tmp_path, monkeypatch):
-    """La calibración edita `DATASET_BUDGET` y el umbral, así que derivar de la
-    config de hoy describiría runs que nunca ocurrieron. Dos hechos que tienen
-    que salir del disco: las épocas que el run corrió de verdad, y el cruce del
-    umbral **vigente** recomputado sobre la curva, no el `epochs_to_threshold`
-    que se guardó con el umbral de entonces."""
+    """Two facts must come from disk, not from the current config: the epochs
+    the run really did, and the crossing of the *current* threshold recomputed
+    on the curve rather than the stored ``epochs_to_threshold``."""
     monkeypatch.setattr(run_pilot, "PILOT_DIR", tmp_path)
     run = run_pilot.PilotRun("mnist", "fc", "sgd")
     d = tmp_path / run.name
     d.mkdir()
 
-    # 7 épocas: ni el presupuesto candidato (20) ni el doblado (40).
+    # 7 epochs: neither the candidate budget (20) nor the doubled one (40).
     pd.DataFrame({
         "epoch": range(7),
         "val_loss": [2.0, 1.4, 1.0, 0.8, 0.7, 0.65, 0.64],
         "val_acc": [0.90, 0.92, 0.94, 0.96, 0.98, 0.99, 0.995],
     }).to_parquet(d / "trajectory.parquet")
     (d / "summary.json").write_text(json.dumps({
-        "epochs_to_threshold": 999,      # calculado con otro umbral: no se usa
+        "epochs_to_threshold": 999,      # computed with another threshold: unused
         "total_seconds": 600.0, "metric_seconds": 150.0, "num_params": 1000,
         "best_val_acc": 0.995, "final_test_acc": 0.98,
         "final_test_f1_macro": 0.98, "final_test_loss": 0.1, "final_gap_acc": 0.01,
@@ -77,16 +75,15 @@ def test_calibration_table_reads_run_facts_from_disk(tmp_path, monkeypatch):
     row = run_pilot.calibration_table([run]).iloc[0]
     assert row["ran_epochs"] == 7
     assert row["candidate_epochs"] == DATASET_BUDGET["mnist"]["epochs"]
-    # La curva suavizada cruza 0,97 en el índice 4, es decir la época 5.
+    # The smoothed curve crosses 0.97 at index 4, that is epoch 5.
     assert row["threshold_epoch"] == 5
     assert row["metric_frac"] == 0.25
     assert bool(row["test_fields_valid"]) is True
 
 
 def test_calibration_table_flags_the_corrupt_tiny_test_fields():
-    """Los summaries de Tiny anteriores al fix se auto-declaran con
-    `_tiny_test_note`; la tabla lo propaga para que quien la lea no cite esos
-    campos de test/gap como si fueran buenos."""
+    """A summary carrying ``_tiny_test_note`` must come out with
+    ``test_fields_valid`` False."""
     runs = [r for r in run_pilot.enumerate_pilots() if r.dataset == "tiny_imagenet"]
     table = run_pilot.calibration_table(runs)
     if table.empty:
@@ -95,9 +92,9 @@ def test_calibration_table_flags_the_corrupt_tiny_test_fields():
 
 
 def test_print_report_marks_the_invalid_test_fields(tmp_path, monkeypatch, capsys):
-    """La marca solo cumple su función si llega al texto que lee la persona, no
-    solo a la tabla. El run que se auto-declara corrupto sale con `*` y con su
-    nota al pie; el sano, sin marca."""
+    """The mark must reach the printed text, not only the table: the run that
+    declares itself invalid prints a `*` and its footnote, the sound one does
+    not."""
     monkeypatch.setattr(run_pilot, "PILOT_DIR", tmp_path)
     curva = {"epoch": range(3), "val_loss": [2.0, 1.0, 0.9],
              "val_acc": [0.90, 0.98, 0.99]}
@@ -126,9 +123,9 @@ def test_print_report_marks_the_invalid_test_fields(tmp_path, monkeypatch, capsy
 
 
 def test_testfix_table_reads_its_own_run_not_the_pilots(tmp_path, monkeypatch):
-    """La referencia es otro run, con su propio presupuesto. Sus épocas salen de
-    su trayectoria, ni de la del pilot ni de `DATASET_BUDGET`. Y un run sin
-    `testfix_40ep/` no aparece en la tabla."""
+    """The reference is a different run with its own budget: its epochs come
+    from its own trajectory, not from the pilot's and not from
+    ``DATASET_BUDGET``. A run with no ``testfix_40ep/`` is absent."""
     monkeypatch.setattr(run_pilot, "PILOT_DIR", tmp_path)
     con = run_pilot.PilotRun("tiny_imagenet", "cnn", "sgd")
     sin = run_pilot.PilotRun("tiny_imagenet", "fc", "sgd")
@@ -144,14 +141,14 @@ def test_testfix_table_reads_its_own_run_not_the_pilots(tmp_path, monkeypatch):
     }))
 
     table = run_pilot.testfix_table([con, sin])
-    assert list(table["model"]) == ["cnn"]        # el que no tiene referencia, fuera
-    assert table["ran_epochs"].iloc[0] == 11      # 11: ni el 40 del presupuesto
-    assert table["final_test_acc"].iloc[0] == 0.25  # ni el 80 del pilot
+    assert list(table["model"]) == ["cnn"]        # the one with no reference is out
+    assert table["ran_epochs"].iloc[0] == 11      # 11, not the budget's 40
+    assert table["final_test_acc"].iloc[0] == 0.25  # nor the pilot's 80
 
 
 def test_print_report_keeps_the_testfix_reference_apart(tmp_path, monkeypatch, capsys):
-    """El bloque solo aparece si la referencia existe, y cada fila declara el
-    presupuesto que corrió, que no es el de la fila de arriba."""
+    """The block appears only when the reference exists, and each row declares
+    the budget it ran, which is not the one of the row above."""
     monkeypatch.setattr(run_pilot, "PILOT_DIR", tmp_path)
     run = run_pilot.PilotRun("mnist", "fc", "sgd")
     d = tmp_path / run.name
@@ -165,7 +162,7 @@ def test_print_report_keeps_the_testfix_reference_apart(tmp_path, monkeypatch, c
     }))
 
     run_pilot.print_report([run])
-    assert "testfix" not in capsys.readouterr().out   # sin referencia, sin bloque
+    assert "testfix" not in capsys.readouterr().out   # no reference, no block
 
     fix = d / run_pilot.TESTFIX_DIR
     fix.mkdir()
