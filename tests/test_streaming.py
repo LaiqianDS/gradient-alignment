@@ -1,14 +1,10 @@
 """Chunk-invariance of the streamed per-sample-grad sweeps.
 
-The five metrics that need the dense ``[M, P]`` Jacobian (``gns_simple``,
-``gsnr``, ``m_coherence``, ``stiffness``, ``gradient_confusion``) plus ``gwa``
-stream the probe in row-chunks so the matrix is never materialised at once
-(``primitives.stream_grad_moments`` / ``stream_gram`` / the dict iterator). These
-tests pin the contract that makes that refactor safe:
+Pins two things:
 
   * the streamed primitives reproduce the full-matrix moments / Gram, and
-  * each metric's ``compute()`` equals its tested ``_core`` over the full matrix
-    AND is invariant to the chunk size (the operational knob never moves a value).
+  * each metric's ``compute()`` equals its ``_core`` over the full matrix AND
+    is invariant to the chunk size, so that knob never moves a logged value.
 """
 
 import pytest
@@ -46,7 +42,7 @@ def probe():
 
 @pytest.fixture(autouse=True)
 def _restore_chunk_default():
-    """Each test mutates the process-wide chunk default; restore it afterwards."""
+    """Restore the process-wide chunk default, which these tests mutate."""
     saved = primitives.DEFAULT_CHUNK_SIZE
     yield
     primitives.set_chunk_size(saved)
@@ -109,8 +105,8 @@ def test_compute_is_chunk_invariant(probe, metric, _reference):
 
 
 def test_gwa_compute_is_chunk_invariant(probe):
-    # gwa has no full-matrix _core to diff against (its math is in _gwa_aggregate);
-    # pin chunk-invariance of the streamed cosines instead.
+    # gwa has no full-matrix _core to diff against, so only chunk-invariance of
+    # the streamed cosines is pinned.
     model, X, y, lf, _G = probe
     primitives.set_chunk_size(40)
     from metrics.gwa import METRIC as GWA
@@ -127,8 +123,8 @@ def test_gwa_compute_is_chunk_invariant(probe):
 
 @pytest.mark.parametrize("chunk", CHUNKS)
 def test_stream_shared_matches_separate_primitives(probe, chunk):
-    # The single shared pass must reproduce, product for product, what the
-    # per-metric stream_grad_moments / stream_gram paths compute on their own.
+    # Product for product, the shared pass must equal stream_grad_moments and
+    # stream_gram run separately.
     model, X, y, lf, _G = probe
     sweep = stream_shared(model, X, y, lf, chunk_size=chunk)
     S, Q, M = stream_grad_moments(model, X, y, lf, chunk_size=chunk)
@@ -146,8 +142,8 @@ _SHARED_METRICS = [GNS, GSNR, MCOH, STIFF, CONF, GWA]
 
 @pytest.mark.parametrize("metric", _SHARED_METRICS)
 def test_shared_reduce_matches_standalone_compute(probe, metric):
-    # The shared-sweep reduce() must equal the metric's own compute(), same keys
-    # and same values, so the measure() optimization cannot move a logged value.
+    # reduce() must equal compute(), same keys and same values, so which path
+    # measure() takes cannot move a logged value.
     model, X, y, lf, _G = probe
     primitives.set_chunk_size(7)  # force genuine multi-chunk streaming on both paths
     sweep = stream_shared(model, X, y, lf)
@@ -159,8 +155,8 @@ def test_shared_reduce_matches_standalone_compute(probe, metric):
 
 
 def test_set_chunk_size_is_read_live_not_frozen():
-    # Regression: a function default would freeze the value at import; the
-    # streamers must resolve chunk_size=None against the live module global.
+    # A function default would freeze the value at import; the streamers must
+    # resolve chunk_size=None against the live module global.
     saved = primitives.DEFAULT_CHUNK_SIZE
     primitives.set_chunk_size(3)
     assert primitives._resolve_chunk(None) == 3

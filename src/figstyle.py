@@ -1,7 +1,7 @@
-"""Figure style for the memoria: body-matched text, final size, no LaTeX scaling.
+"""Shared matplotlib style.
 
-Figures are built at the width they will occupy in the PDF, so ``\\includegraphics``
-never scales them and figure text keeps the size set here. Colour never carries
+Figures are built at the width they will occupy in the PDF, so nothing scales
+them afterwards and figure text keeps the size set here. Colour never carries
 information alone: :data:`CYCLE` pairs each colour with its own dash pattern.
 """
 
@@ -16,8 +16,7 @@ from matplotlib import font_manager
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
-# tfgetsinf.cls: a4paper with 3 cm side margins -> a 15 cm text block, and
-# \LoadClass{book} with no size option -> a 10 pt body set in Palatino (mathpazo).
+# Text block width and body size of the target document class.
 FULL_CM = 15.0
 NARROW_CM = 10.0
 BODY_PT = 10.0
@@ -25,15 +24,15 @@ _CM = 1 / 2.54
 
 IMG_DIR = Path(__file__).parent.parent / "thesis" / "img"
 
-# Four colours ordered by decreasing luminance gap so a greyscale print keeps
-# them apart; ``python src/figstyle.py`` prints the measured gaps.
+# Four colours spaced in luminance so a greyscale print keeps them apart;
+# ``python src/figstyle.py`` prints the measured gaps.
 PALETTE = ("#12325a", "#a34a12", "#4f8f6f", "#d7a13f")
 DASHES = ("-", "--", "-.", ":")
 CYCLE = cycler(color=PALETTE) + cycler(linestyle=DASHES)
 
 
 def _serif_name() -> str:
-    """Register TeX Gyre Pagella (the free Palatino) and return its family name."""
+    """Register TeX Gyre Pagella and return its family name."""
     pattern = "*/texmf-dist/fonts/opentype/public/tex-gyre/texgyrepagella-regular.otf"
     for root in ("/usr/local/texlive", "/usr/share/texlive", "/opt/texlive"):
         for path in Path(root).glob(pattern):
@@ -44,7 +43,7 @@ def _serif_name() -> str:
 
 
 def apply() -> None:
-    """Install the memoria's rcParams. Called on import."""
+    """Install the rcParams. Called on import."""
     plt.rcParams.update({
         "font.family": "serif",
         "font.serif": [_serif_name()],

@@ -1,10 +1,8 @@
 """Tests for the per-run writer, focused on the atomicity of ``save_json``.
 
-``summary.json`` is the canonical "this run finished" marker the launchers
-resume on, so a write interrupted mid-flight must never leave a truncated file
-under the target path. The crash test simulates a process dying between the
-first and last byte and asserts the target still holds the previous, complete
-document.
+An interrupted write must never leave a truncated file under the target path.
+The crash test kills the write between the first and last byte and asserts the
+target still holds the previous, complete document.
 """
 
 import json
@@ -41,6 +39,5 @@ def test_interrupted_save_json_leaves_target_intact(tmp_path, monkeypatch):
     with pytest.raises(RuntimeError):
         logger.save_json("summary", {"final_test_acc": 0.1})
 
-    # The truncated bytes never became visible under the target path: a reader
-    # (analysis, or a launcher's is_done) still sees the complete old document.
+    # The truncated bytes never became visible under the target path.
     assert json.loads(path.read_text()) == first

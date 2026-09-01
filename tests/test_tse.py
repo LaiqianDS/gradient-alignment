@@ -1,9 +1,8 @@
-"""Tests for the TSE baseline predictor (Ru et al., 2021).
+"""Tests for the TSE baseline predictor.
 
-The baseline consumes a sequence of per-epoch mean losses, not a model, so
-these exercise ``compute_tse`` analytically plus a smoke test on ``METRIC``.
-(The per-step → per-epoch aggregation lives in ``train.epoch_mean_losses``
-and is tested in ``test_train_helpers``.)
+Analytic checks on ``compute_tse`` plus a smoke test on ``METRIC``. The
+per-step to per-epoch aggregation lives in ``train.epoch_mean_losses`` and is
+tested in ``test_train_helpers``.
 """
 
 import torch
@@ -25,9 +24,9 @@ def test_hand_computed_sequence_all_variants():
 
 
 def test_ema_most_recent_loss_carries_weight_one():
-    # Decisive construction: a single unit spike. With gamma=0.5 the spike at
-    # t=T must contribute gamma^0 = 1, while the same spike at t=1 contributes
-    # gamma^(T-1) = 0.5^3 = 0.125. This pins the exponent direction.
+    # A single unit spike pins the exponent direction: with gamma=0.5 the spike
+    # at t=T contributes gamma^0 = 1, the same spike at t=1 contributes
+    # gamma^(T-1) = 0.5^3 = 0.125.
     spike_last = compute_tse([0.0, 0.0, 0.0, 1.0], gammas=(0.5,))["tse/ema_0_5"]
     spike_first = compute_tse([1.0, 0.0, 0.0, 0.0], gammas=(0.5,))["tse/ema_0_5"]
     assert abs(spike_last - 1.0) < 1e-9
@@ -87,7 +86,7 @@ def test_decreasing_losses_ema_below_cumulative():
 
 
 def test_ema_gamma_0_9_short_sequence_hand_computed():
-    # Paper's default decay gamma=0.9 on losses=[1,2,3], T=3. Weights gamma^(T-t)
+    # Default decay gamma=0.9 on losses=[1,2,3], T=3. Weights gamma^(T-t)
     # are 0.9^2, 0.9^1, 0.9^0 aligned to l_1,l_2,l_3:
     #   0.81*1 + 0.9*2 + 1.0*3 = 0.81 + 1.8 + 3 = 5.61
     out = compute_tse([1.0, 2.0, 3.0], gammas=(0.9,))
@@ -95,14 +94,13 @@ def test_ema_gamma_0_9_short_sequence_hand_computed():
 
 
 def test_e_window_e_greater_than_length_clamps():
-    # e larger than T clamps to the full history (paper burn-in semantics:
-    # the window starts at max(1, T-E+1)). For T=3, e=5: sum of all 3 losses.
+    # The window starts at max(1, T-e+1), so e > T clamps to the full history.
     out = compute_tse([1.0, 2.0, 3.0], e=5)
     assert abs(out["tse/e_window"] - 6.0) < 1e-9
 
 
 def test_empty_history_returns_zeros():
-    # Documented edge case: no closed losses yet -> all four scalars are 0.0.
+    # No closed epochs yet -> all four scalars are 0.0.
     out = compute_tse([])
     assert set(out) == {"tse/cumulative", "tse/e_window", "tse/ema_0_9", "tse/ema_0_999"}
     assert all(v == 0.0 for v in out.values())

@@ -1,4 +1,4 @@
-"""Tests for the m-coherence metric (Chatterjee & Zielinski, 2020)."""
+"""Tests for the m-coherence metric."""
 
 import torch
 import torch.nn as nn
@@ -38,9 +38,9 @@ def test_crafted_two_directions_hand_computed_alpha():
 
 
 def test_matches_naive_pairwise_definition():
-    # Eq. (3) of the paper: alpha = E_{z,z'}[g_z·g_z'] / E_z[g_z·g_z], with z,z'
-    # i.i.d. WITH replacement (diagonal included), and m-coherence = m·alpha.
-    # The streaming form ‖S‖²/Q must equal the naive m² pairwise average.
+    # alpha = E_{z,z'}[g_z·g_z'] / E_z[g_z·g_z] with z,z' i.i.d. WITH
+    # replacement (diagonal included), and m-coherence = m·alpha. The streaming
+    # form ‖S‖²/Q must equal that naive m² pairwise average.
     G = torch.randn(7, 13, dtype=torch.float64, generator=torch.Generator().manual_seed(0))
     m = G.shape[0]
     naive = m * (G @ G.T).mean() / (G * G).sum(1).mean()
@@ -48,9 +48,8 @@ def test_matches_naive_pairwise_definition():
 
 
 def test_anticorrelated_grads_alpha_zero():
-    # {v, -v}: S = 0 so alpha = 0 (Theorem 1: alpha = 0 iff the mean gradient
-    # vanishes). The true range is [0, m]: 1 is the orthogonal *limit*, not a
-    # lower bound (the paper observes values below 1 near 100% train accuracy).
+    # {v, -v}: S = 0 so alpha = 0. The range is [0, m]; 1 is the orthogonal
+    # *limit*, not a lower bound.
     v = torch.randn(16, generator=torch.Generator().manual_seed(0))
     G = torch.stack([v, -v])
     assert abs(_mcoh_core(G)["mcoh/global"]) < 1e-6

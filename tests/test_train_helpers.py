@@ -54,9 +54,9 @@ def test_epoch_mean_losses_partial_epoch_running_mean():
 
 
 def test_epoch_mean_losses_feeds_tse_epoch_semantics():
-    # Feeding per-step losses would make TSE-E(e=1) the last *step* loss and run
-    # the EMA decay per step. With constant loss 1.0 over 5 epochs x 100 steps,
-    # the epoch-mean feed must give the closed forms over T=5, not T=500.
+    # Per-step losses would make TSE-E(e=1) the last *step* loss and decay the
+    # EMA per step. Constant loss 1.0 over 5 epochs x 100 steps must give the
+    # closed forms over T=5, not T=500.
     means = epoch_mean_losses([1.0] * 500, 100)
     assert means == [1.0] * 5
     out = compute_tse(means)

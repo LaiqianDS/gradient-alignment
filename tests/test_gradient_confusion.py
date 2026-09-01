@@ -1,4 +1,4 @@
-"""Tests for the gradient_confusion metric (Sankararaman et al., 2020)."""
+"""Tests for the gradient_confusion metric."""
 
 import math
 
@@ -115,9 +115,8 @@ def test_zero_norm_row_is_eps_guarded():
 
 
 def test_scale_invariance_per_row():
-    # Cosines ignore per-row gradient magnitudes: rescaling each row by a
-    # positive factor leaves every stat unchanged: the defining property of the
-    # cosine variant (paper §8) vs the raw inner-product bound of Def. 2.1.
+    # Cosines ignore per-row gradient magnitudes, so rescaling each row by a
+    # positive factor leaves every stat unchanged.
     g = torch.Generator().manual_seed(2)
     G = torch.randn(6, 10, generator=g)
     scales = torch.rand(6, 1, generator=g) * 5 + 0.1

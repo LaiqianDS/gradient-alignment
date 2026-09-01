@@ -1,4 +1,4 @@
-"""Tests for the simple gradient noise scale estimator (McCandlish et al., 2018)."""
+"""Tests for the simple gradient noise scale estimator."""
 
 import math
 
@@ -61,9 +61,8 @@ def test_scale_invariance_simple():
 
 
 def test_noise_is_biased_low_by_M_minus_1_over_M():
-    # The plain-mean (1/M) estimator is tr(Sigma) biased low: it equals
-    # ((M-1)/M) * the unbiased per-coordinate variance sum (McCandlish's appendix
-    # uses two batch sizes precisely to remove this bias).
+    # The plain-mean (1/M) estimator of tr(Sigma) equals ((M-1)/M) * the
+    # unbiased per-coordinate variance sum.
     G = torch.tensor([[2.0, 0.0], [0.0, 0.0], [0.0, 2.0], [0.0, 0.0]])  # M=4
     m = G.shape[0]
     unbiased_tr = float(G.var(0, unbiased=True).sum())
@@ -72,11 +71,12 @@ def test_noise_is_biased_low_by_M_minus_1_over_M():
 
 
 def test_noise_matches_appendix_a1_estimator_up_to_bessel():
-    # McCandlish Eq. (A.2) with B_small=1, B_big=M gives the *unbiased* tr(Sigma):
+    # Two-batch-size estimator with B_small=1, B_big=M gives the *unbiased*
+    # tr(Sigma):
     #   S = 1/(1/B_small - 1/B_big) * (mean|G_Bsmall|^2 - |G_Bbig|^2)
     #     = M/(M-1) * ((1/M) sum||g_i||^2 - ||Gbar||^2).
-    # The implementation drops the M/(M-1) Bessel factor (footnote 11), so
-    # noise_scale/tr_sigma must equal (M-1)/M * S built directly from A.2.
+    # The implementation drops the M/(M-1) Bessel factor, so
+    # noise_scale/tr_sigma must equal (M-1)/M * S.
     G = torch.tensor([[1.0, 2.0], [-3.0, 0.5], [0.0, -1.0], [4.0, 2.0], [1.0, 1.0]])
     m = G.shape[0]
     g_small_sq = (G * G).sum(1).mean()      # mean |G_{B_small=1}|^2
@@ -115,8 +115,7 @@ def test_deterministic_sigma_recovery():
 
 
 def test_compute_matches_core_on_per_sample_matrix():
-    # Wiring test: compute() must be exactly _gns_core over the per-sample
-    # gradient matrix of the frozen model on the probe.
+    # compute() must equal _gns_core over the per-sample gradient matrix.
     model = tiny_mlp().eval()
     X, y = synthetic_probe()
     lf = nn.CrossEntropyLoss()

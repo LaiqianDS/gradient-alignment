@@ -1,4 +1,4 @@
-"""Tests for the Gradient-Weight Alignment metric (Hölzl, 2025)."""
+"""Tests for the Gradient-Weight Alignment metric."""
 
 import math
 
@@ -27,8 +27,7 @@ def test_kurtosis_corrected_value():
 
 def test_gaussian_excess_kurtosis_denominator_is_beta():
     # A large Gaussian sample has EXCESS kurtosis ≈ 0, so denom = kurt + 1.2 ≈ β
-    # and value ≈ M1 / β. Pins both the excess semantics of gwa/kurt (Gaussian
-    # logs ≈0, not ≈3) and the denominator construction.
+    # and value ≈ M1 / β. Pins gwa/kurt as excess (≈0, not ≈3).
     g = torch.randn(200_000, generator=torch.Generator().manual_seed(0))
     out = _gwa_aggregate(g)
     assert abs(out["gwa/kurt"]) < 0.05
@@ -46,9 +45,8 @@ def test_constant_cosines_m2_zero_is_nan():
 
 def test_small_cosine_spread_kurtosis_not_distorted():
     # Kurtosis is invariant under affine maps: kurt(0.5 + 1e-3·z) == kurt(z)
-    # exactly. With spread σ ≈ 1e-3, m2² ≈ 1e-12: float32 moments or an additive
-    # EPS on m2² would crush the tiny-spread kurtosis toward 0 (and could flip
-    # the sign of gwa/value), so the float64 path must preserve it.
+    # exactly. With spread σ ≈ 1e-3, m2² ≈ 1e-12, so float32 moments or an
+    # additive EPS on m2² would crush it toward 0 and could flip gwa/value.
     z = torch.randn(512, generator=torch.Generator().manual_seed(0), dtype=torch.float64)
     well = _gwa_aggregate(z)
     tiny = _gwa_aggregate(0.5 + 1e-3 * z)
@@ -57,9 +55,8 @@ def test_small_cosine_spread_kurtosis_not_distorted():
 
 
 def test_last_layer_grad_matches_closed_form():
-    # Independent oracle (paper Alg. 1): for softmax cross-entropy the
-    # last-layer weight gradient per sample is ∇L_i = (softmax(ŷ_i) − onehot(y_i)) z_iᵀ
-    # with z_i the penultimate activation (the paper's g is the negation).
+    # For softmax cross-entropy the last-layer weight gradient per sample is
+    # ∇L_i = (softmax(ŷ_i) − onehot(y_i)) z_iᵀ, z_i the penultimate activation.
     model = tiny_mlp().eval()
     X, y = synthetic_probe()
     grads = per_sample_grads(model, X, y, nn.CrossEntropyLoss())
@@ -104,9 +101,9 @@ def test_denominator_eps_guard_is_finite_and_sign_stable():
 
 
 def test_global_sign_flip_negates_mean_and_value_but_not_kurt():
-    # Paper uses g=-∇L while the pipeline keeps raw ∇L, a global sign flip on every cosine.
-    # Confirm the consequence: negating all gammas flips M1 and value, leaves kurt invariant
-    # (kurtosis is a ratio of even central moments).
+    # Computing on raw ∇L instead of -∇L is a global sign flip on every cosine.
+    # Negating all gammas flips M1 and value but leaves kurt invariant, since
+    # kurtosis is a ratio of even central moments.
     g = torch.tensor([0.1, 0.3, -0.2, 0.5, 0.05, 0.4])
     a = _gwa_aggregate(g)
     b = _gwa_aggregate(-g)
@@ -116,9 +113,9 @@ def test_global_sign_flip_negates_mean_and_value_but_not_kurt():
 
 
 def test_cosine_is_scale_invariant():
-    # γ = cos(g, w) must not change when g or w is rescaled (cosine is scale-invariant).
-    # Checked at the cosine level (mutating w on a live model would change the forward pass
-    # and hence the gradients, so this cannot be probed through compute()).
+    # γ = cos(g, w) must not change when g or w is rescaled. Checked at the
+    # cosine level: mutating w on a live model would change the forward pass and
+    # hence the gradients, so this cannot go through compute().
     torch.manual_seed(0)
     g = torch.randn(12, 48)
     w = torch.randn(48)
@@ -135,9 +132,9 @@ def test_cosine_is_scale_invariant():
 
 
 def test_compute_excludes_bias_and_uses_weight_only_layout():
-    # The per-sample cosine must use only the classifier weight (length out*in), bias excluded.
-    # Build a model with a deliberately large last-layer bias: a weight+bias cosine would be
-    # dominated by the bias direction, so matching the weight-only cosine proves exclusion.
+    # The cosine must use only the classifier weight (length out*in). The large
+    # last-layer bias would dominate a weight+bias cosine, so matching the
+    # weight-only cosine proves the bias is excluded.
     torch.manual_seed(0)
     model = tiny_mlp().eval()
     with torch.no_grad():
@@ -166,10 +163,8 @@ def test_compute_excludes_bias_and_uses_weight_only_layout():
 
 
 def test_compute_uses_raw_grad_negating_paper_convention():
-    # The paper defines g = -∇L (Eq. 1), but compute() runs on the RAW ∇L returned by
-    # per_sample_grads. Pin that sign caveat to the real compute() path: the pipeline's
-    # score_mean must equal the NEGATION of the paper-convention mean (cosine of -∇L
-    # against w), since cos(-g, w) = -cos(g, w).
+    # The definition uses g = -∇L, but compute() runs on the RAW ∇L, so its
+    # score_mean must equal the NEGATION of the cosine of -∇L against w.
     torch.manual_seed(0)
     model = tiny_mlp().eval()
     X, y = synthetic_probe()
@@ -184,7 +179,7 @@ def test_compute_uses_raw_grad_negating_paper_convention():
         gn = g / g.norm(dim=1).clamp_min(EPS).unsqueeze(1)
         return float((gn @ (v / v.norm().clamp_min(EPS))).mean())
 
-    paper_mean = cos_mean(-raw_g, w)  # paper convention g = -∇L
+    paper_mean = cos_mean(-raw_g, w)  # the g = -∇L convention
     assert abs(out["gwa/score_mean"] - (-paper_mean)) < 1e-6
     assert abs(out["gwa/score_mean"] - cos_mean(raw_g, w)) < 1e-6  # compute keeps raw sign
 

@@ -1,8 +1,5 @@
-"""Figures for the memoria. One function per figure, one figure per claim.
-
-Kept apart from ``analysis.py`` and ``efficiency.py``, which stay plotting-free
-and own the numbers.
-"""
+"""Figures. One function per figure; ``analysis.py`` and ``efficiency.py`` own
+the numbers and stay plotting-free."""
 
 from __future__ import annotations
 
@@ -41,11 +38,7 @@ def computable_map(
     report_dir: str | Path = REPORTS_DIR,
     out_dir: Path = figstyle.IMG_DIR,
 ) -> Path:
-    """Usable runs per cell and dependent variable, as an annotated grid.
-
-    The claim: the five indicators that do not depend on a threshold are
-    available in all 24 cells, and the one that does is available in 18.
-    """
+    """Usable runs per cell and dependent variable, as an annotated grid."""
     counts = availability_by_cell(vd_status(report_dir))
     values = counts.to_numpy()
     n_rows, n_cols = values.shape
@@ -70,7 +63,7 @@ def computable_map(
     for spine in ax.spines.values():
         spine.set_visible(False)
 
-    # Dataset once per block of six cells: a right-hand axis, which the layout
+    # Dataset name once per block of rows: a right-hand axis, which the layout
     # engine reserves room for, plus a rule between blocks.
     starts = [i for i, (d, _, _) in enumerate(counts.index)
               if i == 0 or d != counts.index[i - 1][0]]

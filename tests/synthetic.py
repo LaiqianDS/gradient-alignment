@@ -1,12 +1,8 @@
-"""Synthetic models and crafted gradient matrices for metric sanity checks.
+"""Synthetic models and crafted gradient matrices for the metric tests.
 
-Two tiers:
-  * crafted gradient matrices with analytically known metric values
-    (parallel rows, orthogonal rows): test the pure ``_core`` functions.
-  * a tiny MLP + random probe: smoke-test the full ``compute()`` path returns
-    finite scalars with the expected keys.
-
-Importable as ``from synthetic import ...`` (tests/ is on pytest's pythonpath).
+Crafted matrices (parallel rows, orthogonal rows) have analytically known metric
+values and drive the pure ``_core`` functions; the tiny MLP plus random probe
+drives the full ``compute()`` path.
 """
 
 from __future__ import annotations

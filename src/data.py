@@ -14,10 +14,9 @@ from config import NUM_CLASSES, SPLIT_SEED
 ROOT = Path(__file__).parent.parent
 DATA_PATH = ROOT / "data"
 
-# Per-dataset spec: num_classes, in_shape=(C, H, W), normalization mean/std,
-# val_size = the dataset's conventional validation size, carved out of the
-# official train split (none of these datasets ships a labelled val).
-# mean/std are the per-channel pixel statistics of the training split, in the
+# Per-dataset spec: num_classes, in_shape=(C, H, W), normalization mean/std and
+# val_size, the number of samples carved out of the official train split.
+# mean/std are per-channel pixel statistics of the training split, in the
 # [0, 1] range produced by ToTensor (population std over all pixels).
 DATASET_SPECS: dict[str, dict] = {
     "mnist": {
@@ -76,11 +75,10 @@ def _build_transform(spec: dict) -> transforms.Compose:
 class _TinyImageNetVal(Dataset):
     """Tiny ImageNet's val split as a labelled test set.
 
-    The downloaded val/ is flat (val/images/*.JPEG + val_annotations.txt), not
-    the per-class layout ImageFolder expects, so ImageFolder would map every
-    image to a single class. This reads the annotations and labels each image
-    with the train ImageFolder's class_to_idx, so train and test share class
-    indices; any other ordering (wnids.txt, say) would permute the labels.
+    ``val/`` is flat (``val/images/*.JPEG`` + ``val_annotations.txt``), not the
+    per-class layout ImageFolder expects, so ImageFolder would map every image
+    to a single class. Labels come from the train ImageFolder's ``class_to_idx``
+    so train and test share class indices; any other ordering would permute them.
     """
 
     def __init__(self, val_root: Path, class_to_idx: dict[str, int], transform):
@@ -130,10 +128,7 @@ def _build_dataset(
 def stratified_split_indices(
     targets, val_size: int, seed: int
 ) -> tuple[list[int], list[int]]:
-    """Stratified split of sample indices into sorted (train, val) lists.
-
-    Depends only on (targets, val_size, seed), never on the run seed.
-    """
+    """Stratified split of sample indices into sorted (train, val) lists."""
     targets = torch.as_tensor(targets)
     generator = torch.Generator().manual_seed(seed)
     train_idx: list[int] = []
@@ -152,11 +147,11 @@ def build_dataloaders(
 ) -> tuple[DataLoader, DataLoader, DataLoader, int, tuple[int, int, int]]:
     """Build seeded train/val/test DataLoaders.
 
-    Returns (train_loader, val_loader, test_loader, num_classes, in_shape).
-    Val is spec["val_size"] samples carved from the official train split with
+    Returns (train_loader, val_loader, test_loader, num_classes, in_shape). Val
+    is ``spec["val_size"]`` samples carved from the official train split with
     SPLIT_SEED; test is the official test split. The train loader is shuffled
-    with a seeded generator and drops the last partial batch; val and test
-    are unshuffled.
+    with a seeded generator and drops the last partial batch; val and test are
+    unshuffled.
     """
     spec = _check_dataset(dataset)
     root = DATA_PATH if data_root is None else Path(data_root)
@@ -201,11 +196,10 @@ def build_dataloaders(
 def build_probe(
     dataset: Dataset, probe_size: int, seed: int, device: str | torch.device
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """Return a fixed (X, y) probe batch, identical for a given (dataset, probe_size, seed).
+    """Fixed (X, y) probe batch, identical for a given (dataset, probe_size, seed).
 
     X has shape (probe_size, C, H, W) (float); y has shape (probe_size,) (long).
-    Both are moved to `device`. This batch is frozen and reused for all metric
-    measurements across training.
+    Both are moved to ``device``.
     """
     if probe_size > len(dataset):
         raise ValueError(
@@ -222,10 +216,8 @@ def build_probe(
 
 
 def build_train_eval_loader(train_set: Subset, batch_size: int, size: int) -> DataLoader:
-    """Class-stratified train subset for the gap's train term.
-
-    Drawn with SPLIT_SEED, so it is identical across runs.
-    """
+    """Class-stratified subset of ``train_set``, drawn with SPLIT_SEED so it is
+    identical across runs."""
     targets = torch.as_tensor(train_set.dataset.targets)[train_set.indices]
     _, eval_idx = stratified_split_indices(targets, size, SPLIT_SEED)
     return DataLoader(

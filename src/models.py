@@ -1,10 +1,10 @@
-"""Model architectures for the gradient-alignment pipeline behind a single factory.
+"""Model architectures behind a single factory.
 
-Three families, all ending in an ``nn.Linear`` classifier head so downstream
-gradient metrics can locate the head as the last ``nn.Linear`` in the network:
-  * ``fc``:       MLP (Faghri et al.): flatten -> 2 hidden layers -> logits.
-  * ``cnn``:      3-block conv net (Fort et al.), adaptive-pooled to any HxW.
-  * ``resnet18``: torchvision ResNet-18 with a small-image stem (CIFAR style).
+Every model ends in an ``nn.Linear`` classifier head, which is how the gradient
+metrics locate the head (the last ``nn.Linear`` in the network):
+  * ``fc``:       MLP, flatten -> 2 hidden layers -> logits.
+  * ``cnn``:      3-block conv net, adaptive-pooled to any HxW.
+  * ``resnet18``: torchvision ResNet-18 with a small-image stem.
 """
 
 from __future__ import annotations
@@ -55,19 +55,18 @@ def _build_resnet18(in_shape: tuple[int, int, int], num_classes: int) -> nn.Modu
     """torchvision ResNet-18 with a 3x3 stride-1 stem for small (<=64px) images."""
     c, _, _ = in_shape
     model = torchvision.models.resnet18(weights=None, num_classes=num_classes)
-    # Small-image stem: replace the 7x7 stride-2 conv + maxpool that would shrink
-    # 32x32 inputs too aggressively. Also adapts in-channels (handles grayscale).
+    # Small-image stem: the stock 7x7 stride-2 conv + maxpool shrink a 32x32
+    # input too aggressively. In-channels follow in_shape, so grayscale works.
     model.conv1 = nn.Conv2d(c, 64, kernel_size=3, stride=1, padding=1, bias=False)
     model.maxpool = nn.Identity()
-    # ``model.fc`` is already the final ``nn.Linear(512, num_classes)``; leave it.
     return model
 
 
 def build_model(name: str, in_shape: tuple[int, int, int], num_classes: int) -> nn.Module:
     """Build one of ``MODELS`` for ``in_shape`` ``(C, H, W)`` and ``num_classes``.
 
-    The returned module maps a batch ``(B, C, H, W)`` to logits ``(B, num_classes)``
-    and always ends in an ``nn.Linear`` classifier head.
+    The module maps ``(B, C, H, W)`` to logits ``(B, num_classes)`` and always
+    ends in an ``nn.Linear`` head.
     """
     if name == "fc":
         return _build_fc(in_shape, num_classes)

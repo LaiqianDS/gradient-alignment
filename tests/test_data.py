@@ -1,7 +1,7 @@
 """Tests for dataset specs and the fixed-probe builder.
 
-Kept hermetic: no torchvision downloads here (the end-to-end smoke test exercises
-real MNIST). The probe is tested against a synthetic TensorDataset.
+Hermetic: no torchvision downloads. The probe is tested against a synthetic
+TensorDataset.
 """
 
 import pytest
@@ -25,7 +25,7 @@ def test_specs_cover_expected_datasets():
 
 
 def test_specs_val_sizes_follow_dataset_conventions():
-    # MNIST 50k/10k/10k, CIFAR 45k/5k/10k (He et al. 2015), Tiny 90k/10k/10k.
+    # MNIST 50k/10k/10k, CIFAR 45k/5k/10k, Tiny 90k/10k/10k.
     assert DATASET_SPECS["mnist"]["val_size"] == 10_000
     assert DATASET_SPECS["cifar10"]["val_size"] == 5_000
     assert DATASET_SPECS["cifar100"]["val_size"] == 5_000
@@ -55,7 +55,8 @@ def test_stratified_split_depends_only_on_its_seed():
 
 
 def test_split_seed_is_pinned():
-    # Changing this value invalidates comparability with already-finished runs.
+    # Changing this value repartitions train/val, so finished runs stop being
+    # comparable with new ones.
     assert SPLIT_SEED == 42
 
 
@@ -90,8 +91,8 @@ def _make_fake_tiny_imagenet(root):
 
 
 def test_tiny_imagenet_val_labels_align_with_train(tmp_path):
-    # Regression: the flat val/ split must be labelled via the train ImageFolder's
-    # class_to_idx, not ImageFolder(val/) which would map every image to class 0.
+    # The flat val/ split must be labelled via the train ImageFolder's
+    # class_to_idx; ImageFolder(val/) would map every image to class 0.
     from data import _build_dataset
 
     _make_fake_tiny_imagenet(tmp_path)

@@ -1,8 +1,5 @@
-"""Tests for Gradient Disparity (Forouzesh & Thiran, 2021).
-
-Analytic sanity checks on the pure ``_gd_core`` over crafted gradient matrices,
-plus one smoke test of the full ``compute()`` path.
-"""
+"""Tests for Gradient Disparity: analytic checks on ``_gd_core`` over crafted
+gradient matrices, plus one smoke test of the full ``compute()`` path."""
 
 import math
 
@@ -60,10 +57,9 @@ def test_five_rows_exact_mean_of_ten_pairs():
 
 
 def test_matches_paper_ordered_pair_formula():
-    # Paper, Sect. 4 (unnumbered eq. in the ECML PKDD version; Eq. 7 in the
-    # extended arXiv version): D̄ = Σ_i Σ_{j≠i} D_{i,j} / (s(s-1)), ordered pairs.
-    # Since D_{i,j}=D_{j,i}, this equals the mean over C(s,2) unordered pairs.
-    # Pin _gd_core to that formula computed independently (cdist, not pdist).
+    # Ordered-pair form D̄ = Σ_i Σ_{j≠i} D_{i,j} / (s(s-1)). Since
+    # D_{i,j}=D_{j,i}, it equals the mean over the C(s,2) unordered pairs.
+    # Computed independently here with cdist, not pdist.
     g = torch.randn(5, 7, generator=torch.Generator().manual_seed(1))
     s = g.shape[0]
     expected = torch.cdist(g, g, p=2).sum().item() / (s * (s - 1))
@@ -74,7 +70,7 @@ def test_matches_paper_ordered_pair_formula():
 @pytest.mark.parametrize("c", [2.0, -3.0, 0.5])
 def test_scale_equivariance_not_invariance(c):
     # GD is an ℓ2 distance: scaling every gradient by c scales it by |c|.
-    # Deliberately NOT scale-invariant (that is the PAC-Bayes distinction from cosine).
+    # Deliberately NOT scale-invariant, unlike a cosine.
     batch_grads = orthogonal_grads(m=4, p=8)
     base = _gd_core(batch_grads)["gd/scalar"]
     scaled = _gd_core(c * batch_grads)["gd/scalar"]
@@ -93,9 +89,8 @@ def test_compute_identical_batches_zero():
 
 
 def test_compute_forces_eval_mode():
-    # A model handed over in train() mode with Dropout must still be measured
-    # deterministically: compute() switches to eval(), so identical batches
-    # give exactly 0 (regression test for the model.eval() call).
+    # compute() switches a train()-mode model to eval(), so a Dropout model on
+    # identical batches still gives exactly 0.
     m = nn.Sequential(nn.Linear(8, 16), nn.ReLU(), nn.Dropout(0.5), nn.Linear(16, 3))
     m.train()
     Xb, yb = synthetic_probe(m=8)

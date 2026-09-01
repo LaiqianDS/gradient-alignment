@@ -1,10 +1,4 @@
-"""Smoke test: a tiny end-to-end run writes the expected Parquet/JSON outputs.
-
-Uses MNIST + the fc model with a small probe and a coarse measurement cadence so
-the run is fast. Asserts the trajectory carries both a gradient metric and the
-TSE baseline, that epoch rows have test metrics, and that the window/summary
-artifacts are produced.
-"""
+"""Smoke test: a tiny end-to-end run writes the expected Parquet/JSON outputs."""
 
 from pathlib import Path
 
@@ -42,12 +36,12 @@ def test_pipeline_smoke(tmp_path):
     assert (run_dir / "summary.json").exists()
     assert 0.0 < summary["final_test_acc"] <= 1.0
     assert 0.0 < summary["final_test_f1_macro"] <= 1.0
-    # On balanced MNIST macro-F1 tracks accuracy.
+    # On a balanced dataset macro-F1 tracks accuracy.
     assert abs(summary["final_test_f1_macro"] - summary["final_test_acc"]) < 0.1
     assert "final_val_acc" in summary
     assert summary["num_params"] > 0
 
-    # Timing invariants: the two clocks add up, cumulative columns are coherent.
+    # The two clocks add up and the cumulative columns stay coherent.
     assert 0 < summary["metric_seconds"] < summary["total_seconds"]
     assert abs(summary["total_seconds"]
                - (summary["train_seconds"] + summary["metric_seconds"])) < 1e-2

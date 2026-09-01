@@ -31,8 +31,8 @@ def test_command_overrides_epochs_and_isolates_output(tmp_path, monkeypatch):
     monkeypatch.setattr(run_pilot, "PILOT_DIR", tmp_path)
     cmd = run_pilot.build_command(run_pilot.PilotRun("cifar10", "cnn", "sgd"))
 
-    # Doubled budget, center LR, seed 0, and output kept away from reports/,
-    # where run_matrix would mistake the pilot for a finished grid run.
+    # Output must stay out of reports/, where run_matrix would mistake the
+    # pilot for a finished grid run.
     assert cmd[cmd.index("--epochs") + 1] == "80"
     assert cmd[cmd.index("--lr") + 1] == "0.01"
     assert cmd[cmd.index("--seed") + 1] == "0"
@@ -51,9 +51,9 @@ def test_is_done_tracks_summary_json_in_pilot_dir(tmp_path, monkeypatch):
 
 
 def test_calibration_table_reads_run_facts_from_disk(tmp_path, monkeypatch):
-    """Two facts must come from disk, not from the current config: the epochs
-    the run really did, and the crossing of the *current* threshold recomputed
-    on the curve rather than the stored ``epochs_to_threshold``."""
+    """Two facts come from disk, not from the current config: the epochs the run
+    really did, and the crossing recomputed on the curve rather than the stored
+    ``epochs_to_threshold``."""
     monkeypatch.setattr(run_pilot, "PILOT_DIR", tmp_path)
     run = run_pilot.PilotRun("mnist", "fc", "sgd")
     d = tmp_path / run.name
@@ -87,13 +87,13 @@ def test_calibration_table_flags_the_corrupt_tiny_test_fields():
     runs = [r for r in run_pilot.enumerate_pilots() if r.dataset == "tiny_imagenet"]
     table = run_pilot.calibration_table(runs)
     if table.empty:
-        pytest.skip("reports_pilot/ no está en esta máquina (está en .gitignore)")
+        pytest.skip("no finished pilot runs under reports_pilot/")
     assert not table["test_fields_valid"].any()
 
 
 def test_print_report_marks_the_invalid_test_fields(tmp_path, monkeypatch, capsys):
     """The mark must reach the printed text, not only the table: the run that
-    declares itself invalid prints a `*` and its footnote, the sound one does
+    declares itself invalid prints a ``*`` and its footnote, the sound one does
     not."""
     monkeypatch.setattr(run_pilot, "PILOT_DIR", tmp_path)
     curva = {"epoch": range(3), "val_loss": [2.0, 1.0, 0.9],
@@ -123,9 +123,9 @@ def test_print_report_marks_the_invalid_test_fields(tmp_path, monkeypatch, capsy
 
 
 def test_testfix_table_reads_its_own_run_not_the_pilots(tmp_path, monkeypatch):
-    """The reference is a different run with its own budget: its epochs come
-    from its own trajectory, not from the pilot's and not from
-    ``DATASET_BUDGET``. A run with no ``testfix_40ep/`` is absent."""
+    """The reference is a different run with its own budget: its epochs come from
+    its own trajectory, not from the pilot's and not from ``DATASET_BUDGET``. A
+    run with no ``testfix_40ep/`` is absent from the table."""
     monkeypatch.setattr(run_pilot, "PILOT_DIR", tmp_path)
     con = run_pilot.PilotRun("tiny_imagenet", "cnn", "sgd")
     sin = run_pilot.PilotRun("tiny_imagenet", "fc", "sgd")

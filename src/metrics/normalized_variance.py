@@ -1,25 +1,18 @@
 """Normalized Gradient Variance (Faghri et al., 2020).
 
-Two global scalars over ``K`` independent batch gradients of the frozen model:
+Two global scalars over ``K = 10`` disjoint sub-batches of the probe:
 
-  * ``var/avg``: Average Variance, the normalized trace of the gradient
-    covariance ``tr(Cov(g)) / d``: an absolute, scale-dependent variance
-    (paper §4: the average per-coordinate variance).
-  * ``var/normalized``: Normalized Gradient Variance (NGV),
-    ``tr(Cov(g)) / ||E[g]||^2``: the inverse of a signal-to-noise ratio, so
-    values above 1 mean noise dominates the mean gradient. Cross-problem
-    comparable. This is not the paper's literal definition, which is the
-    per-coordinate ratio ``V[g]/E[g²]`` (second *non-central* moment in the
-    denominator, bounded ≈1); the two are monotonically related
-    (``NV = NGV/(1+NGV)``), but the "above 1" reading only holds for this form.
+  * ``var/avg``: ``tr(Cov(g)) / d``, the average per-coordinate variance.
+    Absolute and scale-dependent.
+  * ``var/normalized``: ``tr(Cov(g)) / ||E[g]||^2``, so values above 1 mean
+    noise dominates the mean gradient. This is not the literal definition,
+    which is the per-coordinate ``V[g]/E[g²]`` with the second *non-central*
+    moment in the denominator; the two are related by ``NV = NGV/(1+NGV)``, but
+    the "above 1" reading only holds for the form computed here.
 
-Estimator caveat: the plug-in denominator ``||mean of K grads||²`` is biased
-upward by ``tr(Cov)/K``, so the estimated NGV saturates at ≈K (with K=10 a
-true NGV of 10 reads ≈5; a zero-mean gradient reads ≈K, it does not blow up).
-Invert post-hoc via ``NGV ≈ NGV̂/(1 - NGV̂/K)`` when the regime matters.
-
-Operates on the raw loss gradient ∇L over ``K = 10`` disjoint sub-batches of
-the probe.
+The plug-in denominator ``||mean of K grads||²`` is biased upward by
+``tr(Cov)/K``, so the estimate saturates at ≈K. Invert post-hoc via
+``NGV ≈ NGV̂/(1 - NGV̂/K)`` when the regime matters.
 """
 
 from __future__ import annotations
@@ -33,10 +26,9 @@ from .primitives import EPS, batch_grad_vector, split_batches
 def _ngv_core(batch_grads: torch.Tensor) -> dict[str, float]:
     """NGV scalars from a ``[K, P]`` stack of ``K`` batch gradients.
 
-    ``tr(Cov)`` is the summed per-coordinate (unbiased) variance across the K
-    rows; the mean gradient is the row mean. ``var/normalized`` divides by
-    ``||mean||^2`` (guarded by ``EPS``); ``var/avg`` divides by the parameter
-    count ``P``.
+    ``tr(Cov)`` is the summed per-coordinate unbiased variance across the K
+    rows. ``var/normalized`` divides it by ``||mean||^2`` (guarded by ``EPS``),
+    ``var/avg`` by the parameter count ``P``.
     """
     p = batch_grads.shape[1]
     tr_cov = batch_grads.var(0, unbiased=True).sum()

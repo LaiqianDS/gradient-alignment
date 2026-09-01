@@ -1,21 +1,19 @@
 """Single-run training pipeline: train one model, log gradient metrics throughout.
 
-Entrypoint. One invocation = one :class:`Config` = one run. Reads knobs from
-CLI/YAML (``config.py``), seeds globally (``seed.py``), trains to a fixed epoch
-budget, and logs gradient + baseline metrics on a *fixed probe* at the end of
-every epoch. Outputs land in ``out_dir/run_name/``::
+One invocation = one :class:`Config` = one run. Trains to a fixed epoch budget
+and runs every metric on a fixed probe at the end of every epoch. Outputs land
+in ``out_dir/run_name/``::
 
-    config.yaml              the resolved run knobs
-    trajectory.parquet       one row per epoch measurement, each with cumulative
-                             elapsed/metric wall-clock columns and the val
-                             monitoring curve
-    metrics_at_window.parquet  epoch rows snapped to 5/10/25/50/100% of budget
-    summary.json             efficiency indicators (val curve) + the single
-                             final test evaluation + the generalization gap
-                             (extra eval pass on a fixed train subset) + run
-                             timing: total_seconds, metric_seconds
-                             (instrumentation overhead) and train_seconds
-                             (= total - metric)
+    config.yaml                the resolved run knobs
+    trajectory.parquet         one row per epoch, with the val curve and the
+                               cumulative elapsed/metric wall-clock columns
+    metrics_at_window.parquet  epoch rows snapped to ``cfg.windows``
+    summary.json               efficiency indicators + the single final test
+                               evaluation + the generalization gap + timing
+                               (total_seconds, metric_seconds, train_seconds =
+                               total - metric)
+
+``summary.json`` is written last, so its existence marks a completed run.
 
 Run::
 
@@ -43,10 +41,7 @@ from seed import set_seed
 
 
 def resolve_device(choice: str) -> torch.device:
-    """Map ``auto`` to the best available backend: CUDA → MPS → CPU.
-
-    An explicit ``--device`` (cpu/cuda/mps) is honoured verbatim.
-    """
+    """Map ``auto`` to CUDA, else MPS, else CPU. Any other value is used as-is."""
     if choice != "auto":
         return torch.device(choice)
     if torch.cuda.is_available():
@@ -65,7 +60,7 @@ def device_sync(device: torch.device) -> None:
 
 
 def build_optimizer(cfg: Config, model: nn.Module) -> torch.optim.Optimizer:
-    """Build the run's optimizer: SGD or Adam, per ``cfg.optimizer``."""
+    """SGD or Adam, per ``cfg.optimizer``."""
     if cfg.optimizer == "sgd":
         return torch.optim.SGD(
             model.parameters(), lr=cfg.lr, momentum=cfg.momentum,
@@ -83,13 +78,11 @@ def default_run_name(cfg: Config) -> str:
 
 
 def warn_probe_memory(num_params: int, probe_size: int, chunk_size: int) -> float:
-    """Print the streamed per-sample-grad memory profile and warn if it is large.
+    """Print the streamed per-sample-grad memory profile; return the device peak.
 
     The dense [M, P] Jacobian is never materialised: per-sample grads stream in
-    row-chunks, so the device peak is [chunk_size, P], and only the pairwise
-    metrics assemble the full [M, P] in host RAM to form the [M, M] Gram. Both
-    are printed so a too-tight GPU (lower --chunk-size) or host (smaller probe
-    or model) is diagnosable up front. M is never capped silently.
+    row-chunks, so the device peak is [chunk_size, P] and only the host holds
+    the full [M, P] used to form the [M, M] Gram.
     """
     device_gb = chunk_size * num_params * 4 / 1e9
     host_gb = probe_size * num_params * 4 / 1e9
@@ -105,10 +98,9 @@ def warn_probe_memory(num_params: int, probe_size: int, chunk_size: int) -> floa
 def epoch_mean_losses(step_losses: list[float], steps_per_epoch: int) -> list[float]:
     """Collapse per-step losses into per-epoch means ℓ̄_1..ℓ̄_t for the TSE baseline.
 
-    TSE is defined over epochs of mean batch losses (Ru et al. 2021, Eq. 1).
-    Feeding it raw per-step losses instead shrinks the EMA half-life by a factor
-    of ``steps_per_epoch``. The trailing partial epoch contributes its running
-    mean, so the helper is defined for any loss-history length.
+    TSE is defined over epochs, so feeding it raw per-step losses would shrink
+    the EMA half-life by ``steps_per_epoch``. A trailing partial epoch
+    contributes its running mean, so any history length is accepted.
     """
     full = len(step_losses) // steps_per_epoch
     means = [
@@ -193,7 +185,7 @@ def efficiency_summary(df: pd.DataFrame, cfg: Config) -> dict:
     smooth_loss = median3(val_loss)
     smooth_acc = median3(val_acc)
 
-    # Trapezoidal AUC of raw val loss over the epoch axis (lower = faster descent).
+    # Trapezoidal AUC of the raw val loss over the epoch axis.
     raw_loss = val_loss.tolist()
     auc = (
         sum((a + b) * 0.5 for a, b in zip(raw_loss, raw_loss[1:]))
@@ -205,9 +197,8 @@ def efficiency_summary(df: pd.DataFrame, cfg: Config) -> dict:
     if cfg.threshold_acc is not None:
         hit = epoch_df[smooth_acc >= cfg.threshold_acc]
         if not hit.empty:
-            epochs_to_threshold = int(hit["epoch"].iloc[0]) + 1  # 1-indexed epoch count
-            # Raw wall-clock incl. instrumentation; correct post-hoc via the
-            # cumulative metric_seconds column if needed.
+            epochs_to_threshold = int(hit["epoch"].iloc[0]) + 1  # 1-indexed
+            # Raw wall-clock, instrumentation included.
             seconds_to_threshold = float(hit["elapsed_seconds"].iloc[0])
 
     return {
@@ -221,13 +212,10 @@ def efficiency_summary(df: pd.DataFrame, cfg: Config) -> dict:
 
 
 def train(cfg: Config) -> dict:
-    """Run one training job end to end; return its efficiency summary."""
-    # Must be set before the first CUDA allocation (the model.to below):
-    # expandable_segments lets the caching allocator grow segments instead of
-    # fragmenting. Importing torch does not init CUDA, so here, ahead of
-    # resolve_device's is_available, is early enough. Allocator strategy only;
-    # metric values are unaffected. ``setdefault`` keeps a shell value (or
-    # run_matrix.child_env) authoritative.
+    """Run one training job end to end; return its summary dict."""
+    # Must be set before the first CUDA allocation, so ahead of resolve_device.
+    # Allocator strategy only; computed values are unaffected. ``setdefault``
+    # keeps a value already present in the environment.
     os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
     run_start = time.perf_counter()
     set_seed(cfg.seed)
@@ -246,7 +234,7 @@ def train(cfg: Config) -> dict:
     loss_fn = nn.CrossEntropyLoss()
     optimizer = build_optimizer(cfg, model)
     metrics = dict(REGISTRY)
-    set_chunk_size(cfg.chunk_size)  # cap the per-sample-grad device peak
+    set_chunk_size(cfg.chunk_size)
 
     num_params = sum(p.numel() for p in model.parameters())
     warn_probe_memory(num_params, cfg.probe_size, cfg.chunk_size)
@@ -272,7 +260,7 @@ def train(cfg: Config) -> dict:
         device_sync(device)
         t0 = time.perf_counter()
         row = measure(model, probe_X, probe_y, loss_fn, metrics)
-        # TSE consumes per-epoch mean losses, never raw per-step losses.
+        # TSE takes per-epoch mean losses, never raw per-step losses.
         row.update(baseline_row(epoch_mean_losses(loss_history, len(train_loader))))
         device_sync(device)
         metric_seconds += time.perf_counter() - t0

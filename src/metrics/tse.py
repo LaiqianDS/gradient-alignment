@@ -1,19 +1,17 @@
-"""Training Speed Estimator (TSE), the mandatory baseline (Ru et al., 2021).
+"""Training Speed Estimator (TSE) (Ru et al., 2021).
 
-Unlike every gradient metric in the registry, this baseline consumes a sequence
-of per-epoch mean training losses ℓ̄_1..ℓ̄_T, never a model, so its ``compute``
-signature differs from the ``Metric`` protocol in ``metrics.base``. The paper
-defines t over **epochs** (Eq. 1: each term is the mean batch loss of one
-epoch); callers must aggregate per-step losses first
-(``train.epoch_mean_losses``).
+Consumes a sequence of per-epoch mean training losses ℓ̄_1..ℓ̄_T, never a model,
+so its ``compute`` signature differs from the ``Metric`` protocol in
+``metrics.base``. ``t`` indexes epochs, so callers must aggregate per-step
+losses first (``train.epoch_mean_losses``).
 
 Variants:
   * TSE      = Σ_t ℓ_t                        -> ``tse/cumulative``
   * TSE-E    = Σ_{t=T-E+1}^T ℓ_t (burn-in E)  -> ``tse/e_window``
   * TSE-EMA  = Σ_t γ^(T-t) ℓ_t, γ∈{0.9,0.999} -> ``tse/ema_0_9``, ``tse/ema_0_999``
 
-In TSE-EMA the most recent loss (t=T) carries weight γ^0 = 1 and earlier
-losses decay geometrically.
+In TSE-EMA the most recent loss (t=T) carries weight γ^0 = 1 and earlier losses
+decay geometrically.
 """
 
 from __future__ import annotations
@@ -53,8 +51,7 @@ def compute_tse(
 
 
 class TseMetric:
-    """Baseline predictor. NOTE: unlike gradient metrics, ``compute`` takes a
-    loss sequence (ℓ_1..ℓ_T), not a model + data probe."""
+    """``compute`` takes a loss sequence ℓ_1..ℓ_T, not a model + data probe."""
 
     name = "tse"
 

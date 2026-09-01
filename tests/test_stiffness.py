@@ -1,8 +1,5 @@
-"""Tests for the stiffness metric (Fort et al., 2019).
-
-Analytic sanity checks on the pure ``_stiffness_core`` with crafted gradient
-matrices of known geometry, plus a smoke test of the full ``compute`` path.
-"""
+"""Tests for the stiffness metric: analytic checks on ``_stiffness_core`` with
+crafted gradient matrices of known geometry, plus a ``compute`` smoke test."""
 
 import math
 
@@ -126,10 +123,9 @@ def test_sign_between_mixed_fraction():
 
 
 def test_zero_gradient_row_is_finite_zero():
-    # A perfectly-classified sample has a ~zero gradient; the norm clamp maps
-    # it to the zero vector so its pairs contribute cos 0 and sign 0
-    # (consistent with the paper's "stiffness 0 for ΔL₂ = 0" convention, p.2),
-    # never NaN. Pairs: (0,1) cos 1; (0,2),(1,2) cos 0 → global = 1/3.
+    # The norm clamp maps a zero-gradient row to the zero vector, so its pairs
+    # contribute cos 0 and sign 0, never NaN.
+    # Pairs: (0,1) cos 1; (0,2),(1,2) cos 0 → global = 1/3.
     p = 8
     a = torch.zeros(p)
     a[0] = 1.0
@@ -156,10 +152,9 @@ def test_singleton_class_contributes_no_within_pairs():
 
 
 def test_within_aggregation_is_pooled_micro_not_macro():
-    # The paper's Eq. (7) summarises within/between as a *macro* mean over
-    # class-stiffness-matrix cells; this implementation pools over pairs
-    # (micro). Class sizes {3, 2} with within-cosines {1.0, 0.5} expose the
-    # difference: micro = (3·1 + 1·0.5)/4 = 0.875 vs macro = 0.75.
+    # within/between pool over pairs (micro), not over class-stiffness-matrix
+    # cells (macro). Class sizes {3, 2} with within-cosines {1.0, 0.5} separate
+    # the two: micro = (3·1 + 1·0.5)/4 = 0.875 vs macro = 0.75.
     p = 8
     a = torch.zeros(p)
     a[0] = 1.0
@@ -185,8 +180,8 @@ def test_empty_subset_emits_zero():
 
 
 def test_nan_gradients_do_not_become_zero_signs():
-    # a diverged run gives NaN gradients; torch.sign(NaN) is 0.0, which would
-    # publish a clean zero where nothing was measured
+    # torch.sign(NaN) is 0.0, which would publish a clean zero where nothing
+    # was measured
     G = torch.full((4, 8), float("nan"))
     y = torch.tensor([0, 0, 1, 1])
     out = _stiffness_core(G, y)

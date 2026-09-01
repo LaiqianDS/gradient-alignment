@@ -1,9 +1,8 @@
-"""Tests for the Normalized Gradient Variance metric (Faghri et al., 2020).
+"""Tests for the Normalized Gradient Variance metric.
 
-Pins both scalars analytically on crafted ``[K, P]`` stacks with hand-computed
-``tr(Cov)`` / ``||E[g]||^2``, exercises the scale relationship that separates the
-absolute ``var/avg`` (``tr(Cov)/d``, scales like ``c^2``) from the dimensionless
-``var/normalized`` (the NGV ratio, scale-invariant), and smoke-tests ``compute``.
+Pins both scalars on crafted ``[K, P]`` stacks with hand-computed ``tr(Cov)``
+and ``||E[g]||^2``, checks that ``var/avg`` scales like ``c^2`` while
+``var/normalized`` is scale-invariant, and smoke-tests ``compute``.
 """
 
 import math
@@ -65,9 +64,9 @@ def test_scale_relationship():
 
 
 def test_ngv_unit_boundary_signal_equals_noise():
-    # The paper's interpretive threshold: NGV = tr(Cov)/||E[g]||^2 = 1 marks
-    # noise power == signal power. For a [K=2, P=1] column [m-s, m+s]: unbiased var
-    # = 2*s^2 and ||E[g]||^2 = m^2, so NGV = 1 iff m = s*sqrt(2). Take s=1, m=sqrt2:
+    # NGV = tr(Cov)/||E[g]||^2 = 1 marks noise power == signal power. For a
+    # [K=2, P=1] column [m-s, m+s]: unbiased var = 2*s^2 and ||E[g]||^2 = m^2,
+    # so NGV = 1 iff m = s*sqrt(2). Take s=1, m=sqrt2:
     G = torch.tensor([[math.sqrt(2.0) - 1.0], [math.sqrt(2.0) + 1.0]])
     out = _ngv_core(G)
     assert out["var/normalized"] == pytest.approx(1.0)
@@ -104,9 +103,8 @@ def test_plug_in_estimator_saturates_at_k():
 
 
 def test_compute_matches_classic_backward_sweep():
-    # Independent oracle: replicate compute() with a plain loss.backward() loop
-    # over the same 10 disjoint sub-batches (no torch.func in the reference)
-    # and compare both scalars.
+    # Reference without torch.func: a plain loss.backward() loop over the same
+    # 10 disjoint sub-batches.
     model = tiny_mlp().eval()
     X, y = synthetic_probe(m=40)
     lf = nn.CrossEntropyLoss()

@@ -1,13 +1,10 @@
 """Gradient Signal-to-Noise Ratio (GSNR) of parameters (Liu et al., 2020).
 
-Per-parameter GSNR ``r_j = gbar_j² / Var_i[g_{i,j}]`` measures how consistent the
-raw loss gradient of parameter ``j`` is across samples: signal (mean) over noise
-(variance). The aggregation is by **mean** (never sum, which is incomparable
-across architectures with different ``P``), over the unbiased variance
-(``÷ M-1``), after dropping "dead" parameters (dead ReLUs, zero-init biases) by
-a threshold on ``‖g_j‖``. **median** and **p95** are also reported: the heavy
-tail of ``r_j`` biases the mean. Shares the per-sample ∇L sweep with
-``m_coherence`` and ``stiffness``.
+Per-parameter GSNR is ``r_j = gbar_j² / Var_i[g_{i,j}]``, over the unbiased
+variance (``÷ M-1``) and after dropping "dead" parameters by a threshold on
+``‖g_j‖``. Aggregated by mean, never by sum, which is incomparable across
+architectures with different ``P``; the median and p95 are also logged because
+the tail of ``r_j`` is heavy.
 """
 
 from __future__ import annotations
@@ -17,19 +14,17 @@ import torch.nn as nn
 
 from .primitives import EPS, stream_grad_moments
 
-# Threshold on the per-column gradient norm below which a parameter is treated as
-# "dead" (dead ReLU, zero-init bias) and excluded from the GSNR aggregation.
+# Per-column gradient norm at or below which a parameter counts as dead and is
+# excluded from the aggregation.
 _DEAD_TOL = 1e-8
 
 
 def _gsnr_core(G: torch.Tensor) -> dict[str, float]:
-    """Aggregate per-parameter GSNR over the surviving (non-dead) parameters.
+    """Aggregate per-parameter GSNR over the non-dead columns of ``G`` ``[M, P]``.
 
-    ``G`` is the ``[M, P]`` matrix of per-sample gradients. With ``gbar = G.mean(0)``
-    and ``var = G.var(0, unbiased=True)`` the per-parameter GSNR is
-    ``r_j = gbar_j² / (var_j + EPS)``. Columns whose gradient norm ``‖G[:, j]‖``
-    falls at or below a small tolerance are dropped (falling back to all columns
-    if none survive), then ``r`` is reduced to mean / median / p95.
+    ``r_j = gbar_j² / (var_j + EPS)`` with ``var`` unbiased. Columns whose norm
+    falls at or below :data:`_DEAD_TOL` are dropped, falling back to all columns
+    if none survive; ``r`` is then reduced to mean / median / p95.
     """
     gbar = G.mean(0)
     var = G.var(0, unbiased=True)
@@ -50,9 +45,8 @@ def _gsnr_core(G: torch.Tensor) -> dict[str, float]:
 def _gsnr_from_moments(S: torch.Tensor, Q: torch.Tensor, M: int) -> dict[str, float]:
     """``_gsnr_core`` from the streamed moments ``S = Σg_i``, ``Q = Σg_i²``.
 
-    ``gbar = S/M``; the unbiased per-column variance is ``(Q − S²/M)/(M−1)`` and
-    the per-column gradient norm ``‖G[:, j]‖ = √Q_j``, so the dead-column filter
-    and the ``r_j = gbar_j²/var_j`` reduction match the full-matrix core exactly.
+    ``gbar = S/M``, the unbiased per-column variance is ``(Q − S²/M)/(M−1)`` and
+    the per-column gradient norm is ``√Q_j``.
     """
     gbar = S / M
     var = (Q - S * S / M) / (M - 1)
@@ -71,8 +65,6 @@ def _gsnr_from_moments(S: torch.Tensor, Q: torch.Tensor, M: int) -> dict[str, fl
 
 
 class GsnrMetric:
-    """GSNR metric: per-sample ∇L sweep then :func:`_gsnr_core` aggregation."""
-
     name = "gsnr"
 
     def compute(
@@ -87,7 +79,7 @@ class GsnrMetric:
         return _gsnr_from_moments(S, Q, M)
 
     def reduce(self, sweep) -> dict[str, float]:
-        """Same as :meth:`compute`, off the shared sweep (see ``metrics_runner``)."""
+        """Same result as :meth:`compute`, off the shared sweep."""
         return _gsnr_from_moments(sweep.S, sweep.Q, sweep.M)
 
 

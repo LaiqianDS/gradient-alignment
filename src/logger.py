@@ -1,9 +1,4 @@
-"""Per-run persistence: a thin Parquet/JSON writer.
-
-The logger only does IO. It buffers measurement rows (one flat dict per probe)
-and writes them as Parquet, plus saves the resolved config and a run summary.
-All domain logic (window snapping, efficiency indicators) lives in ``train.py``.
-"""
+"""Per-run persistence: a thin Parquet/JSON writer, IO only."""
 
 from __future__ import annotations
 
@@ -25,11 +20,11 @@ class RunLogger:
         self._rows: list[dict] = []
 
     def log(self, row: dict) -> None:
-        """Buffer one measurement row (mixed step/epoch rows are fine)."""
+        """Buffer one measurement row."""
         self._rows.append(row)
 
     def dataframe(self) -> pd.DataFrame:
-        """All buffered rows as a DataFrame (missing keys become NaN columns)."""
+        """All buffered rows; a key missing from a row becomes NaN."""
         return pd.DataFrame(self._rows)
 
     def save_table(self, name: str, df: pd.DataFrame) -> Path:
@@ -41,10 +36,10 @@ class RunLogger:
     def save_json(self, name: str, obj: dict) -> Path:
         """Write ``obj`` to ``<name>.json`` atomically and return its path.
 
-        ``summary.json`` is the marker the launchers read as "this run
-        finished", so a half-written one would mark a dead run as done. The
-        write goes to a sibling temp file and is renamed into place:
-        ``os.replace`` is atomic, so the target is either absent or complete.
+        The write goes to a sibling temp file and is renamed with
+        ``os.replace``, so the target path is either absent or complete. The
+        launchers treat ``summary.json`` as the "run finished" marker, so a
+        half-written one would mark a dead run as done.
         """
         path = self.dir / f"{name}.json"
         tmp = path.with_name(path.name + ".tmp")

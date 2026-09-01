@@ -38,10 +38,8 @@ def test_per_sample_mean_matches_batch_grad():
 
 
 def test_per_sample_grads_match_autograd_loop():
-    # Independent oracle: per-sample gradients from torch.func must match a
-    # plain autograd loop (loss.backward() one sample at a time). This is the
-    # only check whose reference does NOT itself go through torch.func, so it
-    # catches common-mode errors (loss reduction, buffer handling, model state).
+    # Reference without torch.func: loss.backward() one sample at a time. It
+    # catches common-mode errors (loss reduction, buffers, model state).
     model = tiny_mlp().eval()
     X, y = synthetic_probe(m=12)
     lf = nn.CrossEntropyLoss()
@@ -55,7 +53,7 @@ def test_per_sample_grads_match_autograd_loop():
 
 
 def test_batch_grad_matches_autograd_backward():
-    # Same independent oracle for the batch sweep: torch.func vs loss.backward().
+    # Same reference for the batch sweep: torch.func vs loss.backward().
     model = tiny_mlp().eval()
     X, y = synthetic_probe(m=16)
     lf = nn.CrossEntropyLoss()
@@ -68,8 +66,8 @@ def test_batch_grad_matches_autograd_backward():
 
 
 def test_sweeps_leave_model_state_intact():
-    # Frozen-weights contract: after both sweeps the parameters are bit-identical,
-    # .grad stays untouched (None) and the training flag is preserved.
+    # After both sweeps the parameters are bit-identical, .grad is still None
+    # and the training flag is preserved.
     model = tiny_mlp().eval()
     X, y = synthetic_probe(m=12)
     lf = nn.CrossEntropyLoss()
@@ -90,8 +88,8 @@ def test_split_batches_disjoint_equal():
 
 
 def test_split_batches_contents_disjoint():
-    # Disjointness of contents, not just sizes: with X = arange the value sets
-    # of the k batches must not overlap.
+    # Disjoint contents, not just sizes: with X = arange the value sets of the
+    # k batches must not overlap.
     X = torch.arange(30, dtype=torch.float32).unsqueeze(1)
     y = torch.zeros(30, dtype=torch.long)
     seen: set[float] = set()

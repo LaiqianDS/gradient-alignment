@@ -1,19 +1,16 @@
 """Gradient-Weight Alignment (GWA) (Hölzl, 2025).
 
-The per-sample score is the cosine similarity ``gamma(x_i) = cos(g_i, w_T)``
-between the per-sample gradient and the final classifier weight vector ``w_T``.
-The paper's convention is ``g = -∇L``; this pipeline operates on the RAW ∇L, so
-every cosine sign is flipped relative to the paper. The raw values are kept and
-never negated (ordering and magnitude are preserved either way).
-
-The per-epoch aggregate corrects for excess kurtosis,
+The per-sample score is the cosine ``gamma(x_i) = cos(g_i, w_T)`` between the
+per-sample gradient and the classifier weight vector ``w_T``, last layer only,
+bias excluded. The aggregate corrects for excess kurtosis,
 
     ``GWA_T = M1 / (M4/M2² - 3 + beta)``   with ``beta = 1.2``,
 
 where ``M1`` is the mean cosine and ``M2``/``M4`` are the 2nd/4th central
 moments; ``gwa/kurt`` logs the excess kurtosis ``M4/M2² - 3`` (Gaussian ≈ 0).
-The canonical estimator is **last-layer-only**: the classifier weight matrix, bias
-excluded.
+
+The definition uses ``g = -∇L``. This module computes on the raw ∇L and does
+not negate, so every cosine sign is flipped relative to the definition.
 """
 
 from __future__ import annotations
@@ -23,21 +20,19 @@ import torch.nn as nn
 
 from .primitives import EPS, iter_per_sample_grad_dicts, named_last_linear
 
-# Excess-kurtosis correction constant from the paper (GWA_T denominator).
+# Excess-kurtosis correction constant in the GWA_T denominator.
 _BETA = 1.2
 
 
 def _gwa_aggregate(gammas: torch.Tensor) -> dict[str, float]:
     """Kurtosis-corrected GWA aggregate over per-sample cosines ``gammas`` [M].
 
-    Moments are accumulated in float64 (float32 underflows ``m2²`` once the
-    cosine spread drops below ~1e-3): ``M1 = mean``, ``m2``/``m4`` the 2nd/4th
-    central moments. ``gwa/kurt`` is the **excess** kurtosis ``m4/m2² - 3``
-    (Gaussian ≈ 0), matching the paper's denominator. The aggregate
-    ``value = M1 / (kurt + beta)`` guards its denominator with a
-    sign-preserving ``EPS`` so a near-zero denominator stays finite without
-    flipping the sign. Constant cosines (``m2 = 0``) leave the kurtosis
-    undefined: ``gwa/kurt`` and ``gwa/value`` are NaN, ``gwa/score_mean`` stays.
+    Moments must stay float64: float32 underflows ``m2²`` once the cosine spread
+    drops below ~1e-3. ``gwa/kurt`` is the excess kurtosis ``m4/m2² - 3``
+    (Gaussian ≈ 0) and ``value = M1 / (kurt + beta)``, whose denominator is
+    guarded with a sign-preserving ``EPS`` so it stays finite without flipping
+    sign. Constant cosines (``m2 = 0``) leave the kurtosis undefined:
+    ``gwa/kurt`` and ``gwa/value`` are NaN, ``gwa/score_mean`` stays.
     """
     if gammas.device.type == "mps":
         gammas = gammas.cpu()
@@ -54,8 +49,8 @@ def _gwa_aggregate(gammas: torch.Tensor) -> dict[str, float]:
     kurt = m4 / m2**2 - 3.0  # excess kurtosis
 
     denom = kurt + _BETA
-    # Sign-preserving guard: push the denominator away from zero in its own
-    # direction (+EPS at exactly zero) so the ratio is finite and sign-stable.
+    # Push the denominator away from zero in its own direction (+EPS at exactly
+    # zero) so the ratio is finite and sign-stable.
     sign = torch.where(denom >= 0, torch.ones_like(denom), -torch.ones_like(denom))
     value = M1 / (denom + sign * EPS)
 
@@ -67,8 +62,6 @@ def _gwa_aggregate(gammas: torch.Tensor) -> dict[str, float]:
 
 
 class GwaMetric:
-    """GWA metric: per-sample cosine to the classifier weights, then aggregate."""
-
     name = "gwa"
 
     def compute(
@@ -83,8 +76,8 @@ class GwaMetric:
         w = module.weight.detach().reshape(-1)  # [W] classifier weight vector
         wn = w / w.norm().clamp_min(EPS)
 
-        # cos(g_i, w) per sample, accumulated over streamed chunks (the head's
-        # weight grads are tiny, so only the [M] cosines survive).
+        # cos(g_i, w) per sample, accumulated over streamed chunks; only the
+        # [M] cosines survive.
         chunks = []
         for grads, _ in iter_per_sample_grad_dicts(model, X, y, loss_fn):
             g = grads[lname + ".weight"].flatten(start_dim=1)  # [c, W], bias excluded
@@ -94,7 +87,7 @@ class GwaMetric:
         return _gwa_aggregate(torch.cat(chunks))
 
     def reduce(self, sweep) -> dict[str, float]:
-        """Same as :meth:`compute`, off the shared sweep's precomputed cosines."""
+        """Same result as :meth:`compute`, off the shared sweep's cosines."""
         return _gwa_aggregate(sweep.gwa_cos)
 
 

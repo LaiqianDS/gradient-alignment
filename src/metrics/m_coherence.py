@@ -1,16 +1,14 @@
 """m-coherence (Chatterjee & Zielinski, 2020).
 
-Per-sample gradient alignment $\\alpha_m \\in [0, m]$ (Theorem 1 of the paper:
-$0 \\le \\alpha \\le 1$): 1 is the *orthogonal limit*, $m$ means identical
-gradients, and values below 1 indicate anticorrelated gradients (observed in
-the paper near 100% train accuracy). The identity
-$\\mathbb{E}[g_z\\cdot g] = \\|g\\|^2$ yields the scalable estimator
+Per-sample gradient alignment $\\alpha_m \\in [0, m]$: 1 is the *orthogonal
+limit*, $m$ means identical gradients, and values below 1 mean anticorrelated
+gradients. The estimator is
 
     $\\alpha_m = \\|\\sum_i g_i\\|^2 / \\sum_i \\|g_i\\|^2$,
 
-already on the $[0, m]$ scale (no extra factor of $m$). The reciprocal
-$1/\\alpha$ is the gradient diversity of Yin et al. (2018). Per-sample grads
-are mandatory: Corollary 3.1 proves mini-batches inflate the coherence.
+already on the $[0, m]$ scale, with no extra factor of $m$.
+
+The input must be per-sample gradients: mini-batches inflate the coherence.
 """
 
 from __future__ import annotations
@@ -36,8 +34,7 @@ def _mcoh_core(G: torch.Tensor) -> dict[str, float]:
 def _mcoh_from_moments(S: torch.Tensor, Q: torch.Tensor) -> dict[str, float]:
     """``_mcoh_core`` from the streamed moments ``S = Σg_i``, ``Q = Σg_i²``.
 
-    ``num = ‖S‖²`` and the denominator ``Σ_i‖g_i‖² = Q.sum()``: identical to
-    the full-matrix core, which is ``‖G.sum(0)‖² / (G*G).sum()``.
+    ``num = ‖S‖²`` and ``Σ_i‖g_i‖² = Q.sum()``.
     """
     return {"mcoh/global": float(S.dot(S) / (Q.sum() + EPS))}
 
@@ -57,7 +54,7 @@ class MCoherenceMetric:
         return _mcoh_from_moments(S, Q)
 
     def reduce(self, sweep) -> dict[str, float]:
-        """Same as :meth:`compute`, off the shared sweep (see ``metrics_runner``)."""
+        """Same result as :meth:`compute`, off the shared sweep."""
         return _mcoh_from_moments(sweep.S, sweep.Q)
 
 

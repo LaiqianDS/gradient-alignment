@@ -1,8 +1,4 @@
-"""Shared gradient primitives, computed once and reused across metrics.
-
-The per-sample sweep is the dominant probe cost, so it is computed once here and
-shared. Everything operates on the raw loss gradient ∇L.
-"""
+"""Shared gradient primitives. Everything operates on the raw loss gradient ∇L."""
 
 from __future__ import annotations
 
@@ -15,12 +11,10 @@ from torch.func import functional_call, grad, vmap
 EPS = 1e-12
 
 # Default rows-per-chunk for the streaming per-sample-grad sweeps. The streamed
-# statistics are chunk-invariant (same value for any chunk_size); this only caps
-# the device peak at [chunk_size, P] instead of the full [M, P] Jacobian. Lower
-# it on a tight GPU, raise it on a roomy one. ``train.py`` overrides it per run
-# from ``Config.chunk_size`` via :func:`set_chunk_size`; the streamers resolve a
-# ``chunk_size=None`` argument against this module global *at call time* (a
-# function default would freeze the value at import).
+# statistics are chunk-invariant, so this only caps the device peak at
+# [chunk_size, P] instead of the full [M, P] Jacobian. The streamers resolve a
+# ``chunk_size=None`` argument against this global *at call time*: a function
+# default would freeze the value at import.
 DEFAULT_CHUNK_SIZE = 32
 
 
@@ -50,9 +44,9 @@ def flatten_grads(grads: dict[str, torch.Tensor], *, batched: bool) -> torch.Ten
 def per_sample_grads(model, X, y, loss_fn) -> dict[str, torch.Tensor]:
     """Per-sample ∇L wrt each parameter: ``{name: Tensor[M, *param_shape]}``.
 
-    Uses ``vmap(grad(functional_call))``. The model is frozen (params/buffers
-    detached); call ``model.eval()`` upstream so BatchNorm/Dropout are
-    deterministic across the probe.
+    Params and buffers are detached, so the model is left untouched. Call
+    ``model.eval()`` upstream so BatchNorm/Dropout are deterministic across the
+    probe.
     """
     params = {k: v.detach() for k, v in model.named_parameters()}
     buffers = {k: v.detach() for k, v in model.named_buffers()}
@@ -72,19 +66,16 @@ def per_sample_grad_matrix(model, X, y, loss_fn) -> torch.Tensor:
 # ---------------------------------------------------------------------------
 # Streaming per-sample sweeps.
 #
-# The dense ``[M, P]`` Jacobian is ~M·P·4 bytes (14 GB for the fc head on
-# Tiny ImageNet at M=256), which overflows a 16 GB GPU. These helpers process
-# the probe in row-chunks so the device only ever holds ``[chunk_size, P]``,
-# while still returning the exact same statistics the metric ``_core`` helpers
-# expect. Each metric keeps its tested ``_core(G)`` (full-matrix) path intact;
-# its ``compute()`` drives one of these streamers instead.
+# The dense ``[M, P]`` Jacobian is ~M·P·4 bytes, too large to hold on device.
+# These helpers process the probe in row-chunks so the device only ever holds
+# ``[chunk_size, P]``, while returning the same statistics the metric ``_core``
+# helpers compute from the full matrix.
 # ---------------------------------------------------------------------------
 
 def _moment_device(device: torch.device) -> torch.device:
     """Where to accumulate float64 moments: the device itself, except MPS.
 
-    The Metal backend has no float64; mirroring ``gwa``'s handling, moments on
-    an MPS probe are accumulated on the CPU. CUDA/CPU accumulate in place.
+    The Metal backend has no float64, so an MPS probe accumulates on the CPU.
     """
     return torch.device("cpu") if device.type == "mps" else device
 
@@ -95,11 +86,7 @@ def _resolve_chunk(chunk_size: int | None) -> int:
 
 
 def iter_grad_chunks(model, X, y, loss_fn, chunk_size: int | None = None):
-    """Yield ``(G_chunk [c, P], y_chunk [c])`` per-sample gradient row-chunks.
-
-    Streams the probe in row-blocks of ``chunk_size`` so the full ``[M, P]``
-    matrix is never materialised at once (device peak: ``[chunk_size, P]``).
-    """
+    """Yield ``(G_chunk [c, P], y_chunk [c])`` per-sample gradient row-chunks."""
     cs = _resolve_chunk(chunk_size)
     for s in range(0, X.shape[0], cs):
         Xc, yc = X[s : s + cs], y[s : s + cs]
@@ -109,8 +96,8 @@ def iter_grad_chunks(model, X, y, loss_fn, chunk_size: int | None = None):
 def iter_per_sample_grad_dicts(model, X, y, loss_fn, chunk_size: int | None = None):
     """Yield ``({name: [c, *shape]}, y_chunk)`` per-sample gradient dict chunks.
 
-    For last-layer-only consumers (GWA) that slice a single parameter's grads
-    without ever flattening the full ``P`` columns.
+    For consumers that slice a single parameter's grads without flattening the
+    full ``P`` columns.
     """
     cs = _resolve_chunk(chunk_size)
     for s in range(0, X.shape[0], cs):
@@ -124,11 +111,9 @@ def stream_grad_moments(
     """Streamed first two per-column moments of the per-sample gradients.
 
     Returns ``(S, Q, M)`` with ``S = Σ_i g_i`` and ``Q = Σ_i g_i²`` (elementwise),
-    both ``[P]`` float64, and ``M`` the sample count. The variability metrics
-    (``gns_simple``, ``gsnr``, ``m_coherence``) reduce to these two moments; the
-    float64 accumulation keeps their difference-of-squares forms (tr Σ, variance)
-    free of the fp32 cancellation that the full-matrix ``_core`` paths avoid by
-    computing ``(g_i − ḡ)²`` directly.
+    both ``[P]`` float64, and ``M`` the sample count. The accumulation must stay
+    float64: the consumers form differences of squares (tr Σ, variance), which
+    cancel badly in fp32.
     """
     acc = _moment_device(X.device)
     S = Q = None
@@ -149,12 +134,9 @@ def stream_gram(
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """``[M, M]`` Gram of per-sample gradients and their ``[M]`` row norms.
 
-    The pairwise metrics (``stiffness``, ``gradient_confusion``) need every
-    ``g_i · g_j`` but only the tiny ``[M, M]`` Gram and per-row norms survive.
     Per-sample grads stream in row-chunks to host RAM (device peak: one
     ``[chunk_size, P]`` block); the Gram is then accumulated in column blocks
-    back on the model device so the matmul runs on the accelerator while device
-    memory stays bounded. Costs ~M·P·4 bytes of host RAM for the assembled ``G``.
+    back on the model device. Costs ~M·P·4 bytes of host RAM for ``G``.
     """
     device = X.device
     G = torch.cat(
@@ -172,8 +154,7 @@ def stream_gram(
 def batch_grad(model, X, y, loss_fn) -> dict[str, torch.Tensor]:
     """Aggregate ∇L of the batch loss: ``{name: grad}``.
 
-    "Mean loss" assumes ``loss_fn`` reduces by mean (the pipeline's
-    ``nn.CrossEntropyLoss()`` default); a sum-reducing loss returns ``M×`` the
+    Assumes ``loss_fn`` reduces by mean. A sum-reducing loss returns ``M×`` the
     mean gradient, and a sample-weighted loss breaks the identity
     ``mean(per-sample grads) == batch_grad``.
     """
@@ -202,10 +183,9 @@ def split_batches(X, y, k):
 def named_last_linear(model) -> tuple[str, nn.Linear]:
     """Return ``(qualified_name, module)`` of the last ``nn.Linear``, the head.
 
-    Param names follow as ``f"{name}.weight"`` / ``f"{name}.bias"``.
-    "Last" follows **registration order** (``named_modules``), not forward
-    order: correct for the fc/cnn/resnet18 models here, but not for a model
-    that defines its head before other Linear layers.
+    Param names follow as ``f"{name}.weight"`` / ``f"{name}.bias"``. "Last"
+    follows registration order (``named_modules``), not forward order, so a
+    model that defines its head before other Linear layers breaks this.
     """
     last = None
     for name, mod in model.named_modules():
@@ -218,28 +198,19 @@ def named_last_linear(model) -> tuple[str, nn.Linear]:
 
 # ---------------------------------------------------------------------------
 # One shared per-sample sweep for the whole probe.
-#
-# The per-sample ∇L sweep is a probe's dominant cost, and six metrics each
-# recompute it through their own ``compute()``. ``stream_shared`` runs it once
-# and returns every product they need; ``metrics_runner.measure`` builds it once
-# and feeds each metric its ``reduce``.
 # ---------------------------------------------------------------------------
 
 @dataclass
 class SharedSweep:
-    """Products of one per-sample ∇L sweep, shared across the six per-sample metrics.
+    """Products of one per-sample ∇L sweep, enough for every ``reduce``.
 
-    * ``S``, ``Q``, ``M``: the two per-column float64 moments (Σ gᵢ, Σ gᵢ²)
-      and the sample count, exactly as :func:`stream_grad_moments` returns them
-      (consumed by ``gns_simple`` / ``gsnr`` / ``m_coherence``).
+    * ``S``, ``Q``, ``M``: the two per-column float64 moments (Σ gᵢ, Σ gᵢ²) and
+      the sample count, exactly as :func:`stream_grad_moments` returns them.
     * ``gram``, ``norms``: the ``[M, M]`` Gram and ``[M]`` row norms, exactly as
-      :func:`stream_gram` returns them (consumed by ``stiffness`` /
-      ``gradient_confusion``).
+      :func:`stream_gram` returns them.
     * ``gwa_cos``: the ``[M]`` per-sample cosines ``cos(gᵢ, w_T)`` to the
-      normalised last-layer weight, the input ``gwa._gwa_aggregate`` reduces.
-    * ``y``: the probe labels the sweep was computed over, so a ``reduce`` is a
-      pure function of the sweep alone (only ``stiffness`` needs them, for its
-      within/between-class pair masks).
+      normalised last-layer weight.
+    * ``y``: the probe labels, so a ``reduce`` is a pure function of the sweep.
     """
 
     S: torch.Tensor
@@ -252,17 +223,15 @@ class SharedSweep:
 
 
 def stream_shared(model, X, y, loss_fn, chunk_size: int | None = None) -> SharedSweep:
-    """One per-sample ∇L sweep feeding every per-sample metric (see :class:`SharedSweep`).
+    """One per-sample ∇L sweep yielding every product in :class:`SharedSweep`.
 
-    Streams the probe in row-chunks exactly as :func:`stream_grad_moments` and
-    :func:`stream_gram`, but computes :func:`per_sample_grads` **once** per chunk
-    and derives the moments, the host-assembled ``[M, P]`` for the Gram, and the
-    gwa last-layer cosines from that single dict, so the expensive
-    ``vmap(grad(functional_call))`` runs once per chunk instead of once per metric.
-    Device peak is ``[chunk_size, P]`` and host peak the full ``[M, P]`` f32,
-    matching a single ``stream_gram`` call. The products are the same the
-    per-metric streamers produce (same float64 moment accumulation, same
-    column-blocked Gram), so each metric's ``reduce`` equals its ``compute``.
+    Calls :func:`per_sample_grads` once per row-chunk and derives the moments,
+    the host-assembled ``[M, P]`` for the Gram, and the gwa cosines from that one
+    dict. Device peak ``[chunk_size, P]``, host peak the full ``[M, P]`` f32.
+
+    Its products must stay identical to what :func:`stream_grad_moments` and
+    :func:`stream_gram` return for the same chunk size, or a metric's ``reduce``
+    stops equalling its ``compute``.
     """
     device = X.device
     acc = _moment_device(device)
@@ -284,23 +253,20 @@ def stream_shared(model, X, y, loss_fn, chunk_size: int | None = None) -> Shared
         Gc_cpu = Gc.to("cpu")
         g_host.append(Gc_cpu)
 
-        # Moments in float64 on the accumulation device (MPS rejects float64, so
-        # acc is the host there); float64 keeps tr Σ / variance free of fp32
-        # cancellation. When acc is the host, reuse Gc_cpu instead of copying the
-        # chunk device→host a second time; on CUDA accumulate on-device from Gc.
+        # Moments in float64 on the accumulation device. When that is the host,
+        # reuse Gc_cpu instead of copying the chunk device->host a second time.
         Gd = (Gc_cpu if acc.type == "cpu" else Gc).to(acc).double()
         chunk_S, chunk_Q = Gd.sum(0), (Gd * Gd).sum(0)
         S = chunk_S if S is None else S + chunk_S
         Q = chunk_Q if Q is None else Q + chunk_Q
         M += Gc.shape[0]
 
-        # gwa: cosine of each per-sample head-weight grad to w_T (bias excluded),
-        # computed on the streamed chunk exactly as ``gwa.compute`` does.
+        # Cosine of each per-sample head-weight grad to w_T, bias excluded.
         hg = grads[lname + ".weight"].flatten(start_dim=1)  # [c, W]
         hgn = hg / hg.norm(dim=1).clamp_min(EPS).unsqueeze(1)
         cos_chunks.append((hgn @ wn).to("cpu"))  # [c]
 
-    # Gram in column blocks back on the model device (matches stream_gram).
+    # Gram in column blocks back on the model device.
     G = torch.cat(g_host)
     _, P = G.shape
     gram = torch.zeros(M, M, device=device)

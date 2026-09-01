@@ -1,15 +1,13 @@
 """Stiffness (Fort et al., 2019): pairwise per-sample gradient alignment.
 
-Over all unordered pairs ``i < j`` of per-sample gradients we report two
-complementary statistics:
+Over all unordered pairs ``i < j`` of per-sample gradients:
 
   * ``S_cos  = mean cos(g_i, g_j)``,
   * ``S_sign = mean sign(g_i · g_j)``,
 
 each split into global, within-class (``y_i == y_j``) and between-class
-(``y_i != y_j``) regimes. Operates on the RAW loss gradient ∇L. Only the global
-and within/between scalars are emitted: the dynamic critical length ξ and the
-full class-stiffness matrix ``C(c_a, c_b)`` are not computed.
+(``y_i != y_j``). The dynamic critical length ξ and the full class-stiffness
+matrix ``C(c_a, c_b)`` are not computed.
 """
 
 from __future__ import annotations
@@ -39,11 +37,8 @@ def _stiffness_from_gram(
 ) -> dict[str, float]:
     """Pairwise stiffness from the ``[M, M]`` Gram and ``[M]`` row norms.
 
-    ``cos_{ij} = ⟨g_i, g_j⟩ / (‖g_i‖‖g_j‖) = Gram_{ij}/(n_i n_j)`` and the sign
-    matrix is ``sign(Gram)``: algebraically identical to the row-normalised
-    ``Gn @ Gn.T`` / ``sign(G @ G.T)`` of :func:`_stiffness_core`, but expressed
-    on the compact Gram so it can be fed by the streamed sweep. A zero-gradient
-    row clamps to ``EPS`` and contributes cosine 0 (the paper's ΔL₂=0 convention).
+    ``cos_{ij} = Gram_{ij}/(n_i n_j)`` and the sign matrix is ``sign(Gram)``. A
+    zero-gradient row clamps to ``EPS`` and so contributes cosine 0.
     """
     n = norms.clamp_min(EPS)
     cos = gram / (n.unsqueeze(0) * n.unsqueeze(1))
@@ -68,9 +63,8 @@ def _stiffness_from_gram(
 def _stiffness_core(G: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
     """Pairwise stiffness over per-sample gradients ``G`` [M, P], labels ``y`` [M].
 
-    Forms the ``[M, M]`` Gram and per-row norms, then delegates to
-    :func:`_stiffness_from_gram`: one shared math path for both the full-matrix
-    (tested) and the streamed ``compute()`` routes.
+    Forms the Gram and row norms, then delegates to
+    :func:`_stiffness_from_gram`, the one math path both routes share.
     """
     return _stiffness_from_gram(G @ G.T, G.norm(dim=1), y)
 
@@ -90,7 +84,7 @@ class StiffnessMetric:
         return _stiffness_from_gram(gram, norms, y)
 
     def reduce(self, sweep) -> dict[str, float]:
-        """Same as :meth:`compute`, off the shared sweep (see ``metrics_runner``)."""
+        """Same result as :meth:`compute`, off the shared sweep."""
         return _stiffness_from_gram(sweep.gram, sweep.norms, sweep.y)
 
 

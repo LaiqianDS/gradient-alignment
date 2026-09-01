@@ -1,7 +1,7 @@
 """Post-hoc sanity diagnostics for the logged metric trajectories.
 
-Loads the per-run Parquet/JSON that ``train.py`` writes (see ``logger.py``) and
-returns tidy DataFrames:
+Loads the per-run Parquet/JSON that ``train.py`` writes and returns tidy
+DataFrames:
 
 * :func:`validity_report` / :func:`identity_report`: values inside their
   theoretical range, and the hard cross-column identities.
@@ -35,9 +35,9 @@ REPORTS_DIR = ROOT / "reports"
 # m-coherence (alpha in [0, M]).
 PROBE_SIZE = int(FIXED_KNOBS["probe_size"])
 
-# Signal-to-jitter of a trajectory that is white noise around a constant: for
-# such a series std(diff) = sqrt(2) * std(values), so the ratio is 1/sqrt(2).
-# The reference line of :func:`degeneracy_report`.
+# Signal-to-jitter of white noise around a constant: for such a series
+# std(diff) = sqrt(2) * std(values), so the ratio is 1/sqrt(2). The reference
+# line of :func:`degeneracy_report`.
 NOISE_RATIO = float(1.0 / np.sqrt(2.0))
 
 
@@ -60,15 +60,14 @@ class MetricSpec:
     headline: bool = False
 
 
-# Ranges and trends follow each metric's source paper. cosines -> [-1, 1];
-# variances / distances / GSNR / TSE -> [0, inf); fractions -> [0, 1]; m-coherence
-# -> [0, M]; GWA excess kurtosis -> [-2, inf).
+# Ranges: cosines -> [-1, 1]; variances / distances / GSNR / TSE -> [0, inf);
+# fractions -> [0, 1]; m-coherence -> [0, M]; GWA excess kurtosis -> [-2, inf).
 SPECS: tuple[MetricSpec, ...] = (
     # --- the run's own learning curve ---------------------------------------
     MetricSpec("train_loss", "train_loss", "monitor", 0.0, None, -1),
     MetricSpec("val_loss", "val_loss", "monitor", 0.0, None, None, headline=True),
     MetricSpec("val_acc", "val_acc", "monitor", 0.0, 1.0, +1, headline=True),
-    # --- TSE baseline predictor (level 0) -----------------------------------
+    # --- TSE baseline predictor ---------------------------------------------
     MetricSpec("tse/cumulative", "tse", "baseline", 0.0, None, +1),  # running sum
     MetricSpec("tse/e_window", "tse", "baseline", 0.0, None, None),
     MetricSpec("tse/ema_0_9", "tse", "baseline", 0.0, None, None),
@@ -109,7 +108,7 @@ def metric_columns() -> list[str]:
 
 
 def headline_columns() -> list[str]:
-    """The one primary scalar per metric, plus the level-0 baselines."""
+    """The columns flagged ``headline`` in :data:`SPECS`."""
     return [s.key for s in SPECS if s.headline]
 
 
@@ -145,9 +144,8 @@ def load_windows(report_dir: str | Path = REPORTS_DIR) -> pd.DataFrame:
 def load_summaries(report_dir: str | Path = REPORTS_DIR) -> pd.DataFrame:
     """One row per run: the ``summary.json`` scalars (final test/val/gap, timing).
 
-    Under ``PILOT_DIR`` the ``tiny_imagenet`` test/gap fields are invalid and
-    declare it with a ``_tiny_test_note`` key; their val-side and timing fields
-    are valid. No run under ``reports/`` carries that key.
+    A summary carrying a ``_tiny_test_note`` key declares its own test/gap
+    fields invalid; its val-side and timing fields stay valid.
     """
     rows = [
         json.loads((d / "summary.json").read_text())
@@ -299,8 +297,7 @@ def degeneracy_report(
     :data:`NOISE_RATIO`. Two boundary cases: a constant trajectory scores 0, and
     a perfectly linear one has no jitter and scores infinity.
 
-    ``below_noise`` is the plain comparison against that reference, descriptive
-    only: nothing keys off it.
+    ``below_noise`` is the plain comparison against that reference.
     """
     keys = keys or [k for k in metric_columns() if k in traj.columns]
     rows = []
@@ -360,13 +357,11 @@ def trend_report(
     the expected sign. Returns one row per (run, key); see :func:`trend_summary`
     for the roll-up.
 
-    ``rho_signed = rho * expected`` is the column comparable across metrics:
-    positive always means the metric drifts as its spec predicts.
+    ``rho_signed = rho * expected`` is comparable across metrics: positive always
+    means the metric drifts as its spec predicts.
 
     ``progress_max`` restricts grading to rows with
-    ``progress_frac <= progress_max``. In pilot terms the 1x budget is
-    ``progress_frac`` 0.5, so the logged windows f in {0.05, 0.10, 0.25, 0.50}
-    map to ``progress_max`` {0.025, 0.05, 0.125, 0.25}.
+    ``progress_frac <= progress_max``.
     """
     if progress_max is not None:
         traj = traj[traj["progress_frac"] <= progress_max]
@@ -421,8 +416,7 @@ def redundancy_matrix(
     """Cross-metric Spearman correlation map.
 
     With ``within_run=True`` (default) it averages the per-run Spearman matrices,
-    so the correlation reflects co-movement over training inside each run and is
-    not manufactured by between-run scale differences (a Simpson guard).
+    so between-run scale differences cannot manufacture the correlation.
     """
     keys = keys or [k for k in headline_columns() if k in traj.columns]
     if not within_run:

@@ -19,8 +19,8 @@ def test_forward_shape(name):
 
 @pytest.mark.parametrize("name", MODELS)
 def test_last_layer_is_linear_head(name):
-    # Downstream metrics locate the head as the last nn.Linear; every model
-    # must end in one whose out_features == num_classes.
+    # The metrics locate the head as the last nn.Linear, so every model must
+    # end in one whose out_features == num_classes.
     model = build_model(name, _SHAPES[name], num_classes=7)
     linears = [m for _, m in model.named_modules() if isinstance(m, nn.Linear)]
     assert linears, f"{name} has no nn.Linear"

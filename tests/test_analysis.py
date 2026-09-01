@@ -1,7 +1,7 @@
 """Unit tests for the sanity-diagnostics backend (``src/analysis.py``).
 
-These cover the deterministic logic on synthetic frames: range/identity detection,
-trend direction, degeneracy and the loaders. They do not depend on ``reports_pilot/``.
+Deterministic logic on synthetic frames: range/identity detection, trend
+direction, degeneracy and the loaders.
 """
 
 from __future__ import annotations

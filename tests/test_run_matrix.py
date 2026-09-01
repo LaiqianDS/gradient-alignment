@@ -23,8 +23,8 @@ def test_filters_restrict_the_grid():
 
 
 def test_run_name_mirrors_train_default():
-    # The launcher must predict the exact directory train.py would create for
-    # every grid point, or resume detection silently misses runs.
+    # The launcher must predict the exact directory train.py creates, or resume
+    # detection silently misses runs.
     for run in run_matrix.enumerate_runs():
         cfg = Config(dataset=run.dataset, model=run.model, optimizer=run.optimizer,
                      lr=run.lr, seed=run.seed)

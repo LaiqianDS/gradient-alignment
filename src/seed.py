@@ -1,4 +1,4 @@
-"""Fix random seeds across Python, NumPy and PyTorch for reproducible experiments."""
+"""Fix random seeds across Python, NumPy and PyTorch."""
 
 import os
 import random

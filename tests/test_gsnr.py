@@ -1,9 +1,6 @@
-"""Tests for the GSNR metric (Liu et al., 2020).
-
-Analytic sanity checks exercise the pure ``_gsnr_core`` on crafted gradient
-matrices with known per-parameter GSNR; one smoke test runs the full
-``compute()`` path on a tiny MLP probe.
-"""
+"""Tests for the GSNR metric: analytic checks on ``_gsnr_core`` over crafted
+gradient matrices with known per-parameter GSNR, plus one smoke test of
+``compute()``."""
 
 import math
 
@@ -116,10 +113,8 @@ def test_all_dead_columns_fall_back_to_keeping_all():
 
 
 def test_compute_matches_analytic_linear_model_grads():
-    # Independent oracle for the full compute() path: for ŷ = w·x + b with MSE
-    # loss, the per-sample gradient is g_i = [2 r_i x_i, 2 r_i] with residual
-    # r_i = w·x_i + b − y_i, known in closed form (no torch.func in the
-    # reference). compute() must equal _gsnr_core of those analytic gradients.
+    # Reference without torch.func: for ŷ = w·x + b under MSE the per-sample
+    # gradient is g_i = [2 r_i x_i, 2 r_i] with residual r_i = w·x_i + b − y_i.
     torch.manual_seed(0)
     model = nn.Linear(3, 1)
     X = torch.randn(12, 3)
