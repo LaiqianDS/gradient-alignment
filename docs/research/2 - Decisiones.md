@@ -30,6 +30,16 @@ El 2026-08-27 se retiró de este log la tanda de decisiones del 2026-08-26, la q
 
 ### 2026-09-03
 
+#### El mapa de solape baja a la variable principal, y el volumen de cruces sale a figura aparte
+
+**Qué se decidió.** `solape-mapa` pasa de tres paneles a uno, solo VD1. VD2 y VD3 se cuentan en prosa. Se añaden dos figuras: `solape-cruces`, los cruces ya ocurridos al cerrar cada ventana sumados sobre las 24 celdas, y `solape-bandas`, esa misma cuenta contra la parte del presupuesto consumida, en dos paneles apilados, por conjunto de datos y por arquitectura. `solape-celda` gana un panel con los cruces acumulados.
+
+**Por qué.** El panel del AUC enseñaba supervivencia en las 24 celdas y el párrafo siguiente tenía que retirarla, porque el área supera toda ventana por construcción del trapecio. Un tercio de la figura sostenía un resultado que el texto desmiente. Lo que faltaba en cambio era el volumen: ni la celda de ejemplo ni el mapa dicen cuántos cruces hay detrás de cada ventana, y esa es la magnitud del problema.
+
+- **Trampa: las dos figuras nuevas cuentan entrenamientos y la regla decide en pares.** Sirven para dimensionar, no para decidir. Quien decide sigue siendo el mapa, y la memoria lo dice en el propio párrafo.
+- **Trampa: los dos cortes de `solape-bandas` heredan el confusor del umbral.** MNIST cruza tarde porque se le pide 0,975 y la red plana pronto porque se le pide el umbral más bajo, así que ninguno separa la dificultad de la exigencia. Declarado en la memoria.
+- **Trampa: las bandas son cuartiles sobre seis u ocho celdas.** Con grupos más pequeños el recorrido se colapsaría sobre la mediana sin avisar.
+
 #### La columna titular de cada predictor pasa a la memoria, tal como estaba marcada en el código
 
 **Qué se decidió.** Las once columnas que `analysis.py::SPECS` marca como `headline` (las ocho métricas, TSE con `tse/ema_0_999`, y `val_loss` y `val_acc`) se escriben en `metodologia.tex` §Variables como la Tabla «Columna titular de cada predictor», y Resultados §Rango dinámico las cita por esa tabla. Sin cambiar ninguna: son las que usó el punto 3 de la fase A y las que dibuja la figura de rango por columnas.
@@ -67,7 +77,7 @@ El 2026-08-27 se retiró de este log la tanda de decisiones del 2026-08-26, la q
 - **Trampa: el suavizado mira una *epoch* adelante.** La mediana centrada usa la siguiente, luego VD1 lleva una *epoch* de anticipación dentro. Manda la coherencia con VD1 tal como está definida.
 - **Trampa: las ventanas de MNIST son las *epochs* 1, 2, 5 y 10 y las demás 2, 4, 10 y 20.** Comparar el solape entre conjuntos mezcla tiempo absoluto y relativo; dentro de una celda es constante.
 - **Lo que no decide**, anotado como deuda de §Protocolo de análisis en [[3 - Progreso]]: qué hace la fase B con los runs ya cruzados dentro de una ventana que sirve.
-- **Dos figuras, por decisión de Lai:** `solape-celda`, la que él pidió, y `solape-mapa`.
+- **Cuatro figuras, por decisión de Lai:** `solape-celda`, `solape-cruces`, `solape-bandas` y `solape-mapa`. La forma que tomaron está en la entrada del 2026-09-03.
 
 #### El estilo de figuras pasa a color de artículo, y se retiran tres restricciones
 

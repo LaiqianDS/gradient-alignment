@@ -604,7 +604,9 @@ def crossing_bands(
 
     windows = sorted(w for w in load_windows(report_dir)["window"].unique() if w < 1.0)
     ticks = (0, 0.25, 0.5, 0.75, 1.0)
-    fig, axes = figstyle.figure(width="full", ratio=0.42, ncols=2)
+    # Stacked and not side by side: each panel gets the whole text width, and the
+    # shared horizontal axis is what lets the two cuts be read against each other.
+    fig, axes = figstyle.figure(width="full", ratio=0.74, nrows=2)
     cuts = ((0, DATASETS, DATASET_LABELS), (1, MODELS, MODEL_LABELS))
     for ax, (level, groups, labels) in zip(axes, cuts):
         for i, g in enumerate(groups):
@@ -617,23 +619,23 @@ def crossing_bands(
                             lw=0, zorder=2)
             ax.plot(grid, mid, color=figstyle.PALETTE[i], lw=1.6, zorder=3,
                     label=labels[g])
-        # The first two windows are close together at half width, so their
-        # labels alternate height instead of overlapping.
-        for k, w in enumerate(windows):
+        for w in windows:
             ax.axvline(w, ls="--", lw=0.9, color=figstyle.RULE, zorder=1)
-            ax.text(w, 1.01 + 0.055 * (k % 2), _window_label(w), ha="center",
-                    va="bottom", fontsize=7)
         ax.set_xlim(0, 1)
         ax.set_ylim(0, 1)
         ax.set_xticks(ticks)
-        ax.set_xticklabels([_rate_label(t) for t in ticks])
         ax.set_yticks(ticks)
+        ax.set_yticklabels([_rate_label(t) for t in ticks])
         ax.legend(loc="lower right", fontsize=7.5, handlelength=1.4)
 
-    axes[0].set_yticklabels([_rate_label(t) for t in ticks])
-    axes[0].set_ylabel("cruces ya ocurridos")
-    axes[1].set_yticklabels([])
-    fig.supxlabel("parte del presupuesto consumida", fontsize=figstyle.BODY_PT - 1)
+    top = blended_transform_factory(axes[0].transData, axes[0].transAxes)
+    for w in windows:
+        axes[0].text(w, 1.0, _window_label(w), transform=top, ha="center",
+                     va="bottom", fontsize=7.5)
+    axes[0].set_xticklabels([])
+    axes[1].set_xticklabels([_rate_label(t) for t in ticks])
+    axes[1].set_xlabel("parte del presupuesto consumida")
+    fig.supylabel("cruces ya ocurridos", fontsize=figstyle.BODY_PT - 1)
     return figstyle.save(fig, "solape-bandas", out_dir)
 
 
