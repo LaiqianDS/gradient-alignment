@@ -45,7 +45,30 @@ Las variables predictoras son las ocho métricas de gradiente definidas en las S
 
 La lista se cerró antes de ejecutar el primer entrenamiento de la matriz, y las ocho métricas se miden en los 960, sin excepción. Ninguna se selecciona a la vista de los resultados. Descartar una métrica después de verla rendir mal, o añadir otra al comprobar que la primera falla, convertiría el estudio en una búsqueda de la métrica que mejor queda, y los coeficientes resultantes ya no medirían lo que aparentan.
 
-Una métrica no produce un número por \emph{epoch}, sino varias columnas, y eso condiciona todo lo que viene después: la \emph{stiffness} emite seis, la \emph{gradient confusion} cinco, GSNR y GWA tres cada una, el estimador de velocidad de entrenamiento cuatro, y las cuatro restantes una o dos, de modo que cada \emph{epoch} de cada entrenamiento deja 27 columnas de predictor. Son variantes de una misma cantidad y no predictores independientes, así que contrastarlas todas equivaldría a repetir cada prueba veintisiete veces. Qué columna representa a cada métrica, y cómo se corrige el número de contrastes, se fija en la Sección~\ref{sec:protocolo-analisis}.
+Una métrica no produce un número por \emph{epoch}, sino varias columnas, y eso condiciona todo lo que viene después: la \emph{stiffness} emite seis, la \emph{gradient confusion} cinco, GSNR y GWA tres cada una, el estimador de velocidad de entrenamiento cuatro, y las cuatro restantes una o dos, de modo que cada \emph{epoch} de cada entrenamiento deja 27 columnas de predictor. Son variantes de una misma cantidad y no predictores independientes, así que contrastarlas todas equivaldría a repetir cada prueba veintisiete veces. La columna que representa a cada métrica, su columna titular, queda fijada en la Tabla~\ref{tab:columnas-titulares}. Es la lectura principal de cada métrica, marcada en el registro antes de la primera comprobación del Capítulo~\ref{ch:resultados}, y las demás columnas son otros estadísticos o ámbitos de esa misma cantidad. Cómo se corrige el número de contrastes se fija en la Sección~\ref{sec:protocolo-analisis}.
+
+\begin{table}[ht]
+\centering
+\small
+\caption{Columna titular de cada predictor.}
+\label{tab:columnas-titulares}
+\begin{tabular}{lll}
+\toprule
+\textbf{Predictor} & \textbf{Columna} & \textbf{Qué es} \\
+\midrule
+NGV & \texttt{var/normalized} & varianza del gradiente normalizada \\
+GNS & \texttt{noise\_scale/simple} & escala de ruido, estimador simple \\
+GSNR & \texttt{gsnr/mean} & media del GSNR sobre los parámetros \\
+m-coherencia & \texttt{mcoh/global} & coherencia del \emph{batch} de medición entero \\
+\emph{Stiffness} & \texttt{stiffness/cos\_within} & coseno medio entre pares de la misma clase \\
+\emph{Gradient disparity} & \texttt{gd/scalar} & distancia media entre \emph{sub-batches} \\
+\emph{Gradient confusion} & \texttt{confusion/eta} & cota $\eta$ sobre el coseno más negativo \\
+GWA & \texttt{gwa/value} & valor de GWA sobre la última capa \\
+TSE & \texttt{tse/ema\_0\_999} & media móvil exponencial, factor 0,999 \\
+Validación temprana & \texttt{val\_loss}, \texttt{val\_acc} & \emph{loss} y \emph{accuracy} de validación en la ventana \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsection{La tabla de análisis}
 
@@ -78,7 +101,7 @@ Dependientes   & \emph{Epochs} hasta el umbral                & 1 & Entera, cens
 \end{tabular}
 \end{table}
 
-La forma definitiva de esta tabla depende del protocolo de análisis, que la Sección~\ref{sec:protocolo-analisis} deja pendiente. Qué columna representa a cada métrica, y si las cinco ventanas se leen como filas separadas o como columnas de una misma fila, son decisiones de ese protocolo. Lo que queda fijado aquí es qué entra en la tabla y con qué papel.
+La forma definitiva de esta tabla depende del protocolo de análisis, que la Sección~\ref{sec:protocolo-analisis} deja pendiente. Si las cinco ventanas se leen como filas separadas o como columnas de una misma fila es una decisión de ese protocolo. Lo que queda fijado aquí es qué entra en la tabla y con qué papel.
 
 \section{Ventana temporal}
 \label{sec:ventana}
