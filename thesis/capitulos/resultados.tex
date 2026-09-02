@@ -35,7 +35,7 @@ La censura resulta así una consecuencia del diseño. Los extremos de la rejilla
 \section{Rango dinámico del predictor}
 \label{sec:res-rango}
 
-Un coeficiente nulo admite lecturas que desde fuera resultan indistinguibles. Puede que la métrica no prediga nada, puede que el suceso a predecir ya hubiera ocurrido en el momento de medirla, o puede que la métrica no llegue a moverse dentro de una celda más allá del ruido que introduce la \emph{seed}. Esta sección descarta la última, midiendo qué parte del movimiento de cada columna registrada pone el \emph{learning rate} y qué parte pone la \emph{seed}. Es una comprobación sobre el lado predictor, de modo que no consulta ninguna variable dependiente.
+Un coeficiente nulo admite lecturas que desde fuera resultan indistinguibles. Puede que la métrica no prediga nada, puede que el suceso a predecir ya hubiera ocurrido en el momento de medirla, o puede que la métrica no llegue a moverse dentro de una celda más allá del ruido que introduce la \emph{seed}. Esta sección descarta la última, midiendo qué parte de la dispersión de cada columna registrada explica el \emph{learning rate} y qué parte explica la \emph{seed}. Es una comprobación sobre el lado predictor, de modo que no consulta ninguna variable dependiente.
 
 Dentro de una celda hay 40 entrenamientos, ocho \emph{learning rates} por cinco \emph{seeds}, y dentro de cada \emph{learning rate} lo único que varía es la \emph{seed}. Los valores de una columna se sustituyen por su puesto en la ordenación, y la dispersión de esos puestos se parte en dos, la que separa a los grupos entre sí y la que queda dentro de cada grupo:
 
@@ -50,7 +50,7 @@ El cociente no vale cero cuando el \emph{learning rate} no interviene. Repartir 
 
 El estadístico no exige normalidad ni varianzas iguales, porque opera sobre puestos y no contrasta ninguna hipótesis. Tampoco exige que la relación con el \emph{learning rate} sea monótona, ya que trata los ocho valores como grupos sin orden. Lo que sí exige es la rejilla cruzada y completa de la Sección~\ref{sec:matriz}, que es la que garantiza que dentro de un grupo solo cambie la \emph{seed}. Queda un supuesto que este diseño no permite comprobar, y se declara. Con un entrenamiento por casilla no hay réplica, de manera que un efecto sistemático de \emph{seed} no se separa de la interacción entre ambos factores, y por ese motivo las dos cifras se publican aparte en lugar de como una descomposición que sume la unidad.
 
-La Figura~\ref{fig:rango-celda} recorre una celda completa con la \emph{gradient disparity} medida al 5\,\% del presupuesto. Los cinco entrenamientos de cada \emph{learning rate} caen casi juntos, mientras que las medias de los ocho grupos se reparten de un extremo a otro de la escala. El \emph{learning rate} pone 0,88 del movimiento y la \emph{seed} 0,08, frente a una referencia de 0,18.
+La Figura~\ref{fig:rango-celda} recorre una celda completa con la \emph{gradient disparity} medida al 5\,\% del presupuesto. Los cinco entrenamientos de cada \emph{learning rate} caen casi juntos, mientras que las medias de los ocho grupos se reparten de un extremo a otro de la escala. El \emph{learning rate} explica 0,88 de la dispersión y la \emph{seed} 0,08, frente a una referencia de 0,18.
 
 \begin{figure}[ht]
 \centering
@@ -66,13 +66,13 @@ Cada métrica entra representada por una única columna titular, ya que el regis
 \begin{figure}[ht]
 \centering
 \includegraphics{rango-columnas}
-\caption{Parte del movimiento de cada columna que pone el \emph{learning rate}, mediana sobre las 24 celdas. Las rayadas no requieren instrumentar el gradiente.}
+\caption{Dispersión de cada columna explicada por el \emph{learning rate}, mediana sobre las 24 celdas.}
 \label{fig:rango-columnas}
 \end{figure}
 
 Las cuentas de esta sección emplean solo los entrenamientos que aprendieron, según el criterio de la Sección~\ref{sec:calibracion}. Repetirlas sobre todos los que tienen valor mueve las medianas menos de tres centésimas. Las dos pasadas no aíslan el efecto de los entrenamientos que nunca aprendieron, porque descartarlos recorta también el extremo alto de la rejilla de \emph{learning rates}, de modo que lo que demuestra su coincidencia es que el resultado no depende de qué población se elija.
 
-Las tres columnas rayadas de la Figura~\ref{fig:rango-columnas} no cuestan nada de calcular. El \emph{baseline} TSE marca 0,97 y las dos lecturas de la curva de validación 0,95, por encima del 0,92 de la métrica instrumentada que más se mueve. Dentro de una celda, la columna que mejor sigue al \emph{learning rate} es justamente la que no hay que pagar, que es la vara que la hipótesis H2 obliga a superar.
+Las tres columnas que encabezan la Figura~\ref{fig:rango-columnas} no cuestan nada de calcular. El \emph{baseline} TSE marca 0,97 y las dos lecturas de la curva de validación 0,95, por encima del 0,92 de la métrica instrumentada que más se mueve. Dentro de una celda, la columna que mejor sigue al \emph{learning rate} es justamente la que no hay que pagar, que es la vara que la hipótesis H2 obliga a superar.
 
 Ese mismo resultado deja escrito un confusor. Dentro de una celda, la métrica y el indicador de eficiencia responden ambos al \emph{learning rate}, así que la correlación que mida el contraste será en buena parte una correlación entre dos efectos de una causa común. La utilidad que reclaman los trabajos de origen no desaparece por ello, porque conocer el \emph{learning rate} elegido no anticipa el resultado sin haber ejecutado antes el barrido completo, que es precisamente el coste que se quiere evitar. Queda declarado aquí y se retoma al interpretar los contrastes.
 
