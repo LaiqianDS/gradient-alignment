@@ -576,9 +576,10 @@ def crossing_bands(
     """Share of a cell's crossings already behind, against the budget spent.
 
     Both axes are fractions, and the horizontal one is the unit the windows are
-    already defined in, so the four datasets share an axis without any
-    measurement being rescaled. Median and interquartile band over each
-    dataset's cells.
+    already defined in, so the four datasets sit on one axis without any
+    measurement being rescaled. Median and interquartile band over the cells of
+    each group, by dataset and then by architecture. The two panels reuse the
+    palette: their legends name different things, so nothing can be confused.
     """
     import numpy as np
 
@@ -601,33 +602,38 @@ def crossing_bands(
             curves[key] = np.array([sum(f <= g for f in done) / len(done)
                                     for g in grid])
 
-    fig, ax = figstyle.figure(width="full", ratio=0.5)
-    for i, dset in enumerate(DATASETS):
-        rows = [c for k, c in curves.items() if k[0] == dset]
-        if not rows:
-            continue
-        lo, mid, hi = (np.percentile(np.vstack(rows), p, axis=0)
-                       for p in (25, 50, 75))
-        ax.fill_between(grid, lo, hi, color=figstyle.PALETTE[i], alpha=0.18, lw=0,
-                        zorder=2)
-        ax.plot(grid, mid, color=figstyle.PALETTE[i], lw=1.6, zorder=3,
-                label=DATASET_LABELS[dset])
-
     windows = sorted(w for w in load_windows(report_dir)["window"].unique() if w < 1.0)
-    for w in windows:
-        ax.axvline(w, ls="--", lw=0.9, color=figstyle.RULE, zorder=1)
-        ax.text(w, 1.01, _window_label(w), ha="center", va="bottom", fontsize=7.5)
-
     ticks = (0, 0.25, 0.5, 0.75, 1.0)
-    ax.set_xlim(0, 1)
-    ax.set_ylim(0, 1)
-    ax.set_xticks(ticks)
-    ax.set_xticklabels([_rate_label(t) for t in ticks])
-    ax.set_yticks(ticks)
-    ax.set_yticklabels([_rate_label(t) for t in ticks])
-    ax.set_xlabel("parte del presupuesto consumida")
-    ax.set_ylabel("cruces ya ocurridos")
-    ax.legend(loc="lower right", fontsize=7.5, handlelength=1.4)
+    fig, axes = figstyle.figure(width="full", ratio=0.42, ncols=2)
+    cuts = ((0, DATASETS, DATASET_LABELS), (1, MODELS, MODEL_LABELS))
+    for ax, (level, groups, labels) in zip(axes, cuts):
+        for i, g in enumerate(groups):
+            rows = [c for k, c in curves.items() if k[level] == g]
+            if not rows:
+                continue
+            lo, mid, hi = (np.percentile(np.vstack(rows), p, axis=0)
+                           for p in (25, 50, 75))
+            ax.fill_between(grid, lo, hi, color=figstyle.PALETTE[i], alpha=0.18,
+                            lw=0, zorder=2)
+            ax.plot(grid, mid, color=figstyle.PALETTE[i], lw=1.6, zorder=3,
+                    label=labels[g])
+        # The first two windows are close together at half width, so their
+        # labels alternate height instead of overlapping.
+        for k, w in enumerate(windows):
+            ax.axvline(w, ls="--", lw=0.9, color=figstyle.RULE, zorder=1)
+            ax.text(w, 1.01 + 0.055 * (k % 2), _window_label(w), ha="center",
+                    va="bottom", fontsize=7)
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+        ax.set_xticks(ticks)
+        ax.set_xticklabels([_rate_label(t) for t in ticks])
+        ax.set_yticks(ticks)
+        ax.legend(loc="lower right", fontsize=7.5, handlelength=1.4)
+
+    axes[0].set_yticklabels([_rate_label(t) for t in ticks])
+    axes[0].set_ylabel("cruces ya ocurridos")
+    axes[1].set_yticklabels([])
+    fig.supxlabel("parte del presupuesto consumida", fontsize=figstyle.BODY_PT - 1)
     return figstyle.save(fig, "solape-bandas", out_dir)
 
 

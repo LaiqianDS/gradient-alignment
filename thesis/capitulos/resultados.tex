@@ -110,12 +110,12 @@ Contado en entrenamientos y sumado sobre las 24 celdas, la Figura~\ref{fig:solap
 \label{fig:solape-cruces}
 \end{figure}
 
-El reparto no es igual en los cuatro problemas. La Figura~\ref{fig:solape-bandas} lleva los cruces de cada celda a la parte del presupuesto consumida, que es la unidad en la que las ventanas ya están definidas, y agrupa las celdas de cada conjunto por su mediana y sus cuartiles. MNIST cruza bastante más tarde que los otros tres, y ese retraso es lo que hace que sus seis celdas conserven todas la mitad por delante al 10\,\%, cosa que no consigue ningún otro conjunto. La comparación no separa el problema del umbral que se le pide. A MNIST se le exige 0,975 o más, pegado al techo de lo alcanzable, y esa exigencia es la que retrasa sus cruces.
+El reparto no es igual en todas las condiciones. La Figura~\ref{fig:solape-bandas} lleva los cruces de cada celda a la parte del presupuesto consumida, que es la unidad en la que las ventanas ya están definidas, y agrupa las celdas por su mediana y sus cuartiles, a la izquierda por conjunto de datos y a la derecha por arquitectura. MNIST cruza bastante más tarde que los otros tres conjuntos, y ese retraso es lo que hace que sus seis celdas conserven todas la mitad por delante al 10\,\%, cosa que no consigue ningún otro conjunto. Por arquitectura la separación es menor y va en sentido contrario, con la red \emph{fully connected} cruzando antes que las otras dos. Ninguno de los dos cortes separa la condición del umbral que se le pide. A MNIST se le exige 0,975 o más, pegado al techo de lo alcanzable, y a la red plana el umbral más bajo de las tres, de modo que en los dos casos parte del desplazamiento es la exigencia y no la dificultad.
 
 \begin{figure}[ht]
 \centering
 \includegraphics{solape-bandas}
-\caption{Cruces ya ocurridos frente al presupuesto consumido, por conjunto de datos.}
+\caption{Cruces ya ocurridos frente al presupuesto consumido, por conjunto de datos y por arquitectura.}
 \label{fig:solape-bandas}
 \end{figure}
 
