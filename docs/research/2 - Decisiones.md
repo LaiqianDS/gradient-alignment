@@ -30,14 +30,18 @@ El 2026-08-27 se retiró de este log la tanda de decisiones del 2026-08-26, la q
 
 ### 2026-09-02
 
-#### Las figuras pasan a monocromo y dejan de imprimir identificadores del código
+#### El estilo de figuras pasa a color de artículo, y se retiran tres restricciones
 
-**Qué se decidió (Lai).** La paleta de cuatro colores del 2026-08-27 se sustituye por cuatro tintas separadas en luminancia, de 0,092 a 0,217 de hueco, con el mismo emparejamiento de tinta y trazo. El estilo buscado es el de una figura de artículo. La tipografía del cuerpo se mantiene, porque un rótulo en Palatino al tamaño del texto es lo que distingue una figura de artículo de una de presentación.
+**Qué se decidió (Lai).** Salen de `figstyle.py` tres restricciones del 2026-08-27, la separación mínima de luminancia de la paleta, el emparejamiento de cada color con su trazo para que el color no informe nunca solo, y la tipografía del cuerpo dentro de las figuras. La paleta pasa a **Okabe-Ito** y la tipografía a **TeX Gyre Heros**, el Helvetica libre con el que la mayoría de las revistas componen sus figuras. Se mantiene todo lo que no es estilo, el ancho final sin escalado, la prohibición de `bbox_inches="tight"`, la salida en PDF, el eje que llega al cero y la escala compartida entre paneles.
 
-**Qué se gana.** La regla de que el color no codifique nunca él solo deja de necesitar vigilancia, porque ya no hay color que vigilar, y las tres figuras del documento pasan a formar un sistema. La prueba de separación de luminancia sigue en pie sin tocarla.
+**Por qué se puede.** El depósito por Ebrón es digital, así que la figura no tiene que sobrevivir a una impresión en blanco y negro. Okabe-Ito es la paleta de diseño universal, y sus cuatro colores en uso mantienen la separación bajo las formas comunes de daltonismo en todos sus pares, no solo en los adyacentes.
 
-- **Regla nueva de nombres.** Ningún identificador del código entra en una figura. El detalle está en [[3 - Progreso]] §Plan por objetivos, con su prueba.
-- **Trampa: la regla vieja no estaba escrita en ninguna parte.** `rango-columnas` llegó a rotular las once barras con `gd/scalar` y compañía, nombres que no aparecen en toda la memoria, y `rango-celda` usaba la abreviatura «LR», que tampoco. Los dos defectos salieron al preguntar por las reglas, no de una revisión.
+**Efecto lateral que resuelve un problema viejo.** El modo matemático de matplotlib estaba descartado desde el 2026-09-01 porque imprimía un aviso de tipografía en cada figura, y ese aviso venía de forzar el juego de caracteres a la Pagella del cuerpo. Con la sans y `mathtext.fontset` en `stixsans` desaparece, comprobado escalando los avisos a error. Vuelve a haber cursiva parcial dentro de un rótulo, que es lo que permite escribir «*loss* de validación» con la cursiva solo en el anglicismo.
+
+**Regla nueva, que no existía en ninguna parte.** Una figura tiene que ser autocontenida. Dentro no entra ningún identificador del código ni ninguna abreviatura que no esté en la memoria, y los nombres son los que usa el cuerpo, con acrónimo en redonda y término inglés en cursiva. Cuando un término necesita contexto, ese contexto va en el texto de alrededor. La regla salió de dos defectos reales, un rótulo «LR» que no existe en la memoria y once barras etiquetadas con las claves del parquet.
+
+- **Consecuencia asumida: el color ya informa solo.** Las tres figuras vigentes lo aprovechan, de modo que una impresión en gris las degrada. Es una decisión con fecha y no un descuido.
+- **Trampa: la prueba de gris deja de valer como comprobación.** `tests/test_figstyle.py` ya no vigila la luminancia. Lo que vigila ahora es que el ciclo asigne la paleta en su orden declarado, porque el color sigue al concepto y nunca al rango.
 
 #### El punto 3 mide el rango dinámico con eta cuadrado sobre puestos, y no entra ninguna biblioteca nueva
 

@@ -8,6 +8,7 @@ from itertools import product
 from pathlib import Path
 
 from matplotlib.colors import BoundaryNorm, LinearSegmentedColormap, ListedColormap
+from matplotlib.patches import Patch
 
 import pandas as pd
 
@@ -40,24 +41,6 @@ DATASET_LABELS = {
 }
 MODEL_LABELS = {"fc": "FC", "cnn": "CNN", "resnet18": "ResNet-18"}
 OPTIMIZER_LABELS = {"sgd": "SGD", "adam": "Adam"}
-
-# A logged column carries a code identifier that appears nowhere in the memoria,
-# so a figure prints the name the body text uses instead. The flag is italic,
-# following the memoria's own rule: roman for an acronym, italic for an English
-# term. Every headline column needs an entry; a test pins that.
-COLUMN_LABELS = {
-    "tse/ema_0_999": ("TSE", False),
-    "val_loss": ("loss de validación", True),
-    "val_acc": ("accuracy de validación", True),
-    "stiffness/cos_within": ("stiffness", True),
-    "gd/scalar": ("gradient disparity", True),
-    "confusion/eta": ("gradient confusion", True),
-    "gwa/value": ("GWA", False),
-    "gsnr/mean": ("GSNR", False),
-    "var/normalized": ("NGV", False),
-    "noise_scale/simple": ("GNS", False),
-    "mcoh/global": ("m-coherencia", False),
-}
 
 
 def _rate_label(lr: float) -> str:
@@ -153,19 +136,40 @@ EXAMPLE_CELL = ("mnist", "cnn", "sgd")
 EXAMPLE_KEY = "gd/scalar"
 EXAMPLE_WINDOW = 0.05
 
-# Columns that cost nothing to compute; they carry a hatch instead of a second
-# colour, so the distinction survives a greyscale print.
+# Columns that cost nothing to compute: no gradient is differentiated for them.
 FREE_FAMILIES = ("baseline", "monitor")
 
+# The name each logged column carries in the body text, and whether that name is
+# an English term, which the memoria always sets in italics.
+COLUMN_LABELS = {
+    "var/normalized": ("NGV", False),
+    "noise_scale/simple": ("GNS", False),
+    "gsnr/mean": ("GSNR", False),
+    "mcoh/global": ("m-coherencia", False),
+    "stiffness/cos_within": ("stiffness", True),
+    "gd/scalar": ("gradient disparity", True),
+    "confusion/eta": ("gradient confusion", True),
+    "gwa/value": ("GWA", False),
+    "tse/ema_0_999": ("TSE", False),
+    "val_loss": (r"$\mathit{loss}$ de validación", False),
+    "val_acc": (r"$\mathit{accuracy}$ de validación", False),
+}
 
-def _range_markers(ax, x, y, live, colour, labels: bool = False) -> None:
-    """The runs of one cell: filled if the run learned, hollow if it never did."""
-    ax.plot(x[live], y[live], "o", ms=3.2, ls="none", color=colour,
-            mec="white", mew=0.4, zorder=3,
-            label="aprendió" if labels else None)
-    ax.plot(x[~live], y[~live], "o", ms=3.2, ls="none", mfc="none",
-            mec=colour, mew=0.7, zorder=3,
-            label="nunca aprendió" if labels else None)
+FAMILY_COLOURS = {
+    "alignment": (figstyle.PALETTE[0], "alineación"),
+    "variability": (figstyle.PALETTE[1], "variabilidad"),
+    "free": (figstyle.PALETTE[3], "sin derivar el gradiente"),
+}
+
+
+def _range_markers(ax, x, y, live, labels: bool = False) -> None:
+    """The runs of one cell, coloured by whether the run ever learned."""
+    for mask, colour, name in (
+        (live, figstyle.PALETTE[0], "aprendió"),
+        (~live, figstyle.PALETTE[1], "nunca aprendió"),
+    ):
+        ax.plot(x[mask], y[mask], "o", ms=3.4, ls="none", color=colour,
+                mec="white", mew=0.5, zorder=3, label=name if labels else None)
 
 
 def cell_range(
@@ -189,43 +193,43 @@ def cell_range(
     live = cell["run_name"].isin(alive).to_numpy()
     stat = dynamic_range_report(cell, keys=[EXAMPLE_KEY]).iloc[0]
 
-    fig, (ax_raw, ax_rank) = figstyle.figure(width="full", ratio=0.44, ncols=2)
-    colour = figstyle.PALETTE[0]
+    fig, (ax_raw, ax_rank) = figstyle.figure(width="full", ratio=0.46, ncols=2)
+    # The group mean summarises the points, so it stays neutral instead of
+    # competing with the two colours that carry a status.
+    mean_colour = figstyle.INK
 
-    _range_markers(ax_raw, x, value, live, colour, labels=True)
+    _range_markers(ax_raw, x, value, live, labels=True)
     means = cell.groupby("lr")[EXAMPLE_KEY].mean()
     ax_raw.plot([slot[lr] for lr in means.index], means.to_numpy(),
-                color=colour, ls="-", lw=1.0, zorder=2)
+                color=mean_colour, ls="-", lw=1.3, zorder=2)
     ax_raw.set_yscale("log")
-    name, italic = COLUMN_LABELS[EXAMPLE_KEY]
-    ax_raw.set_title(name, fontsize=figstyle.BODY_PT - 1,
-                     fontstyle="italic" if italic else "normal")
-    ax_raw.legend(loc="lower left", fontsize=7, handletextpad=0.4,
+    ax_raw.set_title(COLUMN_LABELS[EXAMPLE_KEY][0], fontsize=figstyle.BODY_PT - 1,
+                     fontstyle="italic")
+    ax_raw.legend(loc="lower left", fontsize=7.5, handletextpad=0.3,
                   borderpad=0.2, labelspacing=0.3)
 
-    _range_markers(ax_rank, x, rank, live, colour)
+    _range_markers(ax_rank, x, rank, live)
     by_lr = pd.Series(rank).groupby(cell["lr"].to_numpy()).mean()
     for lr, mu in by_lr.items():
         ax_rank.hlines(mu, slot[lr] - 0.34, slot[lr] + 0.34,
-                       color=colour, lw=1.8, zorder=4)
-    ax_rank.axhline(rank.mean(), ls="--", lw=0.8, color="#666666", zorder=1)
-    ax_rank.set_title("su puesto", fontsize=figstyle.BODY_PT - 1)
+                       color=mean_colour, lw=2.2, zorder=4)
+    ax_rank.axhline(rank.mean(), ls="--", lw=0.9, color=figstyle.RULE, zorder=1)
+    ax_rank.set_title("su puesto en la celda", fontsize=figstyle.BODY_PT - 1)
     ax_rank.text(
         0.97, 0.97,
         f"el learning rate pone {_dec(stat['lr_share'])}\n"
         f"la seed pone {_dec(stat['seed_share'])}\n"
         f"al azar saldría {_dec(stat['lr_ref'])}",
         transform=ax_rank.transAxes, va="top", ha="right",
-        fontsize=7, linespacing=1.5,
+        fontsize=7.5, linespacing=1.6,
     )
 
     for ax in (ax_raw, ax_rank):
         ax.set_xticks(range(len(grid)))
         ax.set_xticklabels([_rate_label(lr) for lr in grid],
-                           fontsize=7, rotation=45, ha="right",
+                           fontsize=7.5, rotation=45, ha="right",
                            rotation_mode="anchor")
         ax.set_xlim(-0.7, len(grid) - 0.3)
-        ax.tick_params(axis="both", length=2, width=0.6, color="#666666")
     fig.supxlabel("learning rate", fontsize=figstyle.BODY_PT - 1, fontstyle="italic")
     return figstyle.save(fig, "rango-celda", out_dir)
 
@@ -246,24 +250,31 @@ def column_range(
              .reset_index().sort_values("lr_share"))
     ref = float(at["lr_ref"].median())
 
-    fig, ax = figstyle.figure(width="full", ratio=0.46)
-    colour = figstyle.PALETTE[0]
-    bars = ax.barh(range(len(order)), order["lr_share"], height=0.62, color=colour)
-    for bar, free in zip(bars, order["family"].isin(FREE_FAMILIES)):
-        if free:
-            bar.set(facecolor="white", edgecolor=colour, hatch="////", linewidth=0.7)
+    slots = ["free" if f in FREE_FAMILIES else f for f in order["family"]]
+    fig, ax = figstyle.figure(width="full", ratio=0.48)
+    ax.barh(range(len(order)), order["lr_share"], height=0.66,
+            color=[FAMILY_COLOURS[s][0] for s in slots], zorder=2)
     for i, v in enumerate(order["lr_share"]):
-        ax.text(v + 0.012, i, _dec(v), va="center", fontsize=7, color="#333333")
+        ax.text(v + 0.012, i, _dec(v), va="center", fontsize=7.5,
+                color=figstyle.INK)
 
-    ax.axvline(ref, ls="--", lw=1.0, color="#666666", zorder=3)
-    ax.text(ref + 0.008, len(order) - 0.45, f"lo que daría el azar, {_dec(ref)}",
-            fontsize=7, color="#666666", va="center")
+    ax.axvline(ref, ls="--", lw=1.0, color=figstyle.RULE, zorder=3)
+    ax.text(ref + 0.01, len(order) - 0.4, f"al azar saldría {_dec(ref)}",
+            fontsize=7.5, color=figstyle.RULE, va="center")
 
+    seen = dict.fromkeys(slots)
+    ax.legend(
+        handles=[Patch(facecolor=FAMILY_COLOURS[s][0], label=FAMILY_COLOURS[s][1])
+                 for s in seen],
+        loc="lower right", fontsize=7.5, handlelength=1.1, handletextpad=0.5,
+    )
+
+    labels, english = zip(*(COLUMN_LABELS[k] for k in order["key"]))
     ax.set_yticks(range(len(order)))
-    ax.set_yticklabels([COLUMN_LABELS[k][0] for k in order["key"]], fontsize=7)
-    for label, key in zip(ax.get_yticklabels(), order["key"]):
-        if COLUMN_LABELS[key][1]:
-            label.set_style("italic")
+    ax.set_yticklabels(labels, fontsize=7.5)
+    for tick, is_english in zip(ax.get_yticklabels(), english):
+        if is_english:
+            tick.set_style("italic")
     ax.set_ylim(-0.7, len(order) - 0.1)
     ax.set_xlim(0, 1.06)
     ax.set_xticks([0, 0.25, 0.5, 0.75, 1.0])

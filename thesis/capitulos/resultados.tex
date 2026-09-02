@@ -55,13 +55,13 @@ La Figura~\ref{fig:rango-celda} recorre una celda completa con la \emph{gradient
 \begin{figure}[ht]
 \centering
 \includegraphics{rango-celda}
-\caption{La \emph{gradient disparity} en MNIST con la red convolucional y SGD, al 5\,\% del presupuesto. Cada punto es un entrenamiento y los huecos nunca aprendieron.}
+\caption{Una celda completa, MNIST con la red convolucional y SGD, al 5\,\% del presupuesto. Cada punto es un entrenamiento y el trazo horizontal la media de su grupo.}
 \label{fig:rango-celda}
 \end{figure}
 
 El panel izquierdo muestra además algo que el cociente no recoge. La columna no crece ni decrece con el \emph{learning rate}, sube hasta $10^{-3}$ y a partir de ahí desciende. El estadístico la puntúa alto igual, porque hay estructura, mientras que un coeficiente de rangos leería como ausencia de señal la mitad de esa curva. La elección del estadístico del contraste tiene que contar con ello, y se trata en la Sección~\ref{sec:protocolo-analisis}.
 
-La Figura~\ref{fig:rango-columnas} repite la cuenta en las 24 celdas y resume cada columna por su mediana. Cada métrica entra representada por una sola columna titular, porque varias de ellas emiten más de una clave por \emph{epoch} y contarlas todas dispararía el número de comparaciones sin que ningún objetivo lo pida. Las ocho métricas de gradiente superan su referencia con holgura, desde 0,45 la más floja hasta 0,92 la que más. De las 768 casillas de métrica de gradiente, que son 24 celdas por cuatro ventanas tempranas por ocho columnas, solo 29 quedan en la referencia o por debajo, un 3,8\,\%. Todas ellas corresponden a la familia de variabilidad o a la m-coherencia, que arroja exactamente el mismo número que la escala de ruido por la Ecuación~\ref{eq:gns-mcoh}. La última lectura de un coeficiente nulo queda por tanto descartada en casi toda la rejilla.
+Cada métrica entra representada por una única columna titular, ya que el registro por \emph{epoch} escribe varias claves de cada una y contrastarlas todas dispararía la multiplicidad sin que ningún objetivo lo pida. La Figura~\ref{fig:rango-columnas} repite la cuenta en las 24 celdas y resume cada columna por su mediana. Las ocho métricas de gradiente superan su referencia con holgura, desde 0,45 la más floja hasta 0,92 la que más. De las 768 casillas de métrica de gradiente, que son 24 celdas por cuatro ventanas tempranas por ocho columnas, solo 29 quedan en la referencia o por debajo, un 3,8\,\%. Todas ellas corresponden a la familia de variabilidad o a la m-coherencia, que arroja exactamente el mismo número que la escala de ruido por la Ecuación~\ref{eq:gns-mcoh}. La última lectura de un coeficiente nulo queda por tanto descartada en casi toda la rejilla.
 
 \begin{figure}[ht]
 \centering

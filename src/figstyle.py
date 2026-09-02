@@ -1,9 +1,10 @@
 """Shared matplotlib style.
 
 Figures are built at the width they will occupy in the PDF, so nothing scales
-them afterwards and figure text keeps the size set here. They are monochrome,
-like the document they print in, and :data:`CYCLE` pairs each ink with its own
-dash so a series is told apart by shape rather than by shade.
+them afterwards and figure text keeps the size set here. The palette is
+Okabe-Ito, the colour-universal set, so hues stay apart under the common forms
+of colour blindness; :func:`include_zero` and :func:`match_limits` keep an axis
+from lying about a difference.
 """
 
 from __future__ import annotations
@@ -25,36 +26,40 @@ _CM = 1 / 2.54
 
 IMG_DIR = Path(__file__).parent.parent / "thesis" / "img"
 
-# Four inks spaced in luminance, darkest first; ``python src/figstyle.py``
-# prints the measured gaps.
-PALETTE = ("#1a1a1a", "#5a5a5a", "#8c8c8c", "#b8b8b8")
-DASHES = ("-", "--", "-.", ":")
-CYCLE = cycler(color=PALETTE) + cycler(linestyle=DASHES)
+# Okabe & Ito (2008), in the order the cycle assigns them. Yellow is left out:
+# it has too little contrast against a white page.
+PALETTE = ("#0072B2", "#D55E00", "#009E73", "#E69F00", "#CC79A7", "#56B4E9")
+CYCLE = cycler(color=PALETTE)
+
+# Ink for axes, ticks and secondary rules; a warm-neutral grey, not pure black.
+INK = "#333333"
+RULE = "#8a8a8a"
 
 
-def _serif_name() -> str:
-    """Register the TeX Gyre Pagella faces and return the family name.
+def _sans_name() -> str:
+    """Register the TeX Gyre Heros faces and return the family name.
 
-    All four faces, so that italic figure text (anglicisms, as in the body) is
-    the body's own italic instead of a substitute.
+    Heros is the free Helvetica, the sans most journals set their figures in.
+    All four faces, so an italic label is a real italic and not a slanted fake.
     """
-    pattern = "*/texmf-dist/fonts/opentype/public/tex-gyre/texgyrepagella-*.otf"
+    pattern = "*/texmf-dist/fonts/opentype/public/tex-gyre/texgyreheros-*.otf"
     for root in ("/usr/local/texlive", "/usr/share/texlive", "/opt/texlive"):
         faces = sorted(Path(root).glob(pattern))
         if faces:
             for path in faces:
                 font_manager.fontManager.addfont(path)
             return font_manager.FontProperties(fname=faces[0]).get_name()
-    print("[figstyle] TeX Gyre Pagella not found; figure text will not match the body")
-    return "DejaVu Serif"
+    print("[figstyle] TeX Gyre Heros not found; figure text falls back to DejaVu")
+    return "DejaVu Sans"
 
 
 def apply() -> None:
     """Install the rcParams. Called on import."""
-    serif = _serif_name()
+    sans = _sans_name()
     plt.rcParams.update({
-        "font.family": "serif",
-        "font.serif": [serif],
+        "font.family": "sans-serif",
+        "font.sans-serif": [sans],
+        "mathtext.fontset": "stixsans",
         "font.size": BODY_PT - 1,
         "axes.labelsize": BODY_PT - 1,
         "xtick.labelsize": BODY_PT - 2,
@@ -63,9 +68,17 @@ def apply() -> None:
         "axes.prop_cycle": CYCLE,
         "axes.spines.top": False,
         "axes.spines.right": False,
+        "axes.edgecolor": INK,
+        "axes.labelcolor": INK,
+        "axes.linewidth": 0.8,
         "axes.grid": False,
+        "text.color": INK,
+        "xtick.color": INK,
+        "ytick.color": INK,
+        "xtick.major.width": 0.8,
+        "ytick.major.width": 0.8,
         "legend.frameon": False,
-        "lines.linewidth": 1.2,
+        "lines.linewidth": 1.4,
         "lines.markersize": 3.5,
         "figure.facecolor": "white",
         "savefig.facecolor": "white",
@@ -114,15 +127,3 @@ def save(fig, name: str, out_dir: Path = IMG_DIR) -> Path:
 
 
 apply()
-
-
-if __name__ == "__main__":
-    def luminance(hex_color: str) -> float:
-        rgb = [int(hex_color[i : i + 2], 16) / 255 for i in (1, 3, 5)]
-        lin = [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in rgb]
-        return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]
-
-    lums = sorted((luminance(c), c) for c in PALETTE)
-    print(f"serif: {plt.rcParams['font.serif'][0]}")
-    for (l1, c1), (l2, c2) in zip(lums, lums[1:]):
-        print(f"  {c1} {l1:.3f} -> {c2} {l2:.3f}   gap {l2 - l1:.3f}")
