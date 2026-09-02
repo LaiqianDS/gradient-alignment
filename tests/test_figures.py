@@ -72,6 +72,22 @@ def test_the_overlap_map_builds_and_writes_a_pdf(tmp_path):
     assert path.exists() and path.suffix == ".pdf"
 
 
+def test_the_crossing_count_builds_and_writes_a_pdf(tmp_path):
+    reports, img = tmp_path / "reports", tmp_path / "img"
+    reports.mkdir()
+    _speed_cell(reports)
+    path = figures.crossings_consumed(reports, img)
+    assert path.exists() and path.suffix == ".pdf"
+
+
+def test_the_crossing_bands_build_and_write_a_pdf(tmp_path):
+    reports, img = tmp_path / "reports", tmp_path / "img"
+    reports.mkdir()
+    _speed_cell(reports)
+    path = figures.crossing_bands(reports, img)
+    assert path.exists() and path.suffix == ".pdf"
+
+
 def test_the_val_test_figure_builds_and_writes_a_pdf(tmp_path):
     reports, img = tmp_path / "reports", tmp_path / "img"
     reports.mkdir()
