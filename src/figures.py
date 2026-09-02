@@ -84,37 +84,49 @@ def lr_window(
     present = set(frac.index.get_level_values("optimizer"))
     optimizers = [o for o in OPTIMIZERS if o in present]
     order = {cell: i for i, cell in enumerate(product(DATASETS, MODELS))}
+    # Every cell an optimizer shows, so both panels share one row layout;
+    # a cell missing from one of them simply draws nothing there.
+    rows = sorted(set(frac.index.droplevel("optimizer")), key=order.get)
 
-    fig, _ = figstyle.figure(width="full", ratio=0.66, ncols=len(optimizers))
-    panels = list(fig.axes)
+    # A gap where the dataset changes, so the four problems read as four blocks
+    # without spending a rule on the separation.
+    y, ypos = 0.0, {}
+    for i, cell in enumerate(rows):
+        if i and cell[0] != rows[i - 1][0]:
+            y += 0.55
+        ypos[cell] = y
+        y += 1.0
+    limits = (y - 0.5, -0.5)
+
+    fig, _ = figstyle.figure(width="full", ratio=0.66, ncols=len(optimizers) + 1)
+    panels, ax_tau = list(fig.axes)[:-1], fig.axes[-1]
+    panels[0].get_subplotspec().get_gridspec().set_width_ratios(
+        [1.0] * len(optimizers) + [0.12]
+    )
+
     for ax, opt in zip(panels, optimizers):
-        block = frac.xs(opt, level="optimizer")
-        block = block.loc[sorted(block.index, key=order.get)]
+        block = frac.xs(opt, level="optimizer").reindex(rows)
         counts = (block.fillna(0).to_numpy() * len(SEEDS)).round().astype(int)
-        for i, row in enumerate(counts):
+        for cell, row in zip(rows, counts):
             for j, n in enumerate(row):
                 if n:
-                    ax.add_patch(Rectangle((j - 0.5, i - 0.5), 1, 1,
+                    ax.add_patch(Rectangle((j - 0.5, ypos[cell] - 0.5), 1, 1,
                                            facecolor=CMAP(n - 1),
                                            edgecolor="white", linewidth=0.6))
-        ax.set_xlim(-0.5, counts.shape[1] - 0.5)
-        ax.set_ylim(counts.shape[0] - 0.5, -0.5)
 
         grid = LR_GRID[opt]
         ax.set_title(OPTIMIZER_LABELS[opt], fontsize=figstyle.BODY_PT - 1)
+        ax.set_xlim(-0.5, block.shape[1] - 0.5)
+        ax.set_ylim(*limits)
         ax.set_xticks(range(block.shape[1]))
         ax.set_xticklabels(
             [_rate_label(grid[p - 1]) for p in block.columns],
             fontsize=7, rotation=45, ha="right", rotation_mode="anchor",
         )
         if ax is panels[0]:
-            ax.set_yticks(range(len(block)))
-            # Each row has its own threshold, and the window cannot be read
-            # without it, so it travels with the label.
+            ax.set_yticks([ypos[c] for c in rows])
             ax.set_yticklabels(
-                [f"{DATASET_LABELS[d]} {MODEL_LABELS[m]}  "
-                 f"τ = {_threshold_label(THRESHOLD_ACC[(d, m)])}"
-                 for d, m in block.index],
+                [f"{DATASET_LABELS[d]} {MODEL_LABELS[m]}" for d, m in rows],
                 fontsize=7,
             )
         else:
@@ -124,13 +136,18 @@ def lr_window(
         for spine in ax.spines.values():
             spine.set_visible(False)
 
-        # A rule where the dataset changes, so the four blocks read as blocks.
-        for i, (d, _) in enumerate(block.index):
-            if i and d != block.index[i - 1][0]:
-                ax.axhline(i - 0.5, color=figstyle.RULE, linewidth=0.5)
+    # The threshold each row is read against, in a column of its own so the
+    # twelve values line up instead of trailing their names.
+    ax_tau.set_axis_off()
+    ax_tau.set_xlim(0, 1)
+    ax_tau.set_ylim(*limits)
+    ax_tau.set_title("τ", fontsize=figstyle.BODY_PT - 1)
+    for cell, at in ypos.items():
+        ax_tau.text(0.5, at, _threshold_label(THRESHOLD_ACC[cell]),
+                    ha="center", va="center", fontsize=7)
 
     bar = fig.colorbar(
-        ScalarMappable(norm=NORM, cmap=CMAP), ax=panels,
+        ScalarMappable(norm=NORM, cmap=CMAP), ax=panels + [ax_tau],
         ticks=range(1, len(SEEDS) + 1), pad=0.02, aspect=30, drawedges=True,
     )
     bar.set_label("entrenamientos que cruzan el umbral", fontsize=figstyle.BODY_PT - 1)
@@ -173,7 +190,7 @@ COLUMN_LABELS = {
 FAMILY_COLOURS = {
     "alignment": (figstyle.PALETTE[0], "alineación"),
     "variability": (figstyle.PALETTE[1], "variabilidad"),
-    "free": (figstyle.PALETTE[3], "sin instrumentar el gradiente"),
+    "free": (figstyle.PALETTE[3], "predictores de referencia"),
 }
 
 
@@ -229,15 +246,18 @@ def cell_range(
     ax_raw.yaxis.set_minor_formatter(NullFormatter())
     ax_raw.set_ylabel(COLUMN_LABELS[EXAMPLE_KEY][0], fontsize=figstyle.BODY_PT - 1,
                       fontstyle="italic")
-    ax_raw.legend(loc="lower left", fontsize=7.5, handletextpad=0.3,
-                  borderpad=0.2, labelspacing=0.3)
+    handles, labels = ax_raw.get_legend_handles_labels()
+    handles.append(Line2D([], [], color=figstyle.INK, lw=2.2))
+    labels.append(f"media por {LR_TERM}")
+    ax_raw.legend(handles, labels, loc="lower left", fontsize=7.5,
+                  handletextpad=0.3, borderpad=0.2, labelspacing=0.3)
 
     # The grand mean of the ranks, which every group mean is measured against.
     grand = rank.mean()
     ax_rank.axhline(grand, ls="--", lw=0.9, color=figstyle.RULE, zorder=1)
     ax_rank.text(len(grid) - 0.35, grand - 0.6, "posición media",
                  ha="right", va="top", fontsize=7.5, color=figstyle.RULE)
-    ax_rank.set_ylabel("puesto en la celda", fontsize=figstyle.BODY_PT - 1)
+    ax_rank.set_ylabel("posición en la celda", fontsize=figstyle.BODY_PT - 1)
 
     fig.supxlabel("learning rate", fontsize=figstyle.BODY_PT - 1, fontstyle="italic")
     return figstyle.save(fig, "rango-celda", out_dir)
