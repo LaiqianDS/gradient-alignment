@@ -22,9 +22,9 @@ from analysis import (
 from config import DATASETS, LR_GRID, MODELS, OPTIMIZERS, SEEDS, THRESHOLD_ACC
 from efficiency import crossing_by_lr, run_health, vd_status
 
-# Light grey to the palette's darkest blue: monotone in luminance, so the ramp
-# keeps its order in a greyscale print. The floor is not white, or a zero cell
-# would vanish into the page and stop reading as a cell.
+# A count is a magnitude, so its ramp is one hue running light to dark. The
+# floor is grey and not white, or a zero cell would vanish into the page and
+# stop reading as a cell.
 _RAMP = LinearSegmentedColormap.from_list("count", ["#e8e8e8", figstyle.PALETTE[0]])
 
 # One step per possible number of seeds, because the fraction drawn cannot take
@@ -137,7 +137,10 @@ EXAMPLE_KEY = "gd/scalar"
 EXAMPLE_WINDOW = 0.05
 
 # Columns that cost nothing to compute: no gradient is differentiated for them.
+# They carry a hatch as well as a colour, because the palette separates hues and
+# not luminance, and the two families are 0,07 apart in a greyscale print.
 FREE_FAMILIES = ("baseline", "monitor")
+FREE_HATCH = "///"
 
 # The name each logged column carries in the body text, and whether that name is
 # an English term, which the memoria always sets in italics.
@@ -163,13 +166,17 @@ FAMILY_COLOURS = {
 
 
 def _range_markers(ax, x, y, live, labels: bool = False) -> None:
-    """The runs of one cell, coloured by whether the run ever learned."""
-    for mask, colour, name in (
-        (live, figstyle.PALETTE[0], "aprendió"),
-        (~live, figstyle.PALETTE[1], "nunca aprendió"),
+    """The runs of one cell, split by whether the run ever learned.
+
+    Filled against hollow: the two colours are 0,07 apart in luminance, so a
+    greyscale print would merge them if the shape did not say it too.
+    """
+    for mask, face, edge, name in (
+        (live, figstyle.PALETTE[0], "white", "aprendió"),
+        (~live, "white", figstyle.PALETTE[1], "nunca aprendió"),
     ):
-        ax.plot(x[mask], y[mask], "o", ms=3.4, ls="none", color=colour,
-                mec="white", mew=0.5, zorder=3, label=name if labels else None)
+        ax.plot(x[mask], y[mask], "o", ms=3.4, ls="none", mfc=face, mec=edge,
+                mew=0.9, zorder=3, label=name if labels else None)
 
 
 def cell_range(
@@ -252,8 +259,11 @@ def column_range(
 
     slots = ["free" if f in FREE_FAMILIES else f for f in order["family"]]
     fig, ax = figstyle.figure(width="full", ratio=0.48)
-    ax.barh(range(len(order)), order["lr_share"], height=0.66,
-            color=[FAMILY_COLOURS[s][0] for s in slots], zorder=2)
+    bars = ax.barh(range(len(order)), order["lr_share"], height=0.66,
+                   color=[FAMILY_COLOURS[s][0] for s in slots], zorder=2)
+    for bar, slot in zip(bars, slots):
+        if slot == "free":
+            bar.set(hatch=FREE_HATCH, edgecolor="white", linewidth=0)
     for i, v in enumerate(order["lr_share"]):
         ax.text(v + 0.012, i, _dec(v), va="center", fontsize=7.5,
                 color=figstyle.INK)
@@ -264,7 +274,9 @@ def column_range(
 
     seen = dict.fromkeys(slots)
     ax.legend(
-        handles=[Patch(facecolor=FAMILY_COLOURS[s][0], label=FAMILY_COLOURS[s][1])
+        handles=[Patch(facecolor=FAMILY_COLOURS[s][0], label=FAMILY_COLOURS[s][1],
+                       hatch=FREE_HATCH if s == "free" else None,
+                       edgecolor="white", linewidth=0)
                  for s in seen],
         loc="lower right", fontsize=7.5, handlelength=1.1, handletextpad=0.5,
     )
