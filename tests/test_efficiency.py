@@ -37,6 +37,8 @@ def _write_run(
     val_loss_auc: float = 2.0,
     best_val_loss: float = 0.5,
     final_test_acc: float = 0.7,
+    final_test_loss: float = 1.0,
+    final_test_f1_macro: float | None = None,
     final_gap_loss: float = 0.1,
     final_gap_acc: float = 0.05,
 ) -> None:
@@ -68,10 +70,14 @@ def _write_run(
         "run_name": name, "dataset": dataset, "model": model,
         "optimizer": optimizer, "lr": lr, "seed": seed,
         "best_val_acc": best,
+        "final_val_acc": curve[-1],
         "epochs_to_threshold": stale_vd1,
         "val_loss_auc": val_loss_auc,
         "best_val_loss": best_val_loss,
         "final_test_acc": final_test_acc,
+        "final_test_loss": final_test_loss,
+        "final_test_f1_macro": (final_test_acc if final_test_f1_macro is None
+                                else final_test_f1_macro),
         "final_gap_loss": final_gap_loss,
         "final_gap_acc": final_gap_acc,
     }))
@@ -409,3 +415,66 @@ def test_the_pooled_share_weighs_cells_by_their_crossings():
         "n_crossed_ahead": [3, 3],
     })
     assert E.vd1_consumed_pooled(detail)[0.05] == pytest.approx(0.4)
+
+
+def test_agreement_is_perfect_when_test_follows_validation(tmp_path):
+    # test sits a fixed 0,01 under validation, which two standard errors of two
+    # accuracies on 5.000 and 10.000 examples (about 0,016) still cover
+    for i, v in enumerate((0.3, 0.5, 0.6, 0.7)):
+        _write_run(tmp_path, f"r{i}", val_acc=(v,) * 4, final_test_acc=v - 0.01,
+                   final_test_f1_macro=v - 0.01 - (0.003 if i == 0 else 0.0))
+    out = E.val_test_agreement(tmp_path).iloc[0]
+    assert out["n"] == 4
+    assert out["tau_acc"] == 1.0
+    assert out["median_diff_acc"] == pytest.approx(0.01)
+    assert out["n_beyond_noise"] == 0
+    assert out["max_f1_gap"] == pytest.approx(0.003)
+
+
+def test_a_reversed_order_scores_minus_one(tmp_path):
+    for i, v in enumerate((0.3, 0.5, 0.7)):
+        _write_run(tmp_path, f"r{i}", val_acc=(v,) * 4, final_test_acc=1 - v)
+    assert E.val_test_agreement(tmp_path).iloc[0]["tau_acc"] == -1.0
+
+
+def test_the_loss_is_compared_at_the_last_epoch(tmp_path):
+    # the last val loss is 0,4 and 0,3; test loss orders them the other way
+    _write_run(tmp_path, "a", val_loss=(1.0, 0.8, 0.6, 0.4), final_test_loss=0.5)
+    _write_run(tmp_path, "b", val_loss=(1.0, 0.7, 0.5, 0.3), final_test_loss=0.6)
+    out = E.val_test_agreement(tmp_path).iloc[0]
+    assert out["tau_loss"] == -1.0
+    assert out["median_diff_loss"] == pytest.approx((-0.1 - 0.3) / 2)
+
+
+def test_a_gap_beyond_measurement_noise_is_counted(tmp_path):
+    _write_run(tmp_path, "close", val_acc=(0.702,) * 4, final_test_acc=0.70)
+    _write_run(tmp_path, "far", val_acc=(0.75,) * 4, final_test_acc=0.70)
+    assert E.val_test_agreement(tmp_path).iloc[0]["n_beyond_noise"] == 1
+
+
+def test_diverged_runs_are_left_out_of_the_agreement(tmp_path):
+    _diverged(tmp_path, "boom")
+    _write_run(tmp_path, "fine")
+    _write_run(tmp_path, "dead", best_val_acc=0.1, final_test_acc=0.1)
+    assert E.val_test_agreement(tmp_path).iloc[0]["n"] == 2
+    assert E.val_test_agreement(tmp_path, runs={"fine"}).iloc[0]["n"] == 1
+
+
+def test_the_agreement_summary_aggregates_per_dataset():
+    detail = pd.DataFrame({
+        "dataset": ["cifar10", "cifar10", "mnist"],
+        "n": [40, 30, 40],
+        "tau_acc": [0.9, 0.7, 0.2],
+        "tau_loss": [0.9, 0.8, 0.3],
+        "median_diff_acc": [0.01, 0.02, 0.0],
+        "median_diff_loss": [0.0, 0.0, 0.0],
+        "n_beyond_noise": [2, 5, 0],
+        "test_acc_range": [0.5, 0.5, 0.01],
+        "max_f1_gap": [0.001, 0.002, 0.0],
+    })
+    s = E.agreement_summary(detail)
+    assert s.loc["cifar10", "n_cells"] == 2
+    assert s.loc["cifar10", "min_tau_acc"] == 0.7
+    assert s.loc["cifar10", "beyond_noise_frac"] == pytest.approx(7 / 70)
+    assert s.loc["cifar10", "max_f1_gap"] == 0.002
+    assert s.loc["mnist", "median_tau_acc"] == 0.2

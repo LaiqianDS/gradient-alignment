@@ -16,6 +16,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from scipy.stats import kendalltau
 
 from analysis import (
     REPORTS_DIR,
@@ -27,7 +28,7 @@ from analysis import (
     load_trajectories,
     load_windows,
 )
-from config import LR_GRID, NUM_CLASSES, THRESHOLD_ACC
+from config import LR_GRID, NUM_CLASSES, TEST_SIZE, THRESHOLD_ACC, VAL_SIZE
 from train import median3
 
 # Multiple of the chance floor a run must reach to count as having learned.
@@ -36,6 +37,11 @@ CHANCE_MARGIN = 1.25
 # A window still predicts a speed indicator in a cell when at least this share
 # of the indicator lies ahead of it.
 AHEAD_FLOOR = 0.5
+
+# Two accuracies of one model on two independent splits differ by measurement
+# noise alone; a run whose val-test gap exceeds this many binomial standard
+# errors of that difference counts as beyond it.
+NOISE_SIGMAS = 2.0
 
 # Metric and baseline columns, excluding the run's own learning curve.
 _MEASURED = tuple(s.key for s in SPECS if s.family != "monitor")
@@ -241,6 +247,72 @@ def vd1_consumed_pooled(detail: pd.DataFrame) -> pd.Series:
     return 1.0 - g["n_crossed_ahead"].sum() / g["n_crossed"].sum()
 
 
+def _tau(a: pd.Series, b: pd.Series) -> float:
+    return float(kendalltau(a, b).statistic) if len(a) > 1 else np.nan
+
+
+def val_test_agreement(
+    report_dir: str | Path = REPORTS_DIR,
+    runs: Iterable[str] | None = None,
+) -> pd.DataFrame:
+    """Per cell, whether the end of the validation curve agrees with the single
+    test evaluation, in order and in level.
+
+    Order is Kendall's tau-b across the cell's runs, for accuracy and for the
+    loss. Level is the median of validation minus test, plus how many runs sit
+    more than :data:`NOISE_SIGMAS` standard errors apart, the error being that
+    of two independent accuracies on the two split sizes. Diverged runs are
+    left out, since their test accuracy is not a measurement. ``runs``
+    restricts the pass.
+    """
+    health = run_health(report_dir)
+    keep = health["failure"] != "diverged"
+    if runs is not None:
+        keep &= health["run_name"].isin(set(runs))
+    names = set(health.loc[keep, "run_name"])
+
+    fields = ["dataset", "model", "optimizer", "final_val_acc", "final_test_acc",
+              "final_test_loss", "final_test_f1_macro"]
+    df = load_summaries(report_dir).set_index("run_name")[fields]
+    df = df[df.index.isin(names)].copy()
+    traj = load_trajectories(report_dir).sort_values("epoch")
+    df["final_val_loss"] = traj.groupby("run_name")["val_loss"].last().reindex(df.index)
+
+    p = df["final_test_acc"]
+    se = np.sqrt(p * (1 - p) * (1 / df["dataset"].map(VAL_SIZE)
+                                + 1 / df["dataset"].map(TEST_SIZE)))
+    df["beyond_noise"] = (df["final_val_acc"] - p).abs() > NOISE_SIGMAS * se
+
+    rows = []
+    for (dset, model, opt), g in df.groupby(["dataset", "model", "optimizer"], sort=False):
+        rows.append({
+            "dataset": dset, "model": model, "optimizer": opt, "n": len(g),
+            "tau_acc": _tau(g["final_val_acc"], g["final_test_acc"]),
+            "tau_loss": _tau(g["final_val_loss"], g["final_test_loss"]),
+            "median_diff_acc": float((g["final_val_acc"] - g["final_test_acc"]).median()),
+            "median_diff_loss": float((g["final_val_loss"] - g["final_test_loss"]).median()),
+            "n_beyond_noise": int(g["beyond_noise"].sum()),
+            "test_acc_range": float(g["final_test_acc"].max() - g["final_test_acc"].min()),
+            "max_f1_gap": float((g["final_test_f1_macro"] - g["final_test_acc"]).abs().max()),
+        })
+    return pd.DataFrame(rows)
+
+
+def agreement_summary(detail: pd.DataFrame) -> pd.DataFrame:
+    """Per dataset: the cells' order agreement, level shift and F1 check."""
+    g = detail.groupby("dataset", sort=False)
+    return pd.DataFrame({
+        "n_cells": g.size(),
+        "n_runs": g["n"].sum(),
+        "min_tau_acc": g["tau_acc"].min(),
+        "median_tau_acc": g["tau_acc"].median(),
+        "median_tau_loss": g["tau_loss"].median(),
+        "median_diff_acc": g["median_diff_acc"].median(),
+        "beyond_noise_frac": g["n_beyond_noise"].sum() / g["n"].sum(),
+        "max_f1_gap": g["max_f1_gap"].max(),
+    })
+
+
 def vd_status(
     report_dir: str | Path = REPORTS_DIR,
     margin: float = CHANCE_MARGIN,
@@ -404,6 +476,15 @@ def _main(report_dir: str | Path = REPORTS_DIR) -> None:
         print(overlap_summary(detail).round(3))
         print("crossings already behind the window, pooled over cells:")
         print(vd1_consumed_pooled(detail).round(3).to_string())
+
+    print("\n== validation against test at the end of training ==")
+    for label, subset in (("all runs", None), ("runs that learned", alive)):
+        detail = val_test_agreement(report_dir, runs=subset)
+        print(f"\n-- {label} --")
+        print(agreement_summary(detail).round(3))
+        print(detail.set_index(["dataset", "model", "optimizer"])
+              [["n", "tau_acc", "tau_loss", "median_diff_acc", "n_beyond_noise",
+                "test_acc_range"]].round(3))
 
 
 if __name__ == "__main__":

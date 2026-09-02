@@ -72,6 +72,15 @@ def test_the_overlap_map_builds_and_writes_a_pdf(tmp_path):
     assert path.exists() and path.suffix == ".pdf"
 
 
+def test_the_val_test_figure_builds_and_writes_a_pdf(tmp_path):
+    reports, img = tmp_path / "reports", tmp_path / "img"
+    reports.mkdir()
+    _write_run(reports, "a", val_acc=(0.3, 0.5, 0.6, 0.7), final_test_acc=0.69)
+    _write_run(reports, "b", dataset="mnist", val_acc=(0.9,) * 4, final_test_acc=0.91)
+    path = figures.val_test(reports, img)
+    assert path.exists() and path.suffix == ".pdf"
+
+
 def test_every_axis_value_has_a_label():
     from config import DATASETS, MODELS, OPTIMIZERS
 

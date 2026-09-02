@@ -130,6 +130,21 @@ NUM_CLASSES = {
     "tiny_imagenet": 200,
 }
 
+# Validation examples carved out of each official train split, and the size of
+# the split that serves as test (Tiny ImageNet's is its public val split).
+VAL_SIZE = {
+    "mnist": 10_000,
+    "cifar10": 5_000,
+    "cifar100": 5_000,
+    "tiny_imagenet": 10_000,
+}
+TEST_SIZE = {
+    "mnist": 10_000,
+    "cifar10": 10_000,
+    "cifar100": 10_000,
+    "tiny_imagenet": 10_000,
+}
+
 # Epoch budget per dataset; it does not depend on the architecture.
 DATASET_BUDGET = {
     "mnist": {"epochs": 20},

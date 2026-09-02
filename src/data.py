@@ -9,7 +9,7 @@ import torchvision.datasets as datasets
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader, Dataset, Subset
 
-from config import NUM_CLASSES, SPLIT_SEED
+from config import NUM_CLASSES, SPLIT_SEED, VAL_SIZE
 
 ROOT = Path(__file__).parent.parent
 DATA_PATH = ROOT / "data"
@@ -24,28 +24,28 @@ DATASET_SPECS: dict[str, dict] = {
         "in_shape": (1, 28, 28),
         "mean": (0.1307,),
         "std": (0.3081,),
-        "val_size": 10_000,
+        "val_size": VAL_SIZE["mnist"],
     },
     "cifar10": {
         "num_classes": NUM_CLASSES["cifar10"],
         "in_shape": (3, 32, 32),
         "mean": (0.4914, 0.4822, 0.4465),
         "std": (0.2470, 0.2435, 0.2616),
-        "val_size": 5_000,
+        "val_size": VAL_SIZE["cifar10"],
     },
     "cifar100": {
         "num_classes": NUM_CLASSES["cifar100"],
         "in_shape": (3, 32, 32),
         "mean": (0.5071, 0.4865, 0.4409),
         "std": (0.2673, 0.2564, 0.2762),
-        "val_size": 5_000,
+        "val_size": VAL_SIZE["cifar100"],
     },
     "tiny_imagenet": {
         "num_classes": NUM_CLASSES["tiny_imagenet"],
         "in_shape": (3, 64, 64),
         "mean": (0.4802, 0.4481, 0.3975),
         "std": (0.2770, 0.2691, 0.2821),
-        "val_size": 10_000,
+        "val_size": VAL_SIZE["tiny_imagenet"],
     },
 }
 

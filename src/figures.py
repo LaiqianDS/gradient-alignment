@@ -8,10 +8,14 @@ from itertools import product
 from pathlib import Path
 
 from matplotlib.cm import ScalarMappable
-from matplotlib.colors import BoundaryNorm, LinearSegmentedColormap, ListedColormap
+from matplotlib.colors import (
+    BoundaryNorm,
+    LinearSegmentedColormap,
+    ListedColormap,
+    Normalize,
+)
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch, Rectangle
-from matplotlib.ticker import NullFormatter
 from matplotlib.transforms import blended_transform_factory
 
 import figstyle
@@ -19,10 +23,19 @@ from analysis import (
     REPORTS_DIR,
     dynamic_range_report,
     headline_columns,
+    load_summaries,
     load_trajectories,
     load_windows,
 )
-from config import DATASETS, LR_GRID, MODELS, OPTIMIZERS, SEEDS, THRESHOLD_ACC
+from config import (
+    DATASETS,
+    LR_GRID,
+    MODELS,
+    NUM_CLASSES,
+    OPTIMIZERS,
+    SEEDS,
+    THRESHOLD_ACC,
+)
 from efficiency import (
     AHEAD_COLUMNS,
     AHEAD_FLOOR,
@@ -34,12 +47,14 @@ from efficiency import (
 )
 from train import median3
 
-# A cell is drawn only where at least one run crossed, so what stays on the page
-# is the window itself. One step per possible count, light to dark in a single
-# hue, because the fraction drawn cannot take any other value.
+# One step per possible count, light to dark in a single hue, because the count
+# drawn cannot take any other value. Zero is white and its cell is left unpainted,
+# so the scale carries the meaning of an empty square instead of leaving it open.
 _RAMP = LinearSegmentedColormap.from_list("count", ["#b3d5e8", figstyle.PALETTE[0]])
-CMAP = ListedColormap([_RAMP(i / (len(SEEDS) - 1)) for i in range(len(SEEDS))])
-NORM = BoundaryNorm([i + 0.5 for i in range(len(SEEDS) + 1)], len(SEEDS))
+CMAP = ListedColormap(
+    ["white"] + [_RAMP(i / (len(SEEDS) - 1)) for i in range(len(SEEDS))]
+)
+NORM = BoundaryNorm([i - 0.5 for i in range(len(SEEDS) + 2)], len(SEEDS) + 1)
 
 DATASET_LABELS = {
     "mnist": "MNIST",
@@ -79,6 +94,10 @@ def lr_window(
     present = set(frac.index.get_level_values("optimizer"))
     optimizers = [o for o in OPTIMIZERS if o in present]
     order = {cell: i for i, cell in enumerate(product(DATASETS, MODELS))}
+    # The two optimizers were swept over different rates, so both panels are laid
+    # out on the union of the grids: one horizontal position is one rate in both.
+    union = sorted(set().union(*(LR_GRID[o] for o in OPTIMIZERS)))
+    uslot = {lr: i for i, lr in enumerate(union)}
     # Every cell an optimizer shows, so both panels share one row layout;
     # a cell missing from one of them simply draws nothing there.
     rows = sorted(set(frac.index.droplevel("optimizer")), key=order.get)
@@ -102,21 +121,27 @@ def lr_window(
     for ax, opt in zip(panels, optimizers):
         block = frac.xs(opt, level="optimizer").reindex(rows)
         counts = (block.fillna(0).to_numpy() * len(SEEDS)).round().astype(int)
-        for cell, row in zip(rows, counts):
-            for j, n in enumerate(row):
-                if n:
-                    ax.add_patch(Rectangle((j - 0.5, ypos[cell] - 0.5), 1, 1,
-                                           facecolor=CMAP(n - 1),
-                                           edgecolor="white", linewidth=0.6))
-
         grid = LR_GRID[opt]
+        xs = [uslot[grid[p - 1]] for p in block.columns]
+        for cell, row in zip(rows, counts):
+            for j, n in zip(xs, row):
+                # A rate this optimizer was swept over always leaves a square, so
+                # a blank position means the rate is outside its grid and an
+                # empty square means none of its runs crossed.
+                ax.add_patch(Rectangle(
+                    (j - 0.5, ypos[cell] - 0.5), 1, 1, facecolor=CMAP(n),
+                    edgecolor="white" if n else "#dcdcdc", linewidth=0.6))
+
         ax.set_title(OPTIMIZER_LABELS[opt], fontsize=figstyle.BODY_PT - 1)
-        ax.set_xlim(-0.5, block.shape[1] - 0.5)
+        ax.set_xlim(-0.5, len(union) - 0.5)
         ax.set_ylim(*limits)
-        ax.set_xticks(range(block.shape[1]))
+        # Only the rates this optimizer was swept over, so no tick points at an
+        # empty stretch; the positions are shared, which is what makes the two
+        # panels comparable.
+        ax.set_xticks([uslot[lr] for lr in grid])
         ax.set_xticklabels(
-            [_rate_label(grid[p - 1]) for p in block.columns],
-            fontsize=7, rotation=45, ha="right", rotation_mode="anchor",
+            [_rate_label(lr) for lr in grid],
+            fontsize=6.5, rotation=45, ha="right", rotation_mode="anchor",
         )
         if ax is panels[0]:
             ax.set_yticks([ypos[c] for c in rows])
@@ -143,11 +168,13 @@ def lr_window(
 
     bar = fig.colorbar(
         ScalarMappable(norm=NORM, cmap=CMAP), ax=panels + [ax_tau],
-        ticks=range(1, len(SEEDS) + 1), pad=0.02, aspect=30, drawedges=True,
+        ticks=range(len(SEEDS) + 1), pad=0.02, aspect=30, drawedges=True,
     )
     bar.set_label("entrenamientos que cruzan el umbral", fontsize=figstyle.BODY_PT - 1)
-    bar.outline.set_visible(False)
-    bar.dividers.set(color="white", linewidth=0.8)
+    # A light frame, because the swatch for zero is white and would otherwise
+    # have no edge at all.
+    bar.outline.set(edgecolor="#dcdcdc", linewidth=0.6)
+    bar.dividers.set(color="#dcdcdc", linewidth=0.8)
     bar.ax.minorticks_off()
     bar.ax.tick_params(length=0, pad=3)
     fig.supxlabel(
@@ -177,8 +204,8 @@ COLUMN_LABELS = {
     "confusion/eta": "gradient confusion",
     "gwa/value": "GWA",
     "tse/ema_0_999": "TSE",
-    "val_loss": "loss de validación",
-    "val_acc": "accuracy de validación",
+    "val_loss": "validation loss",
+    "val_acc": "validation accuracy",
 }
 
 FAMILY_COLOURS = {
@@ -234,23 +261,34 @@ def cell_range(
                            rotation=45, ha="right", rotation_mode="anchor")
         ax.set_xlim(-0.7, len(grid) - 0.3)
 
-    ax_raw.set_yscale("log")
-    ax_raw.set_yticks([0.3, 1, 3, 10])
-    ax_raw.set_yticklabels(["0,3", "1", "3", "10"])
-    ax_raw.yaxis.set_minor_formatter(NullFormatter())
-    ax_raw.set_ylabel(COLUMN_LABELS[EXAMPLE_KEY], fontsize=figstyle.BODY_PT - 1)
+    # Linear and from zero. The rates at the top of the grid then pile onto the
+    # floor, which is the fact: those runs collapsed and share one value.
+    ax_raw.set_ylim(0, value.max() * 1.08)
+    ax_raw.set_ylabel(
+        f"{COLUMN_LABELS[EXAMPLE_KEY]}, ventana {_window_label(EXAMPLE_WINDOW)}",
+        fontsize=figstyle.BODY_PT - 1,
+    )
     handles, labels = ax_raw.get_legend_handles_labels()
     handles.append(Line2D([], [], color=figstyle.INK, lw=2.2))
     labels.append("media por learning rate")
-    ax_raw.legend(handles, labels, loc="lower left", fontsize=7.5,
+    ax_raw.legend(handles, labels, loc="upper right", fontsize=7.5,
                   handletextpad=0.3, borderpad=0.2, labelspacing=0.3)
 
     # The grand mean of the ranks, which every group mean is measured against.
     grand = rank.mean()
     ax_rank.axhline(grand, ls="--", lw=0.9, color=figstyle.RULE, zorder=1)
-    ax_rank.text(len(grid) - 0.35, grand - 0.6, "posición media",
+    ax_rank.text(len(grid) - 0.35, grand - 0.9, "posición media",
                  ha="right", va="top", fontsize=7.5, color=figstyle.RULE)
-    ax_rank.set_ylabel("posición en la celda", fontsize=figstyle.BODY_PT - 1)
+    # The last position is a tick of its own: it says how many runs the cell
+    # ranks, which is not always the full five seeds by eight rates.
+    ax_rank.set_ylim(0, len(rank) + 1)
+    ax_rank.set_yticks([1, *range(10, len(rank) - 4, 10), len(rank)])
+    ax_rank.set_ylabel("posición en la celda, 1 = más bajo",
+                       fontsize=figstyle.BODY_PT - 1)
+    ax_rank.text(len(grid) - 0.35, len(rank) + 0.6,
+                 " ".join((DATASET_LABELS[dset], MODEL_LABELS[model],
+                           OPTIMIZER_LABELS[opt])),
+                 ha="right", va="top", fontsize=7.5)
 
     fig.supxlabel("learning rate", fontsize=figstyle.BODY_PT - 1)
     return figstyle.save(fig, "rango-celda", out_dir)
@@ -272,12 +310,23 @@ def column_range(
              .reset_index().sort_values("lr_share"))
     ref = float(at["lr_ref"].median())
 
+    # The bar is a median over cells, so the cells' middle half rides on top of
+    # it: the claim is about a centre and the spread has to be visible.
+    quartiles = at.groupby("key")["lr_share"].quantile([0.25, 0.75]).unstack()
+    q1 = quartiles.loc[order["key"], 0.25].to_numpy()
+    q3 = quartiles.loc[order["key"], 0.75].to_numpy()
+    n_cells = int(at.groupby("key").size().max())
+
     slots = ["free" if f in FREE_FAMILIES else f for f in order["family"]]
     fig, ax = figstyle.figure(width="full", ratio=0.48)
     ax.barh(range(len(order)), order["lr_share"], height=0.66,
             color=[FAMILY_COLOURS[s][0] for s in slots], zorder=2)
-    for i, v in enumerate(order["lr_share"]):
-        ax.text(v + 0.012, i, _dec(v), va="center", fontsize=7.5,
+    ax.hlines(range(len(order)), q1, q3, color=figstyle.INK, lw=1.0, zorder=4)
+    for i, (lo, hi) in enumerate(zip(q1, q3)):
+        ax.vlines([lo, hi], i - 0.16, i + 0.16, color=figstyle.INK, lw=1.0,
+                  zorder=4)
+    for i, (v, hi) in enumerate(zip(order["lr_share"], q3)):
+        ax.text(max(v, hi) + 0.012, i, _dec(v), va="center", fontsize=7.5,
                 color=figstyle.INK)
 
     ax.axvline(ref, ls="--", lw=1.0, color=figstyle.RULE, zorder=3)
@@ -287,7 +336,9 @@ def column_range(
     seen = dict.fromkeys(slots)
     ax.legend(
         handles=[Patch(facecolor=FAMILY_COLOURS[s][0], label=FAMILY_COLOURS[s][1])
-                 for s in seen],
+                 for s in seen]
+        + [Line2D([], [], color=figstyle.INK, lw=1.0,
+                  label=f"cuartiles, {n_cells} celdas")],
         loc="lower right", fontsize=7.5, handlelength=1.1, handletextpad=0.5,
     )
 
@@ -298,8 +349,10 @@ def column_range(
     ax.set_xlim(0, 1.06)
     ax.set_xticks([0, 0.25, 0.5, 0.75, 1.0])
     ax.set_xticklabels([_dec(t) for t in (0, 0.25, 0.5, 0.75, 1.0)], fontsize=7)
-    ax.set_xlabel("dispersión explicada por el learning rate",
-                  fontsize=figstyle.BODY_PT - 1)
+    ax.set_xlabel(
+        f"dispersión explicada por el learning rate, ventana {_window_label(EXAMPLE_WINDOW)}",
+        fontsize=figstyle.BODY_PT - 1,
+    )
     ax.tick_params(axis="y", length=0)
     ax.tick_params(axis="x", length=2, width=0.6, color="#666666")
     return figstyle.save(fig, "rango-columnas", out_dir)
@@ -314,7 +367,10 @@ VD_TITLES = {
     "vd2_area_ahead": "AUC",
     "vd3_pairs_ahead": "mejor validation loss",
 }
-MODEL_COLOURS = dict(zip(MODELS, figstyle.PALETTE[:len(MODELS)]))
+# The whole range, zero included: the floor is a decision drawn on top, not a
+# reason to leave two thirds of the map blank.
+AHEAD_CMAP = LinearSegmentedColormap.from_list(
+    "ahead", ["#dbe9f3", figstyle.PALETTE[0]])
 
 
 def _window_label(w: float) -> str:
@@ -356,27 +412,34 @@ def cell_overlap(
     ax.text(budget, tau + 0.012, f"τ = {_threshold_label(tau)}",
             ha="right", va="bottom", fontsize=7.5)
 
+    # The chance floor, named where the collapsed runs already draw it. A rule of
+    # its own would only lie under them and break their line into dashes.
+    chance = 1.0 / NUM_CLASSES[dset]
+    ax.text(budget, chance + 0.014, f"azar {_dec(chance)}",
+            ha="right", va="bottom", fontsize=7.5, color=figstyle.RULE)
+
     top = blended_transform_factory(ax.transData, ax.transAxes)
     for w, e in closes.items():
         ax.axvline(e, ls="--", lw=0.9, color=figstyle.RULE, zorder=1)
         ax.text(e, 1.0, _window_label(w), transform=top,
                 ha="center", va="bottom", fontsize=7.5)
 
-    ax.set_xscale("log")
     ax.set_xlim(1, budget)
-    ticks = [t for t in (1, 2, 4, 10, 20, 40) if t <= budget]
-    ax.set_xticks(ticks)
-    ax.set_xticklabels([str(t) for t in ticks])
-    ax.xaxis.set_minor_formatter(NullFormatter())
+    ax.set_xticks([t for t in (1, 10, 20, 30, 40) if t <= budget])
     ax.set_ylim(0, 1)
     ax.set_yticks([0, 0.25, 0.5, 0.75, 1.0])
     ax.set_yticklabels([_rate_label(t) for t in (0, 0.25, 0.5, 0.75, 1.0)])
     ax.set_xlabel("epoch")
     ax.set_ylabel("validation accuracy suavizada")
+    ax.text(budget, 0.99, " ".join((DATASET_LABELS[dset], MODEL_LABELS[model],
+                                    OPTIMIZER_LABELS[opt])),
+            ha="right", va="top", fontsize=7.5)
     ax.legend(
         handles=[Line2D([], [], color=crossed_colour, label="cruza el umbral"),
-                 Line2D([], [], color=censored_colour, label="no lo cruza")],
-        loc="lower right", bbox_to_anchor=(1.0, 0.13), fontsize=7.5,
+                 Line2D([], [], color=censored_colour, label="no lo cruza"),
+                 Line2D([], [], color=crossed_colour, marker="o", ls="none",
+                        ms=3.2, mec="white", mew=0.5, label="época de cruce")],
+        loc="lower right", bbox_to_anchor=(1.0, 0.16), fontsize=7.5,
         handlelength=1.4,
     )
     return figstyle.save(fig, "solape-celda", out_dir)
@@ -386,46 +449,146 @@ def overlap_map(
     report_dir: str | Path = REPORTS_DIR,
     out_dir: Path = figstyle.IMG_DIR,
 ) -> Path:
-    """Per speed indicator, each cell's share still ahead of every early window."""
+    """Per speed indicator, which early windows still leave a cell predictable."""
     detail = window_overlap(report_dir)
     windows = sorted(detail["window"].unique())
-    slot = {w: i for i, w in enumerate(windows)}
-    offset = {m: (i - (len(MODELS) - 1) / 2) * 0.24 for i, m in enumerate(MODELS)}
-    # Inside an architecture, a hair per (dataset, optimizer) so equal values
-    # stack side by side instead of on top of each other.
-    pairs = sorted(set(zip(detail["dataset"], detail["optimizer"])))
-    hair = {p: (i - (len(pairs) - 1) / 2) * 0.018 for i, p in enumerate(pairs)}
+    cells = [c for c in product(DATASETS, MODELS, OPTIMIZERS)
+             if c in set(zip(detail["dataset"], detail["model"], detail["optimizer"]))]
 
-    fig, axes = figstyle.figure(width="full", ratio=0.42, ncols=len(AHEAD_COLUMNS))
-    for ax, key in zip(axes, AHEAD_COLUMNS):
-        for m in MODELS:
-            sub = detail[detail["model"] == m]
-            if sub.empty:
-                continue
-            x = (sub["window"].map(slot) + offset[m]
-                 + [hair[p] for p in zip(sub["dataset"], sub["optimizer"])])
-            ax.plot(x, sub[key], "o", ls="none", ms=3.4, color=MODEL_COLOURS[m],
-                    mec="white", mew=0.5, zorder=3, label=MODEL_LABELS[m])
-        ax.axhline(AHEAD_FLOOR, ls="--", lw=0.9, color=figstyle.RULE, zorder=1)
-        ax.set_title(VD_TITLES[key], fontsize=figstyle.BODY_PT - 1)
+    y, ypos = 0.0, {}
+    for i, cell in enumerate(cells):
+        if i and cell[0] != cells[i - 1][0]:
+            y += 0.55
+        ypos[cell] = y
+        y += 1.0
+    limits = (y - 0.5, -0.5)
 
+    key = {(d, m, o, w): v for d, m, o, w, v in zip(
+        detail["dataset"], detail["model"], detail["optimizer"],
+        detail["window"], detail[AHEAD_COLUMNS[0]])}
+
+    fig, axes = figstyle.figure(width="full", ratio=0.78, ncols=len(AHEAD_COLUMNS))
+    for ax, column in zip(axes, AHEAD_COLUMNS):
+        share = {(d, m, o, w): v for d, m, o, w, v in zip(
+            detail["dataset"], detail["model"], detail["optimizer"],
+            detail["window"], detail[column])}
+        edge = {}
+        for cell in cells:
+            row = [share.get((*cell, w)) for w in windows]
+            for j, v in enumerate(row):
+                if v is None:
+                    continue
+                ax.add_patch(Rectangle((j - 0.5, ypos[cell] - 0.5), 1, 1,
+                                       facecolor=AHEAD_CMAP(v),
+                                       edgecolor="white", linewidth=0.6))
+            # The share only falls as the window grows, so the windows that clear
+            # the floor are always the first ones and one step marks the boundary.
+            edge[cell] = sum(v is not None and v >= AHEAD_FLOOR for v in row) - 0.5
+
+        for i, cell in enumerate(cells):
+            ax.vlines(edge[cell], ypos[cell] - 0.5, ypos[cell] + 0.5,
+                      color=figstyle.INK, lw=1.0, zorder=4)
+            if i and cells[i - 1][0] == cell[0]:
+                ax.hlines(ypos[cell] - 0.5, *sorted((edge[cells[i - 1]], edge[cell])),
+                          color=figstyle.INK, lw=1.0, zorder=4)
+
+        ax.set_title(VD_TITLES[column], fontsize=figstyle.BODY_PT - 1)
+        ax.set_xlim(-0.5, len(windows) - 0.5)
+        ax.set_ylim(*limits)
         ax.set_xticks(range(len(windows)))
         ax.set_xticklabels([_window_label(w) for w in windows], fontsize=7)
-        ax.set_xlim(-0.6, len(windows) - 0.4)
-        ax.tick_params(axis="x", length=0)
+        if ax is axes[0]:
+            # The architecture and the optimizer on the tick, the dataset once
+            # per block on a minor tick pushed clear of them.
+            ax.set_yticks([ypos[c] for c in cells])
+            ax.set_yticklabels(
+                [f"{MODEL_LABELS[m]} {OPTIMIZER_LABELS[o]}" for _, m, o in cells],
+                fontsize=6.5,
+            )
+            blocks = {d: [ypos[c] for c in cells if c[0] == d] for d in DATASETS
+                      if any(c[0] == d for c in cells)}
+            ax.set_yticks([sum(v) / len(v) for v in blocks.values()], minor=True)
+            ax.set_yticklabels([DATASET_LABELS[d] for d in blocks], minor=True,
+                               fontsize=7.5)
+            ax.tick_params(axis="y", which="minor", length=0, pad=44)
+        else:
+            ax.set_yticks([])
+        ax.tick_params(axis="y", which="major", length=0)
+        ax.tick_params(axis="x", length=2, width=0.6, color="#666666", pad=1)
+        for spine in ax.spines.values():
+            spine.set_visible(False)
 
-    axes[0].set_ylim(0, 1.04)
-    figstyle.match_limits(axes)
-    axes[0].set_yticks([0, 0.25, 0.5, 0.75, 1.0])
-    axes[0].set_yticklabels([_rate_label(t) for t in (0, 0.25, 0.5, 0.75, 1.0)])
-    axes[0].set_ylabel("parte por delante")
-    axes[1].text(-0.55, AHEAD_FLOOR + 0.025, "la mitad",
-                 ha="left", fontsize=7.5, color=figstyle.RULE)
-    for ax in axes[1:]:
-        ax.tick_params(axis="y", labelleft=False)
-    axes[0].legend(loc="upper right", fontsize=7.5, handletextpad=0.3)
+    bar = fig.colorbar(
+        ScalarMappable(norm=Normalize(0.0, 1.0), cmap=AHEAD_CMAP),
+        ax=list(axes), ticks=[0, 0.25, 0.5, 0.75, 1.0], pad=0.02, aspect=30,
+    )
+    bar.set_ticklabels([_dec(t) for t in (0, 0.25, 0.5, 0.75, 1.0)])
+    bar.set_label("resultado aún sin decidir", fontsize=figstyle.BODY_PT - 1)
+    bar.ax.axhline(AHEAD_FLOOR, color=figstyle.INK, lw=1.0)
+    bar.ax.text(-0.4, AHEAD_FLOOR, "suelo", transform=bar.ax.get_yaxis_transform(),
+                ha="right", va="center", fontsize=7)
+    bar.outline.set_visible(False)
+    bar.ax.minorticks_off()
+    bar.ax.tick_params(length=0, pad=3)
     fig.supxlabel("ventana", fontsize=figstyle.BODY_PT - 1)
     return figstyle.save(fig, "solape-mapa", out_dir)
+
+
+DATASET_COLOURS = dict(zip(DATASETS, figstyle.PALETTE[:len(DATASETS)]))
+
+
+def val_test(
+    report_dir: str | Path = REPORTS_DIR,
+    out_dir: Path = figstyle.IMG_DIR,
+) -> Path:
+    """Every run's end-of-training validation reading against its single test
+    evaluation, accuracy and loss, with the line of equality."""
+    health = run_health(report_dir).set_index("run_name")
+    summ = load_summaries(report_dir).set_index("run_name")
+    summ = summ[health.loc[summ.index, "failure"] != "diverged"].copy()
+    traj = load_trajectories(report_dir).sort_values("epoch")
+    summ["final_val_loss"] = traj.groupby("run_name")["val_loss"].last().reindex(summ.index)
+
+    fig, (ax_acc, ax_loss) = figstyle.figure(width="full", ratio=0.5, ncols=2)
+    for dset in DATASETS:
+        g = summ[summ["dataset"] == dset]
+        if g.empty:
+            continue
+        style = dict(marker="o", ls="none", ms=2.6, mec="white", mew=0.3, alpha=0.85,
+                     color=DATASET_COLOURS[dset], zorder=3)
+        ax_acc.plot(g["final_val_acc"], g["final_test_acc"], label=DATASET_LABELS[dset],
+                    **style)
+        ax_loss.plot(g["final_val_loss"], g["final_test_loss"], **style)
+
+    ax_acc.set_xlim(0, 1)
+    ax_acc.set_ylim(0, 1)
+    ax_acc.plot([0, 1], [0, 1], color=figstyle.RULE, lw=0.8, zorder=1)
+    ticks = (0, 0.25, 0.5, 0.75, 1.0)
+    ax_acc.set_xticks(ticks)
+    ax_acc.set_yticks(ticks)
+    ax_acc.set_xticklabels([_rate_label(t) for t in ticks])
+    ax_acc.set_yticklabels([_rate_label(t) for t in ticks])
+    ax_acc.set_xlabel("validation accuracy")
+    ax_acc.set_ylabel("test accuracy")
+    ax_acc.legend(loc="upper left", fontsize=7.5, handletextpad=0.3)
+
+    ax_loss.set_xscale("log")
+    ax_loss.set_yscale("log")
+    lo = min(ax_loss.get_xlim()[0], ax_loss.get_ylim()[0])
+    hi = max(ax_loss.get_xlim()[1], ax_loss.get_ylim()[1])
+    ax_loss.set_xlim(lo, hi)
+    ax_loss.set_ylim(lo, hi)
+    ax_loss.plot([lo, hi], [lo, hi], color=figstyle.RULE, lw=0.8, zorder=1)
+    ax_loss.set_xlabel("validation loss")
+    ax_loss.set_ylabel("test loss")
+    for ax in (ax_acc, ax_loss):
+        ax.set_aspect("equal")
+        # Both panels are square and share their limits, so the diagonal runs at
+        # 45 degrees and the label can sit on it in axes coordinates.
+        ax.text(0.78, 0.70, "igualdad", transform=ax.transAxes, rotation=45,
+                rotation_mode="anchor", ha="center", va="center", fontsize=7.5,
+                color=figstyle.RULE)
+    return figstyle.save(fig, "val-test", out_dir)
 
 
 if __name__ == "__main__":
@@ -434,3 +597,4 @@ if __name__ == "__main__":
     print(column_range())
     print(cell_overlap())
     print(overlap_map())
+    print(val_test())
