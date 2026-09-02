@@ -24,6 +24,8 @@ def _write_run(
     model: str = "cnn",
     optimizer: str = "sgd",
     lr: float = 0.1,
+    seed: int = 0,
+    window_value: float | None = None,
     best_val_acc: float = 0.7,
     val_acc: tuple[float, ...] | None = None,
     train_loss: tuple[float, ...] = (1.0, 0.8, 0.6, 0.4),
@@ -59,7 +61,7 @@ def _write_run(
     }).to_parquet(d / "trajectory.parquet")
     (d / "summary.json").write_text(json.dumps({
         "run_name": name, "dataset": dataset, "model": model,
-        "optimizer": optimizer, "lr": lr, "seed": 0,
+        "optimizer": optimizer, "lr": lr, "seed": seed,
         "best_val_acc": best,
         "epochs_to_threshold": stale_vd1,
         "val_loss_auc": val_loss_auc,
@@ -68,6 +70,12 @@ def _write_run(
         "final_gap_loss": final_gap_loss,
         "final_gap_acc": final_gap_acc,
     }))
+    if window_value is not None:
+        pd.DataFrame([{
+            "run_name": name, "dataset": dataset, "model": model,
+            "optimizer": optimizer, "lr": lr, "seed": seed,
+            "window": 0.05, "gd/scalar": window_value,
+        }]).to_parquet(d / "metrics_at_window.parquet")
 
 
 def _diverged(root, name: str, **kw) -> None:

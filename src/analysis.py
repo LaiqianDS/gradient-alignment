@@ -8,6 +8,8 @@ DataFrames:
 * :func:`degeneracy_report`: whether a metric moves inside a run or only jitters.
 * :func:`trend_report`: the direction each metric drifts over training.
 * :func:`redundancy_matrix`: which metrics move together.
+* :func:`dynamic_range_report`: whether a metric moves across a cell's learning
+  rates or only across its seeds.
 
 The loaders default to ``reports/`` and accept any report directory.
 :data:`SPECS` says what each logged column means: its valid range and the
@@ -438,6 +440,82 @@ def top_redundant_pairs(corr: pd.DataFrame, n: int = 12) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------------------
+# Diagnostic 5: dynamic range, does a metric move with the learning rate or
+# only with the seed?
+# ---------------------------------------------------------------------------
+
+def _between_ss(rank: pd.Series, by: pd.Series) -> tuple[float, int]:
+    """Between-group sum of squares of ``rank`` under one grouping, and k."""
+    g = rank.groupby(by.to_numpy())
+    return float((g.size() * (g.mean() - rank.mean()) ** 2).sum()), int(g.ngroups)
+
+
+def dynamic_range_report(
+    windows: pd.DataFrame,
+    keys: list[str] | None = None,
+) -> pd.DataFrame:
+    """Per cell, window and metric column: who moves the column, LR or seed.
+
+    Each share is eta-squared over the column's ranks inside one cell, once
+    grouping by ``lr`` and once by ``seed``. Ranking fixes the denominator, so
+    ``(k - 1) / (n - 1)`` is the *exact* expected share under a random
+    regrouping, not an asymptotic one; that is the reference each share is read
+    against.
+
+    The two shares need not add to one. What is left over is the LR-by-seed
+    interaction, which this crossed design cannot separate from residual.
+
+    ``n_distinct`` guards the reading: a column with a handful of distinct
+    values scores whatever its ties allow.
+    """
+    keys = [k for k in (keys or metric_columns()) if k in windows.columns]
+    cell = ["dataset", "model", "optimizer", "window"]
+    rows = []
+    for (dset, model, opt, w), g in windows.groupby(cell, sort=False):
+        for key in keys:
+            sub = g[[key, "lr", "seed"]].dropna(subset=[key])
+            n = len(sub)
+            rank = sub[key].rank()
+            ss_total = float(((rank - rank.mean()) ** 2).sum()) if n else 0.0
+            lr_ss, n_lr = _between_ss(rank, sub["lr"])
+            seed_ss, n_seed = _between_ss(rank, sub["seed"])
+            ok = n >= 3 and ss_total > 0
+            rows.append({
+                "dataset": dset, "model": model, "optimizer": opt, "window": w,
+                "key": key, "family": SPEC_BY_KEY[key].family,
+                "n": n, "n_distinct": int(sub[key].nunique()),
+                "lr_share": lr_ss / ss_total if ok else np.nan,
+                "lr_ref": (n_lr - 1) / (n - 1) if ok else np.nan,
+                "seed_share": seed_ss / ss_total if ok else np.nan,
+                "seed_ref": (n_seed - 1) / (n - 1) if ok else np.nan,
+            })
+    return pd.DataFrame(rows)
+
+
+def dynamic_range_summary(detail: pd.DataFrame) -> pd.DataFrame:
+    """Per column and window: the typical LR share, and in how many cells it
+    fails to clear its own reference.
+
+    ``n_scored`` counts the cells where the share is defined at all, so a column
+    that goes constant somewhere cannot hide inside the median.
+    """
+    return (
+        detail.assign(flat=detail["lr_share"] <= detail["lr_ref"])
+        .groupby(["key", "window"])
+        .agg(
+            family=("family", "first"),
+            n_cells=("lr_share", "size"),
+            n_scored=("lr_share", "count"),
+            n_flat=("flat", "sum"),
+            median_lr_share=("lr_share", "median"),
+            median_seed_share=("seed_share", "median"),
+            min_distinct=("n_distinct", "min"),
+        )
+        .sort_values("median_lr_share")
+    )
+
+
+# ---------------------------------------------------------------------------
 # Console smoke report: `uv run python src/analysis.py [report_dir]`.
 # ---------------------------------------------------------------------------
 
@@ -470,6 +548,13 @@ def _main(report_dir: str | Path = REPORTS_DIR) -> None:
 
     print("\n== redundancy: top |Spearman| pairs (exploratory) ==")
     print(top_redundant_pairs(redundancy_matrix(traj)).round(3))
+
+    print("\n== dynamic range: LR vs seed (headline columns, early windows) ==")
+    early = load_windows(report_dir)
+    early = early[early["window"] < 1.0]
+    print(dynamic_range_summary(
+        dynamic_range_report(early, keys=headline_columns())
+    ).round(3))
 
 
 if __name__ == "__main__":

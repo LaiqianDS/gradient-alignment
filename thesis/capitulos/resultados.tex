@@ -32,6 +32,50 @@ Los entrenamientos censurados tampoco están repartidos al azar por la rejilla. 
 
 La censura resulta así una consecuencia del diseño. Los extremos de la rejilla existen para producir entrenamientos malos, como expone la Sección~\ref{sec:matriz}, y son precisamente ellos los que no alcanzan el umbral. Descartar los entrenamientos censurados dejaría solo el centro de cada rejilla, y retiraría de la muestra la variación que la matriz se construyó para crear.
 
+\section{Rango dinámico del predictor}
+\label{sec:res-rango}
+
+Un coeficiente nulo admite lecturas que desde fuera resultan indistinguibles. Puede que la métrica no prediga nada, puede que el suceso a predecir ya hubiera ocurrido en el momento de medirla, o puede que la métrica no llegue a moverse dentro de una celda más allá del ruido que introduce la \emph{seed}. Esta sección descarta la última, midiendo qué parte del movimiento de cada columna registrada pone el \emph{learning rate} y qué parte pone la \emph{seed}. Es una comprobación sobre el lado predictor, de modo que no consulta ninguna variable dependiente.
+
+Dentro de una celda hay 40 entrenamientos, ocho \emph{learning rates} por cinco \emph{seeds}, y dentro de cada \emph{learning rate} lo único que varía es la \emph{seed}. Los valores de una columna se sustituyen por su puesto en la ordenación, y la dispersión de esos puestos se parte en dos, la que separa a los grupos entre sí y la que queda dentro de cada grupo:
+
+\begin{equation}
+\eta^2_{\mathrm{LR}} = \frac{\sum_{g} n_g\,(\bar{R}_g - \bar{R})^2}{\sum_{i} (R_i - \bar{R})^2},
+\label{eq:eta-rangos}
+\end{equation}
+
+donde $R_i$ es el puesto del entrenamiento $i$, $\bar{R}$ la media de todos los puestos, $\bar{R}_g$ la media del grupo $g$ y $n_g$ su tamaño. El mismo cociente se calcula agrupando por \emph{seed} en lugar de por \emph{learning rate}, y de ahí salen las dos cifras que se comparan. Trabajar sobre puestos y no sobre valores impide que un entrenamiento extremo domine el reparto, y hace la cifra independiente de las unidades de cada métrica, que recorren órdenes de magnitud muy distintos entre sí.
+
+El cociente no vale cero cuando el \emph{learning rate} no interviene. Repartir $n$ puestos al azar entre $k$ grupos deja alguna diferencia entre las medias por pura suerte, y su valor esperado es $(k-1)/(n-1)$, que es la referencia contra la que se lee cada casilla. Ordenar por puestos deja fijo el denominador de la Ecuación~\ref{eq:eta-rangos}, porque depende del conjunto de valores y no de cómo se repartan, así que esa referencia es exacta y no una aproximación asintótica. La cantidad coincide además con el tamaño de efecto $\varepsilon^2$ de la prueba de Kruskal-Wallis, cuyo estadístico $H$ cumple $\eta^2 = H/(n-1)$, y por eso se obtiene sin recurrir a ninguna implementación de esa prueba.
+
+El estadístico no exige normalidad ni varianzas iguales, porque opera sobre puestos y no contrasta ninguna hipótesis. Tampoco exige que la relación con el \emph{learning rate} sea monótona, ya que trata los ocho valores como grupos sin orden. Lo que sí exige es la rejilla cruzada y completa de la Sección~\ref{sec:matriz}, que es la que garantiza que dentro de un grupo solo cambie la \emph{seed}. Queda un supuesto que este diseño no permite comprobar, y se declara. Con un entrenamiento por casilla no hay réplica, de manera que un efecto sistemático de \emph{seed} no se separa de la interacción entre ambos factores, y por ese motivo las dos cifras se publican aparte en lugar de como una descomposición que sume la unidad.
+
+La Figura~\ref{fig:rango-celda} recorre una celda completa con la \emph{gradient disparity} medida al 5\,\% del presupuesto. Los cinco entrenamientos de cada \emph{learning rate} caen casi juntos, mientras que las medias de los ocho grupos se reparten de un extremo a otro de la escala. El \emph{learning rate} pone 0,88 del movimiento y la \emph{seed} 0,08, frente a una referencia de 0,18.
+
+\begin{figure}[ht]
+\centering
+\includegraphics{rango-celda}
+\caption{La \emph{gradient disparity} en MNIST con la red convolucional y SGD, al 5\,\% del presupuesto. Cada punto es un entrenamiento y los huecos nunca aprendieron.}
+\label{fig:rango-celda}
+\end{figure}
+
+El panel izquierdo muestra además algo que el cociente no recoge. La columna no crece ni decrece con el \emph{learning rate}, sube hasta $10^{-3}$ y a partir de ahí desciende. El estadístico la puntúa alto igual, porque hay estructura, mientras que un coeficiente de rangos leería como ausencia de señal la mitad de esa curva. La elección del estadístico del contraste tiene que contar con ello, y se trata en la Sección~\ref{sec:protocolo-analisis}.
+
+La Figura~\ref{fig:rango-columnas} repite la cuenta en las 24 celdas y resume cada columna por su mediana. Cada métrica entra representada por una sola columna titular, porque varias de ellas emiten más de una clave por \emph{epoch} y contarlas todas dispararía el número de comparaciones sin que ningún objetivo lo pida. Las ocho métricas de gradiente superan su referencia con holgura, desde 0,45 la más floja hasta 0,92 la que más. De las 768 casillas de métrica de gradiente, que son 24 celdas por cuatro ventanas tempranas por ocho columnas, solo 29 quedan en la referencia o por debajo, un 3,8\,\%. Todas ellas corresponden a la familia de variabilidad o a la m-coherencia, que arroja exactamente el mismo número que la escala de ruido por la Ecuación~\ref{eq:gns-mcoh}. La última lectura de un coeficiente nulo queda por tanto descartada en casi toda la rejilla.
+
+\begin{figure}[ht]
+\centering
+\includegraphics{rango-columnas}
+\caption{Parte del movimiento de cada columna que pone el \emph{learning rate}, mediana sobre las 24 celdas. Las rayadas no requieren instrumentar el gradiente.}
+\label{fig:rango-columnas}
+\end{figure}
+
+Las cuentas de esta sección emplean solo los entrenamientos que aprendieron, según el criterio de la Sección~\ref{sec:calibracion}. Repetirlas sobre todos los que tienen valor mueve las medianas menos de tres centésimas. Las dos pasadas no aíslan el efecto de los entrenamientos que nunca aprendieron, porque descartarlos recorta también el extremo alto de la rejilla de \emph{learning rates}, de modo que lo que demuestra su coincidencia es que el resultado no depende de qué población se elija.
+
+Las tres columnas rayadas de la Figura~\ref{fig:rango-columnas} no cuestan nada de calcular. El \emph{baseline} TSE marca 0,97 y las dos lecturas de la curva de validación 0,95, por encima del 0,92 de la métrica instrumentada que más se mueve. Dentro de una celda, la columna que mejor sigue al \emph{learning rate} es justamente la que no hay que pagar, que es la vara que la hipótesis H2 obliga a superar.
+
+Ese mismo resultado deja escrito un confusor. Dentro de una celda, la métrica y el indicador de eficiencia responden ambos al \emph{learning rate}, así que la correlación que mida el contraste será en buena parte una correlación entre dos efectos de una causa común. La utilidad que reclaman los trabajos de origen no desaparece por ello, porque conocer el \emph{learning rate} elegido no anticipa el resultado sin haber ejecutado antes el barrido completo, que es precisamente el coste que se quiere evitar. Queda declarado aquí y se retoma al interpretar los contrastes.
+
 \section{Correlaciones por condición}
 \label{sec:res-por-condicion}
 % rho por celda (arq x dataset x opt) para H1; el método y la corrección de multiplicidad los fija la fase B.

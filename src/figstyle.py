@@ -1,8 +1,9 @@
 """Shared matplotlib style.
 
 Figures are built at the width they will occupy in the PDF, so nothing scales
-them afterwards and figure text keeps the size set here. Colour never carries
-information alone: :data:`CYCLE` pairs each colour with its own dash pattern.
+them afterwards and figure text keeps the size set here. They are monochrome,
+like the document they print in, and :data:`CYCLE` pairs each ink with its own
+dash so a series is told apart by shape rather than by shade.
 """
 
 from __future__ import annotations
@@ -24,9 +25,9 @@ _CM = 1 / 2.54
 
 IMG_DIR = Path(__file__).parent.parent / "thesis" / "img"
 
-# Four colours spaced in luminance so a greyscale print keeps them apart;
-# ``python src/figstyle.py`` prints the measured gaps.
-PALETTE = ("#12325a", "#a34a12", "#4f8f6f", "#d7a13f")
+# Four inks spaced in luminance, darkest first; ``python src/figstyle.py``
+# prints the measured gaps.
+PALETTE = ("#1a1a1a", "#5a5a5a", "#8c8c8c", "#b8b8b8")
 DASHES = ("-", "--", "-.", ":")
 CYCLE = cycler(color=PALETTE) + cycler(linestyle=DASHES)
 

@@ -26,6 +26,21 @@ def _traj(metrics: dict[str, list[float]], run_name: str = "r0", n: int | None =
     return pd.DataFrame({**base, **metrics})
 
 
+_LRS = (3e-4, 1e-3, 3e-3, 1e-2, 3e-2, 1e-1, 3e-1, 1.0)
+_SEEDS = (0, 1, 2, 3, 4)
+
+
+def _windows(values, key: str = "gd/scalar", window: float = 0.05) -> pd.DataFrame:
+    """One cell of window rows; ``values[i][j]`` sits at LR ``i``, seed ``j``."""
+    return pd.DataFrame([
+        {"run_name": f"r{i}_{j}", "dataset": "mnist", "model": "cnn",
+         "optimizer": "sgd", "lr": lr, "seed": seed, "window": window,
+         key: values[i][j]}
+        for i, lr in enumerate(_LRS)
+        for j, seed in enumerate(_SEEDS)
+    ])
+
+
 def test_spec_keys_unique_and_headline_subset():
     keys = A.metric_columns()
     assert len(keys) == len(set(keys)), "duplicate spec keys"
@@ -156,6 +171,55 @@ def test_absent_columns_reads_schemas_not_the_stacked_frame(tmp_path):
     assert absent.loc["gd/scalar", "runs_absent"] == 0
     assert absent.loc["gwa/value", "runs_absent"] == 1
     assert absent["n_runs"].iloc[0] == 2
+
+
+def test_the_lr_share_is_one_when_only_the_learning_rate_moves_the_column():
+    values = [[float(i)] * len(_SEEDS) for i in range(len(_LRS))]
+    row = A.dynamic_range_report(_windows(values), keys=["gd/scalar"]).iloc[0]
+    assert row["lr_share"] == pytest.approx(1.0)
+    assert row["seed_share"] == pytest.approx(0.0)
+
+
+def test_the_lr_share_is_zero_when_only_the_seed_moves_the_column():
+    values = [[float(j) for j in range(len(_SEEDS))] for _ in _LRS]
+    row = A.dynamic_range_report(_windows(values), keys=["gd/scalar"]).iloc[0]
+    assert row["lr_share"] == pytest.approx(0.0)
+    assert row["seed_share"] == pytest.approx(1.0)
+
+
+def test_the_reference_is_the_share_a_random_regrouping_scores():
+    """``lr_ref`` is exact, not asymptotic: ranking fixes the denominator, so
+    ``(k-1)/(n-1)`` is the mean share of a column the learning rate does not
+    touch."""
+    rng = np.random.default_rng(0)
+    shares, ref = [], None
+    for _ in range(200):
+        values = rng.normal(size=(len(_LRS), len(_SEEDS))).tolist()
+        row = A.dynamic_range_report(_windows(values), keys=["gd/scalar"]).iloc[0]
+        shares.append(row["lr_share"])
+        ref = row["lr_ref"]
+    assert ref == pytest.approx(7 / 39)
+    assert float(np.mean(shares)) == pytest.approx(7 / 39, rel=0.1)
+
+
+def test_a_constant_column_scores_nan_and_not_zero():
+    """Zero would read as 'the seed moves it', which is the opposite of a cell
+    where nothing moves it."""
+    values = [[2.5] * len(_SEEDS) for _ in _LRS]
+    row = A.dynamic_range_report(_windows(values), keys=["gd/scalar"]).iloc[0]
+    assert np.isnan(row["lr_share"]) and np.isnan(row["seed_share"])
+    assert row["n_distinct"] == 1
+
+
+def test_the_share_is_invariant_to_a_monotone_change_of_units():
+    rng = np.random.default_rng(1)
+    flat = rng.normal(size=len(_LRS) * len(_SEEDS))
+    shape = (len(_LRS), len(_SEEDS))
+    plain = _windows(flat.reshape(shape).tolist())
+    blown = _windows(np.exp(3 * flat).reshape(shape).tolist())
+    a = A.dynamic_range_report(plain, keys=["gd/scalar"]).iloc[0]["lr_share"]
+    b = A.dynamic_range_report(blown, keys=["gd/scalar"]).iloc[0]["lr_share"]
+    assert a == pytest.approx(b)
 
 
 def test_loaders_concat_runs(tmp_path):

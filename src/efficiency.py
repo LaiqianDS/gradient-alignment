@@ -16,7 +16,16 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from analysis import REPORTS_DIR, SPECS, load_summaries, load_trajectories
+from analysis import (
+    REPORTS_DIR,
+    SPECS,
+    dynamic_range_report,
+    dynamic_range_summary,
+    headline_columns,
+    load_summaries,
+    load_trajectories,
+    load_windows,
+)
 from config import LR_GRID, NUM_CLASSES, THRESHOLD_ACC
 from train import median3
 
@@ -261,6 +270,16 @@ def _main(report_dir: str | Path = REPORTS_DIR) -> None:
 
     print("\n== VD1 across the learning-rate grid ==")
     print(crossing_by_lr(status).round(2))
+
+    # The same statistic analysis.py prints over every run, restricted to the
+    # runs that learned: a dead run reports a constant, which reads as range.
+    print("\n== dynamic range, runs that learned only ==")
+    alive = set(health.loc[health["learned"], "run_name"])
+    win = load_windows(report_dir)
+    win = win[win["run_name"].isin(alive) & (win["window"] < 1.0)]
+    print(dynamic_range_summary(
+        dynamic_range_report(win, keys=headline_columns())
+    ).round(3))
 
 
 if __name__ == "__main__":

@@ -30,6 +30,32 @@ El 2026-08-27 se retiró de este log la tanda de decisiones del 2026-08-26, la q
 
 ### 2026-09-02
 
+#### Las figuras pasan a monocromo y dejan de imprimir identificadores del código
+
+**Qué se decidió (Lai).** La paleta de cuatro colores del 2026-08-27 se sustituye por cuatro tintas separadas en luminancia, de 0,092 a 0,217 de hueco, con el mismo emparejamiento de tinta y trazo. El estilo buscado es el de una figura de artículo. La tipografía del cuerpo se mantiene, porque un rótulo en Palatino al tamaño del texto es lo que distingue una figura de artículo de una de presentación.
+
+**Qué se gana.** La regla de que el color no codifique nunca él solo deja de necesitar vigilancia, porque ya no hay color que vigilar, y las tres figuras del documento pasan a formar un sistema. La prueba de separación de luminancia sigue en pie sin tocarla.
+
+- **Regla nueva de nombres.** Ningún identificador del código entra en una figura. El detalle está en [[3 - Progreso]] §Plan por objetivos, con su prueba.
+- **Trampa: la regla vieja no estaba escrita en ninguna parte.** `rango-columnas` llegó a rotular las once barras con `gd/scalar` y compañía, nombres que no aparecen en toda la memoria, y `rango-celda` usaba la abreviatura «LR», que tampoco. Los dos defectos salieron al preguntar por las reglas, no de una revisión.
+
+#### El punto 3 mide el rango dinámico con eta cuadrado sobre puestos, y no entra ninguna biblioteca nueva
+
+**Qué se decidió.** Dentro de cada celda, para cada columna registrada y cada ventana temprana, los valores se sustituyen por su puesto y la dispersión se parte entre grupos y dentro de grupos, una vez agrupando por learning rate y otra por semilla. Vive en `analysis.py`, con `dynamic_range_report` y `dynamic_range_summary`, porque el sujeto es una columna de métrica y ese es el módulo de las columnas. La cuenta se hace dos veces, con todos los entrenamientos que tienen valor y solo con los que aprendieron.
+
+**Por qué un tamaño de efecto y no una prueba.** La pregunta es cuánto sitio tiene el predictor para moverse. Ponerle valor p serían 2.592 contrastes, 27 columnas por 24 celdas por cuatro ventanas, con una multiplicidad que ningún objetivo pide. El cociente es además el ε² de Kruskal-Wallis, porque η² = H/(n−1), así que `scipy` solo aportaría ese valor p. Se trabaja sobre puestos porque estas columnas recorren órdenes de magnitud dentro de una misma celda y un entrenamiento extremo dominaría el reparto.
+
+**La línea de referencia es exacta y no asintótica.** Bajo un reparto al azar la esperanza del cociente es (k−1)/(n−1), y ordenar por puestos deja fijo el denominador, porque depende del conjunto de valores y no de cómo se repartan. Se calcula con la n y la k reales de cada casilla, que van de 0,167 a 0,200.
+
+**Evidencia medida sobre los 960**, ventana del 5 % y solo los que aprendieron. Las ocho métricas de gradiente superan su línea, de 0,45 la m-coherencia y la escala de ruido a 0,92 la stiffness. De las 768 casillas de métrica de gradiente solo 29 caen en la línea o por debajo, un 3,8 %, y todas son de variabilidad o de m-coherencia. La causa dos de un coeficiente nulo queda descartada en casi toda la rejilla.
+
+- **Trampa: el predictor de referencia gana en rango dinámico a todas las métricas caras.** TSE marca 0,97 y las dos lecturas de validación 0,95, por encima del 0,92 de la mejor instrumentada. Dentro de una celda, la columna que mejor sigue al learning rate es la que no cuesta nada, que es justo la vara de H2.
+- **Trampa: la correlación de la fase B tendrá una causa común.** Un reparto de 0,90 dice que nueve décimas de esa columna son el learning rate leído de otra manera, y el indicador de eficiencia responde al mismo eje. Queda declarado en `resultados.tex` §Rango dinámico del predictor.
+- **Trampa: las dos pasadas no aíslan a los entrenamientos muertos.** Quitar los que nunca aprendieron recorta también el extremo alto de la rejilla, así que son dos sesgos de signo contrario. Las medianas se mueven menos de tres centésimas, y eso demuestra que el resultado no depende de la población que elija la fase B, decisión todavía abierta.
+- **Trampa: hay un supuesto que este diseño no puede comprobar.** Con un entrenamiento por casilla no hay réplica, así que un efecto sistemático de semilla no se separa de la interacción. Por eso se publican los dos repartos por separado y no una descomposición que sume uno.
+- **Trampa: una columna constante da cero partido por cero y devuelve NaN.** Con un cero, una celda muerta se leería como una celda donde manda la semilla, que es lo contrario de lo que pasa.
+- **Cambio de plan, con fecha.** La fase A decía que solo el punto 2 llevaba figura. El punto 3 se lleva dos, `rango-celda` y `rango-columnas`, por decisión de Lai al ver el material.
+
 #### Se podan los dos documentos del vault, y salen los dos últimos restos del plan de análisis retirado
 
 **Qué se decidió.** Los dos documentos se podan con la regla de registro del 2026-08-29. Salen las afirmaciones que el umbral por arquitectura dejó falsas, el detalle de verificación de trabajo ya cerrado, y lo que la memoria o los otros documentos cuentan mejor. [[3 - Progreso]] pasa de 149 a 136 líneas y este documento de 440 a 392, sin perder ninguna decisión, ninguna fecha, ningún número vivo ni ningún punto abierto.
