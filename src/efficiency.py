@@ -11,6 +11,7 @@ The ``*_frac`` columns carry the extent of a failure, so ``frac > 0`` and
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from pathlib import Path
 
 import numpy as np
@@ -31,6 +32,10 @@ from train import median3
 
 # Multiple of the chance floor a run must reach to count as having learned.
 CHANCE_MARGIN = 1.25
+
+# A window still predicts a speed indicator in a cell when at least this share
+# of the indicator lies ahead of it.
+AHEAD_FLOOR = 0.5
 
 # Metric and baseline columns, excluding the run's own learning curve.
 _MEASURED = tuple(s.key for s in SPECS if s.family != "monitor")
@@ -105,6 +110,17 @@ def health_counts(health: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+def crossing_epochs(traj: pd.DataFrame) -> pd.Series:
+    """:func:`vd1_epochs` over trajectories already loaded."""
+    epochs = {}
+    for name, g in traj.sort_values("epoch").groupby("run_name"):
+        row = g.iloc[0]
+        tau = THRESHOLD_ACC[(row["dataset"], row["model"])]
+        hit = g["epoch"][median3(g["val_acc"]) >= tau]
+        epochs[name] = float(hit.iloc[0]) + 1 if len(hit) else np.nan  # 1-indexed
+    return pd.Series(epochs, name="epochs_to_threshold").rename_axis("run_name")
+
+
 def vd1_epochs(report_dir: str | Path = REPORTS_DIR) -> pd.Series:
     """Epochs to threshold per run (1-indexed), recomputed from the val curve.
 
@@ -115,14 +131,114 @@ def vd1_epochs(report_dir: str | Path = REPORTS_DIR) -> pd.Series:
 
     NaN where the run never reaches its threshold, never the budget.
     """
-    traj = load_trajectories(report_dir)
+    return crossing_epochs(load_trajectories(report_dir))
+
+
+def _best_loss_epochs(traj: pd.DataFrame) -> pd.Series:
+    """1-indexed epoch where the smoothed val loss first reaches its minimum."""
     epochs = {}
     for name, g in traj.sort_values("epoch").groupby("run_name"):
-        row = g.iloc[0]
-        tau = THRESHOLD_ACC[(row["dataset"], row["model"])]
-        hit = g["epoch"][median3(g["val_acc"]) >= tau]
-        epochs[name] = float(hit.iloc[0]) + 1 if len(hit) else np.nan  # 1-indexed
-    return pd.Series(epochs, name="epochs_to_threshold").rename_axis("run_name")
+        smooth = median3(g["val_loss"].reset_index(drop=True))
+        epochs[name] = float(smooth.idxmin()) + 1 if smooth.notna().any() else np.nan
+    return pd.Series(epochs, name="best_loss_epoch").rename_axis("run_name")
+
+
+def _area_fixed(traj: pd.DataFrame) -> dict[str, np.ndarray]:
+    """Per run, the share of the val-loss AUC fixed by each epoch (0-indexed).
+
+    The AUC is the trapezoid of ``train.efficiency_summary``: the endpoints
+    weigh a half and every interior epoch a whole.
+    """
+    out = {}
+    for name, g in traj.sort_values("epoch").groupby("run_name"):
+        loss = g["val_loss"].to_numpy(dtype=float)
+        w = np.ones(len(loss))
+        if len(loss) > 1:
+            w[[0, -1]] = 0.5
+        cum = np.cumsum(w * loss)
+        out[name] = cum / cum[-1]
+    return out
+
+
+def _pairs_ahead(ahead: int, k: int, censored: int) -> float:
+    """Share of the comparable pairs in which neither run has had its event."""
+    total = k * (k - 1) / 2 + k * censored
+    return (ahead * (ahead - 1) / 2 + ahead * censored) / total if total else np.nan
+
+
+def window_overlap(
+    report_dir: str | Path = REPORTS_DIR,
+    runs: Iterable[str] | None = None,
+) -> pd.DataFrame:
+    """Per cell and early window: how much of each speed indicator still lies
+    ahead when the window closes.
+
+    The window closes at the epoch ``metrics_at_window.parquet`` was read
+    from, so an event in that same epoch is already behind it. Epochs to
+    threshold and best val loss are events, and their ``ahead`` share is
+    counted in comparable pairs: a pair still predicts when neither run has
+    had its event, and a censored run never has. The val-loss AUC is a
+    weighted sum, so its ``ahead`` share is the part of the sum the window has
+    not fixed yet, median over the cell's runs. ``runs`` restricts the pass.
+    """
+    traj = load_trajectories(report_dir)
+    events = pd.DataFrame({
+        "t_cross": crossing_epochs(traj),
+        "t_best": _best_loss_epochs(traj),
+    })
+    fixed = _area_fixed(traj)
+
+    keep = ["run_name", "dataset", "model", "optimizer", "window", "epoch"]
+    win = load_windows(report_dir)[keep]
+    win = win[win["window"] < 1.0]
+    if runs is not None:
+        win = win[win["run_name"].isin(set(runs))]
+    win = win.join(events, on="run_name")
+    win["area_fixed"] = [fixed[r][e] for r, e in zip(win["run_name"], win["epoch"])]
+    win["epoch"] = win["epoch"] + 1  # 1-indexed, like the events
+
+    cell = ["dataset", "model", "optimizer", "window"]
+    rows = []
+    for (dset, model, opt, w), g in win.groupby(cell, sort=False):
+        e = int(g["epoch"].iloc[0])
+        k = int(g["t_cross"].notna().sum())
+        f = int((g["t_cross"] > e).sum())
+        m = int(g["t_best"].notna().sum())
+        rows.append({
+            "dataset": dset, "model": model, "optimizer": opt, "window": w,
+            "epoch": e, "n": len(g),
+            "n_crossed": k, "n_censored": len(g) - k, "n_crossed_ahead": f,
+            "vd1_runs_ahead": f / k if k else np.nan,
+            "vd1_pairs_ahead": _pairs_ahead(f, k, len(g) - k),
+            "vd2_area_ahead": float((1.0 - g["area_fixed"]).median()),
+            "vd3_pairs_ahead": _pairs_ahead(int((g["t_best"] > e).sum()), m, 0),
+        })
+    return pd.DataFrame(rows)
+
+
+AHEAD_COLUMNS = ("vd1_pairs_ahead", "vd2_area_ahead", "vd3_pairs_ahead")
+
+
+def overlap_summary(detail: pd.DataFrame) -> pd.DataFrame:
+    """Per speed indicator and window: the cells' ``ahead`` share, and how many
+    cells clear :data:`AHEAD_FLOOR`."""
+    long = detail.melt(id_vars="window", value_vars=list(AHEAD_COLUMNS),
+                       var_name="vd", value_name="ahead")
+    return (
+        long.groupby(["vd", "window"])["ahead"]
+        .agg(
+            n_cells="count",
+            median="median",
+            min="min",
+            n_usable=lambda s: int((s >= AHEAD_FLOOR).sum()),
+        )
+    )
+
+
+def vd1_consumed_pooled(detail: pd.DataFrame) -> pd.Series:
+    """Share of all crossings already behind each window, pooled over cells."""
+    g = detail.groupby("window")
+    return 1.0 - g["n_crossed_ahead"].sum() / g["n_crossed"].sum()
 
 
 def vd_status(
@@ -280,6 +396,14 @@ def _main(report_dir: str | Path = REPORTS_DIR) -> None:
     print(dynamic_range_summary(
         dynamic_range_report(win, keys=headline_columns())
     ).round(3))
+
+    print("\n== window overlap: share of each speed indicator still ahead ==")
+    for label, subset in (("all runs", None), ("runs that learned", alive)):
+        detail = window_overlap(report_dir, runs=subset)
+        print(f"\n-- {label} --")
+        print(overlap_summary(detail).round(3))
+        print("crossings already behind the window, pooled over cells:")
+        print(vd1_consumed_pooled(detail).round(3).to_string())
 
 
 if __name__ == "__main__":

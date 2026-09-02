@@ -26,8 +26,10 @@ def _write_run(
     lr: float = 0.1,
     seed: int = 0,
     window_value: float | None = None,
+    window_epochs: dict[float, int] | None = None,
     best_val_acc: float = 0.7,
     val_acc: tuple[float, ...] | None = None,
+    val_loss: tuple[float, ...] | None = None,
     train_loss: tuple[float, ...] = (1.0, 0.8, 0.6, 0.4),
     gwa_value: tuple[float, ...] = (0.3, 0.3, 0.2, 0.2),
     score_mean: tuple[float, ...] = (0.1, 0.1, 0.1, 0.1),
@@ -43,9 +45,11 @@ def _write_run(
     ``val_acc`` defaults to a flat curve at ``best_val_acc``; passing one instead
     derives ``best_val_acc`` from it, so curve and summary always agree.
     ``stale_vd1`` is what the summary carries in ``epochs_to_threshold``, which
-    nothing may read.
+    nothing may read. ``window_epochs`` maps each window to the 0-indexed epoch
+    its row was read from, as ``train.snap_windows`` records it.
     """
     curve = list(val_acc) if val_acc is not None else [best_val_acc] * len(train_loss)
+    losses = list(val_loss) if val_loss is not None else [1.0 / (i + 1) for i in range(len(curve))]
     best = float(median3(pd.Series(curve)).max())
     d = root / name
     d.mkdir()
@@ -56,6 +60,7 @@ def _write_run(
         "epoch": list(range(len(curve))),
         "train_loss": list(train_loss),
         "val_acc": curve,
+        "val_loss": losses,
         "gwa/value": list(gwa_value),
         "gwa/score_mean": list(score_mean),
     }).to_parquet(d / "trajectory.parquet")
@@ -70,12 +75,13 @@ def _write_run(
         "final_gap_loss": final_gap_loss,
         "final_gap_acc": final_gap_acc,
     }))
-    if window_value is not None:
+    if window_value is not None or window_epochs is not None:
         pd.DataFrame([{
             "run_name": name, "dataset": dataset, "model": model,
             "optimizer": optimizer, "lr": lr, "seed": seed,
-            "window": 0.05, "gd/scalar": window_value,
-        }]).to_parquet(d / "metrics_at_window.parquet")
+            "window": w, "epoch": e, "gd/scalar": window_value,
+        } for w, e in (window_epochs or {0.05: 0}).items()]
+        ).to_parquet(d / "metrics_at_window.parquet")
 
 
 def _diverged(root, name: str, **kw) -> None:
@@ -84,6 +90,7 @@ def _diverged(root, name: str, **kw) -> None:
         root, name,
         best_val_acc=0.1,
         train_loss=(1.0, NAN, NAN, NAN),
+        val_loss=(1.0, NAN, NAN, NAN),
         gwa_value=(0.3, NAN, NAN, NAN),
         score_mean=(0.1, 0.0, 0.0, 0.0),
         stale_vd1=None,
@@ -287,3 +294,118 @@ def test_by_cell_counts_every_run_once(tmp_path):
     assert cells["n_runs"].sum() == 2
     assert cells["n_learned"].sum() == 1
     assert cells["n_collapsed"].sum() == 1
+
+
+# Eight-epoch runs on cifar10 with a cnn, which asks 0.60. The windows are read
+# from the 0-indexed epochs below, so they close at epochs 1, 2, 4 and 6.
+_W = {0.05: 0, 0.10: 1, 0.25: 3, 0.50: 5, 1.0: 7}
+_CENSORED = (0.55,) * 8
+_CROSS_AT = {  # smoothed val accuracy first reaches 0.60 in this epoch
+    1: (0.65, 0.66, 0.67, 0.68, 0.69, 0.70, 0.70, 0.70),
+    2: (0.40, 0.62, 0.65, 0.66, 0.67, 0.68, 0.69, 0.70),
+    3: (0.40, 0.50, 0.62, 0.66, 0.67, 0.68, 0.69, 0.70),
+    5: (0.40, 0.45, 0.50, 0.55, 0.62, 0.66, 0.70, 0.70),
+}
+_FLAT_LOSS = (1.0,) * 8
+_LATE_MIN = (0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2)
+_EARLY_MIN = (0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9)
+
+
+def _speed_run(root, name: str, val_acc, val_loss=_LATE_MIN, **kw) -> None:
+    _write_run(
+        root, name, val_acc=val_acc, val_loss=val_loss, window_epochs=_W,
+        train_loss=(1.0,) * 8, gwa_value=(0.3,) * 8, score_mean=(0.1,) * 8, **kw,
+    )
+
+
+def _overlap(root, **kw) -> pd.DataFrame:
+    return E.window_overlap(root, **kw).set_index("window")
+
+
+def test_an_event_in_the_window_epoch_is_already_behind_it(tmp_path):
+    # the run crosses in epoch 2, and the 10 % window is read from that epoch
+    _speed_run(tmp_path, "crosser", _CROSS_AT[2])
+    _speed_run(tmp_path, "censored", _CENSORED)
+    out = _overlap(tmp_path)
+    assert list(out.index) == [0.05, 0.10, 0.25, 0.50]
+    assert out.loc[0.05, "epoch"] == 1 and out.loc[0.10, "epoch"] == 2
+    assert out.loc[0.05, "vd1_runs_ahead"] == 1.0
+    assert out.loc[0.10, "vd1_runs_ahead"] == 0.0
+    # the censored run is the crosser's only partner and never has an event
+    assert out.loc[0.05, "vd1_pairs_ahead"] == 1.0
+    assert out.loc[0.10, "vd1_pairs_ahead"] == 0.0
+
+
+def test_pairs_ahead_counts_the_pairs_neither_run_has_settled(tmp_path):
+    # crossings in epochs 1, 3 and 5 plus one censored run; at the 10 % window
+    # (epoch 2) two crossings lie ahead: C(2,2) + 2*1 = 3 of C(3,2) + 3*1 = 6
+    for t in (1, 3, 5):
+        _speed_run(tmp_path, f"cross{t}", _CROSS_AT[t])
+    _speed_run(tmp_path, "censored", _CENSORED)
+    out = _overlap(tmp_path)
+    assert out.loc[0.10, "n_crossed"] == 3
+    assert out.loc[0.10, "n_crossed_ahead"] == 2
+    assert out.loc[0.10, "vd1_runs_ahead"] == pytest.approx(2 / 3)
+    assert out.loc[0.10, "vd1_pairs_ahead"] == pytest.approx(0.5)
+    assert out.loc[0.50, "vd1_pairs_ahead"] == 0.0
+
+
+def test_the_area_share_uses_the_trapezoid_weights(tmp_path):
+    # a flat loss over 8 epochs weighs 0.5 + 6 + 0.5 = 7, and the 10 % window
+    # (epochs 1 and 2) fixes 0.5 + 1 of it
+    _speed_run(tmp_path, "flat", _CROSS_AT[1], val_loss=_FLAT_LOSS)
+    out = _overlap(tmp_path)
+    assert out.loc[0.05, "vd2_area_ahead"] == pytest.approx(6.5 / 7)
+    assert out.loc[0.10, "vd2_area_ahead"] == pytest.approx(5.5 / 7)
+
+
+def test_a_falling_loss_fixes_more_area_than_its_share_of_epochs(tmp_path):
+    # losses 8..1 weigh 31,5 and the 10 % window fixes 4 + 7 = 11 of them
+    _speed_run(tmp_path, "falling", _CROSS_AT[1], val_loss=tuple(range(8, 0, -1)))
+    out = _overlap(tmp_path)
+    assert out.loc[0.10, "vd2_area_ahead"] == pytest.approx(1 - 11 / 31.5)
+
+
+def test_the_best_loss_is_behind_the_window_once_the_curve_has_turned(tmp_path):
+    # two runs still falling: their pair is ahead of every early window; pair
+    # one of them with a run that bottoms out in epoch 1 and it no longer is
+    _speed_run(tmp_path, "late_a", _CROSS_AT[1])
+    _speed_run(tmp_path, "late_b", _CROSS_AT[1])
+    _speed_run(tmp_path, "early", _CROSS_AT[1], val_loss=_EARLY_MIN, optimizer="adam")
+    _speed_run(tmp_path, "late_c", _CROSS_AT[1], optimizer="adam")
+    out = E.window_overlap(tmp_path).set_index(["optimizer", "window"])
+    assert out.loc[("sgd", 0.50), "vd3_pairs_ahead"] == 1.0
+    assert out.loc[("adam", 0.05), "vd3_pairs_ahead"] == 0.0
+
+
+def test_restricting_the_runs_removes_a_dead_partner(tmp_path):
+    _speed_run(tmp_path, "crosser", _CROSS_AT[5])
+    _speed_run(tmp_path, "dead", (0.10,) * 8)
+    full = _overlap(tmp_path)
+    alone = _overlap(tmp_path, runs={"crosser"})
+    assert full.loc[0.05, "n_censored"] == 1
+    assert full.loc[0.05, "vd1_pairs_ahead"] == 1.0
+    assert alone.loc[0.05, "n"] == 1
+    assert pd.isna(alone.loc[0.05, "vd1_pairs_ahead"])
+
+
+def test_the_summary_counts_a_cell_at_the_floor_as_usable():
+    detail = pd.DataFrame({
+        "window": [0.05] * 3,
+        "vd1_pairs_ahead": [0.5, 0.49, 0.9],
+        "vd2_area_ahead": [0.8, 0.8, 0.8],
+        "vd3_pairs_ahead": [NAN, 1.0, 1.0],
+    })
+    s = E.overlap_summary(detail)
+    assert s.loc[("vd1_pairs_ahead", 0.05), "n_usable"] == 2
+    assert s.loc[("vd1_pairs_ahead", 0.05), "min"] == 0.49
+    assert s.loc[("vd3_pairs_ahead", 0.05), "n_cells"] == 2
+
+
+def test_the_pooled_share_weighs_cells_by_their_crossings():
+    detail = pd.DataFrame({
+        "window": [0.05, 0.05],
+        "n_crossed": [4, 6],
+        "n_crossed_ahead": [3, 3],
+    })
+    assert E.vd1_consumed_pooled(detail)[0.05] == pytest.approx(0.4)

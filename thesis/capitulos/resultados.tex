@@ -76,6 +76,48 @@ Las tres columnas que encabezan la Figura~\ref{fig:rango-columnas} no cuestan na
 
 Ese mismo resultado deja escrito un confusor. Dentro de una celda, la métrica y el indicador de eficiencia responden ambos al \emph{learning rate}, así que la correlación que mida el contraste será en buena parte una correlación entre dos efectos de una causa común. La utilidad que reclaman los trabajos de origen no desaparece por ello, porque conocer el \emph{learning rate} elegido no anticipa el resultado sin haber ejecutado antes el barrido completo, que es precisamente el coste que se quiere evitar. Queda declarado aquí y se retoma al interpretar los contrastes.
 
+\section{Solape entre la ventana y el desenlace}
+\label{sec:res-solape}
+
+De las tres lecturas de un coeficiente nulo con las que abre la Sección~\ref{sec:res-rango}, queda por acotar la segunda, que el suceso a predecir ya hubiera ocurrido al medir. La Sección~\ref{sec:ventana} lo enuncia como condición y la Sección~\ref{sec:riesgos} exige medir su alcance antes de interpretar cualquier resultado de velocidad. Esta sección lo mide celda a celda y ventana a ventana sobre las tres variables de velocidad, y fija qué ventanas conservan sentido para cada una. Como la anterior, trabaja sobre un solo lado, aquí el de las variables dependientes, y no consulta ninguna métrica.
+
+Una ventana se cierra en la \emph{epoch} en la que se lee el predictor, la 1, 2, 5 y 10 en MNIST y la 2, 4, 10 y 20 en los otros tres conjuntos. Un suceso que ocurre en esa misma \emph{epoch} queda ya detrás de ella, porque la métrica y el suceso describen la misma red al final de la misma \emph{epoch}, y la primera no puede anticipar lo que ya es. Las \emph{epochs} hasta el umbral tienen por suceso el cruce, y el mejor \emph{loss} de validación tiene por suceso la \emph{epoch} en la que la curva suavizada toca su mínimo. El área bajo la curva carece de suceso, porque es una suma ponderada de los \emph{loss} de todas las \emph{epochs}, y lo que la ventana deja detrás es la parte de esa suma que ya está fijada al cerrarse.
+
+La unidad de la cuenta son los pares comparables, la misma con la que la Sección~\ref{sec:res-cobertura} mide la censura, porque un coeficiente de rangos consume pares y no entrenamientos. Un par sigue siendo una predicción cuando ninguno de sus dos entrenamientos ha tenido el suceso al cerrar la ventana, y un entrenamiento censurado nunca lo tiene. Con $k$ cruces en la celda, $f$ de ellos todavía por delante y $c$ entrenamientos censurados, la parte de los pares comparables que sigue por delante es
+\begin{equation}
+\frac{\binom{f}{2} + f\,c}{\binom{k}{2} + k\,c},
+\label{eq:pares-delante}
+\end{equation}
+y para el mejor \emph{loss}, que nunca se censura, $c$ vale cero. Para el área, la parte por delante de cada entrenamiento es el complemento de la fracción fijada, y la celda se resume por su mediana.
+
+Una ventana sirve para una variable de velocidad en una celda cuando al menos la mitad de esa variable sigue por delante. El motivo es que una ventana predice cuando el desenlace está por delante para la mayor parte de la información que usa el contraste. La regla se fijó después de conocer las cifras agregadas sobre los 960 entrenamientos y antes del desglose por celda, con fecha en el registro de decisiones, y se declara como lo que es, una regla posterior a los datos.
+
+La Figura~\ref{fig:solape-celda} recorre CIFAR-10 con la red convolucional y SGD, la celda que reparte sus cruces cinco a cinco entre las cuatro ventanas. De sus 40 entrenamientos cruzan 20, y las cuatro ventanas dejan detrás cinco, 10, 15 y los 20. En pares, la parte que sigue por delante baja de 0,69 al 5\,\% a 0,42 al 10\,\%, 0,19 al 25\,\% y cero al 50\,\%. A partir de la segunda ventana, lo que una métrica leída ahí puede hacer con la variable principal es, en su mayor parte, describir un cruce que ya ha pasado.
+
+\begin{figure}[ht]
+\centering
+\includegraphics{solape-celda}
+\caption{CIFAR-10 con la red convolucional y SGD. Sobre cada ventana, cuántos de los 20 cruces ya han ocurrido al cerrarla.}
+\label{fig:solape-celda}
+\end{figure}
+
+Contado en entrenamientos y sumado sobre las 24 celdas, el 11\,\% de los 571 cruces ya ha ocurrido al cerrar la ventana del 5\,\%, el 35\,\% al cerrar la del 10\,\%, el 72\,\% al cerrar la del 25\,\% y el 85\,\% al cerrar la del 50\,\%. La Figura~\ref{fig:solape-mapa} baja esa cuenta a cada celda, en pares y para las tres variables, y bajo cada ventana anota cuántas celdas conservan al menos la mitad. Para las \emph{epochs} hasta el umbral la ventana del 5\,\% sirve en 22 celdas y la del 10\,\% en 12, y ninguna de las dos posteriores sirve en ninguna. Las dos celdas que fallan ya al 5\,\% son la red \emph{fully connected} con Adam en CIFAR-100 y en Tiny-ImageNet, donde los entrenamientos que cruzan lo hacen en las dos primeras \emph{epochs}. Al 10\,\% el mapa se parte por arquitectura. Quedan por encima de la mitad las seis celdas de MNIST, las cuatro de la convolucional y la ResNet-18 sobre Tiny-ImageNet y las dos de la ResNet-18 con SGD sobre CIFAR, y ninguna red \emph{fully connected} fuera de MNIST pasa de 0,33. Es la misma escalera de la Figura~\ref{fig:ventana-lr}, porque a la red plana se le pide el umbral más bajo y lo alcanza antes.
+
+\begin{figure}[ht]
+\centering
+\includegraphics{solape-mapa}
+\caption{Parte de cada variable de velocidad que sigue por delante de cada ventana, un punto por celda.}
+\label{fig:solape-mapa}
+\end{figure}
+
+El mejor \emph{loss} de validación resiste algo más, con 23 celdas al 5\,\%, 17 al 10\,\%, nueve al 25\,\% y dos al 50\,\%, y lo que lo consume es el sobreajuste. Sin \emph{data augmentation} ni \emph{weight decay}, la curva de \emph{loss} de validación toca fondo pronto y vuelve a subir, y en CIFAR-10 con ResNet-18 y Adam los 40 entrenamientos alcanzan su mínimo antes de la \emph{epoch} 10, con lo que al 25\,\% no queda ningún par por delante. En esas celdas la variable dice cuándo empieza el sobreajuste más que a qué velocidad se aprende, y así hay que leerla.
+
+El área bajo la curva se comporta como una regla graduada. Al cerrar cada ventana queda fijada casi exactamente la fracción del presupuesto transcurrida, con medianas de 0,96, 0,90, 0,76 y 0,51 por delante frente a los 0,96, 0,91, 0,76 y 0,50 que dejaría una curva plana. Eso lo dictan los pesos del trapecio, sin que los datos aporten nada. La variable sirve hasta el 25\,\% en las 24 celdas. Al 50\,\% cae sobre la línea por construcción, con 13 celdas de 24, y para esa ventana queda declarada como descrita a medias.
+
+Las cuentas anteriores usan los 960 entrenamientos. Repetidas solo con los que aprendieron, según el criterio de la Sección~\ref{sec:calibracion}, el recuento de celdas de la variable principal no cambia y el de las otras dos se mueve una celda. Un entrenamiento que nunca aprende nunca cruza, así que entra como censurado, y quitarlo apenas toca el reparto.
+
+Para las variables de velocidad, el barrido de ventanas de la hipótesis H4 queda acotado a las del 5 y el 10\,\%, y para la variable principal a las celdas que la Figura~\ref{fig:solape-mapa} deja por encima de la mitad en cada una. Las tres variables que se miden al terminar el entrenamiento carecen de este límite. La cuenta es además un suelo. No haber cruzado no equivale a estar por decidir, porque un entrenamiento al 95\,\% del umbral al cerrar la ventana tiene el desenlace casi escrito y aquí cuenta como por delante, así que el solape real es mayor que el medido. Tampoco decide qué hace el contraste con los entrenamientos que ya han cruzado dentro de una ventana que sirve, porque quitarlos recorta el extremo rápido de la celda y dejarlos mezcla detectar con predecir, y esa elección corresponde a la Sección~\ref{sec:protocolo-analisis}. El predictor de referencia lo tiene todavía peor, porque en un entrenamiento que ya cruzó el \emph{accuracy} de validación leído en la ventana vale ya el umbral y lo detecta sin coste, lo que se suma al confusor que deja escrito la Sección~\ref{sec:res-rango}.
+
 \section{Correlaciones por condición}
 \label{sec:res-por-condicion}
 % rho por celda (arq x dataset x opt) para H1; el método y la corrección de multiplicidad los fija la fase B.

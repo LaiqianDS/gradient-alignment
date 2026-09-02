@@ -46,6 +46,32 @@ def test_the_column_range_builds_and_writes_a_pdf(tmp_path):
     assert path.exists() and path.suffix == ".pdf"
 
 
+def _speed_cell(reports):
+    """CIFAR-10/CNN/SGD: crossings in four different epochs plus one run that
+    never crosses, with the windows read from known epochs."""
+    from test_efficiency import _CENSORED, _CROSS_AT, _speed_run
+
+    for t, curve in _CROSS_AT.items():
+        _speed_run(reports, f"cross{t}", curve, lr=1e-2, seed=t)
+    _speed_run(reports, "censored", _CENSORED, lr=1e-3)
+
+
+def test_the_cell_overlap_builds_and_writes_a_pdf(tmp_path):
+    reports, img = tmp_path / "reports", tmp_path / "img"
+    reports.mkdir()
+    _speed_cell(reports)
+    path = figures.cell_overlap(reports, img)
+    assert path.exists() and path.suffix == ".pdf"
+
+
+def test_the_overlap_map_builds_and_writes_a_pdf(tmp_path):
+    reports, img = tmp_path / "reports", tmp_path / "img"
+    reports.mkdir()
+    _speed_cell(reports)
+    path = figures.overlap_map(reports, img)
+    assert path.exists() and path.suffix == ".pdf"
+
+
 def test_every_axis_value_has_a_label():
     from config import DATASETS, MODELS, OPTIMIZERS
 

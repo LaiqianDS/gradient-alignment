@@ -7,30 +7,39 @@ import math
 from itertools import product
 from pathlib import Path
 
+from matplotlib.cm import ScalarMappable
 from matplotlib.colors import BoundaryNorm, LinearSegmentedColormap, ListedColormap
-from matplotlib.patches import Patch
+from matplotlib.lines import Line2D
+from matplotlib.patches import Patch, Rectangle
 from matplotlib.ticker import NullFormatter
+from matplotlib.transforms import blended_transform_factory
 
 import figstyle
 from analysis import (
     REPORTS_DIR,
     dynamic_range_report,
     headline_columns,
+    load_trajectories,
     load_windows,
 )
 from config import DATASETS, LR_GRID, MODELS, OPTIMIZERS, SEEDS, THRESHOLD_ACC
-from efficiency import crossing_by_lr, run_health, vd_status
+from efficiency import (
+    AHEAD_COLUMNS,
+    AHEAD_FLOOR,
+    crossing_by_lr,
+    crossing_epochs,
+    run_health,
+    vd_status,
+    window_overlap,
+)
+from train import median3
 
-# A count is a magnitude, so its ramp is one hue running light to dark. The
-# floor is grey and not white, or a zero cell would vanish into the page and
-# stop reading as a cell.
-_RAMP = LinearSegmentedColormap.from_list("count", ["#e8e8e8", figstyle.PALETTE[0]])
-
-# One step per possible number of seeds, because the fraction drawn cannot take
-# any other value; a continuous ramp would promise a precision that is not there.
-_STEPS = len(SEEDS) + 1
-CMAP = ListedColormap([_RAMP(i / len(SEEDS)) for i in range(_STEPS)])
-NORM = BoundaryNorm([(i - 0.5) / len(SEEDS) for i in range(_STEPS + 1)], _STEPS)
+# A cell is drawn only where at least one run crossed, so what stays on the page
+# is the window itself. One step per possible count, light to dark in a single
+# hue, because the fraction drawn cannot take any other value.
+_RAMP = LinearSegmentedColormap.from_list("count", ["#b3d5e8", figstyle.PALETTE[0]])
+CMAP = ListedColormap([_RAMP(i / (len(SEEDS) - 1)) for i in range(len(SEEDS))])
+NORM = BoundaryNorm([i + 0.5 for i in range(len(SEEDS) + 1)], len(SEEDS))
 
 DATASET_LABELS = {
     "mnist": "MNIST",
@@ -81,7 +90,15 @@ def lr_window(
     for ax, opt in zip(panels, optimizers):
         block = frac.xs(opt, level="optimizer")
         block = block.loc[sorted(block.index, key=order.get)]
-        im = ax.imshow(block.to_numpy(), cmap=CMAP, norm=NORM, aspect="auto")
+        counts = (block.fillna(0).to_numpy() * len(SEEDS)).round().astype(int)
+        for i, row in enumerate(counts):
+            for j, n in enumerate(row):
+                if n:
+                    ax.add_patch(Rectangle((j - 0.5, i - 0.5), 1, 1,
+                                           facecolor=CMAP(n - 1),
+                                           edgecolor="white", linewidth=0.6))
+        ax.set_xlim(-0.5, counts.shape[1] - 0.5)
+        ax.set_ylim(counts.shape[0] - 0.5, -0.5)
 
         grid = LR_GRID[opt]
         ax.set_title(OPTIMIZER_LABELS[opt], fontsize=figstyle.BODY_PT - 1)
@@ -110,20 +127,16 @@ def lr_window(
         # A rule where the dataset changes, so the four blocks read as blocks.
         for i, (d, _) in enumerate(block.index):
             if i and d != block.index[i - 1][0]:
-                ax.axhline(i - 0.5, color="white", linewidth=1.6)
+                ax.axhline(i - 0.5, color=figstyle.RULE, linewidth=0.5)
 
-    counts = range(_STEPS)
     bar = fig.colorbar(
-        im, ax=panels, ticks=[i / len(SEEDS) for i in counts],
-        pad=0.02, aspect=30, drawedges=True,
+        ScalarMappable(norm=NORM, cmap=CMAP), ax=panels,
+        ticks=range(1, len(SEEDS) + 1), pad=0.02, aspect=30, drawedges=True,
     )
-    bar.set_ticklabels([str(i) for i in counts])
-    bar.set_label(
-        "entrenamientos que cruzan el umbral", fontsize=figstyle.BODY_PT - 1
-    )
+    bar.set_label("entrenamientos que cruzan el umbral", fontsize=figstyle.BODY_PT - 1)
     bar.outline.set_visible(False)
     bar.dividers.set(color="white", linewidth=0.8)
-    bar.ax.minorticks_off()  # the gaps already separate the blocks
+    bar.ax.minorticks_off()
     bar.ax.tick_params(length=0, pad=3)
     fig.supxlabel(
         "learning rate", fontsize=figstyle.BODY_PT - 1, fontstyle="italic"
@@ -222,7 +235,7 @@ def cell_range(
     # The grand mean of the ranks, which every group mean is measured against.
     grand = rank.mean()
     ax_rank.axhline(grand, ls="--", lw=0.9, color=figstyle.RULE, zorder=1)
-    ax_rank.text(len(grid) - 0.35, grand - 0.6, "media de los puestos",
+    ax_rank.text(len(grid) - 0.35, grand - 0.6, "posición media",
                  ha="right", va="top", fontsize=7.5, color=figstyle.RULE)
     ax_rank.set_ylabel("puesto en la celda", fontsize=figstyle.BODY_PT - 1)
 
@@ -282,7 +295,144 @@ def column_range(
     return figstyle.save(fig, "rango-columnas", out_dir)
 
 
+# The cell the overlap figure walks through: its crossings spread evenly over
+# the four windows, five in each stretch.
+OVERLAP_CELL = ("cifar10", "cnn", "sgd")
+
+VD_TITLES = {
+    "vd1_pairs_ahead": r"$\mathit{epochs}$ hasta el umbral",
+    "vd2_area_ahead": r"área bajo la curva de $\mathit{loss}$",
+    "vd3_pairs_ahead": r"mejor $\mathit{loss}$ de validación",
+}
+MODEL_COLOURS = dict(zip(MODELS, figstyle.PALETTE[:len(MODELS)]))
+
+
+def _window_label(w: float) -> str:
+    return f"{round(w * 100)} %"
+
+
+def cell_overlap(
+    report_dir: str | Path = REPORTS_DIR,
+    out_dir: Path = figstyle.IMG_DIR,
+) -> Path:
+    """One cell's smoothed val-accuracy curves against its threshold, with the
+    epochs where the early windows close and how many crossings each has behind it."""
+    dset, model, opt = OVERLAP_CELL
+    health = run_health(report_dir)
+    names = set(health.loc[(health["dataset"] == dset) & (health["model"] == model)
+                           & (health["optimizer"] == opt), "run_name"])
+    traj = load_trajectories(report_dir)
+    traj = traj[traj["run_name"].isin(names)].sort_values(["run_name", "epoch"])
+    cross = crossing_epochs(traj)
+    tau = THRESHOLD_ACC[(dset, model)]
+    win = load_windows(report_dir)
+    win = win[win["run_name"].isin(names) & (win["window"] < 1.0)]
+    closes = win.groupby("window")["epoch"].first() + 1  # 1-indexed
+    budget = int(traj["epoch"].max()) + 1
+
+    crossed_colour, censored_colour = figstyle.PALETTE[0], figstyle.PALETTE[1]
+    fig, ax = figstyle.figure(width="full", ratio=0.55)
+    for name, g in traj.groupby("run_name"):
+        smooth = median3(g["val_acc"].reset_index(drop=True))
+        crossed = not math.isnan(cross[name])
+        ax.plot(g["epoch"].to_numpy() + 1, smooth, lw=0.8, alpha=0.75, zorder=2,
+                color=crossed_colour if crossed else censored_colour)
+        if crossed:
+            t = int(cross[name])
+            ax.plot(t, smooth.iloc[t - 1], "o", ms=3.2, color=crossed_colour,
+                    mec="white", mew=0.5, zorder=4)
+
+    ax.axhline(tau, color=figstyle.INK, lw=0.9, zorder=3)
+    ax.text(budget, tau + 0.012, f"τ = {_threshold_label(tau)}",
+            ha="right", va="bottom", fontsize=7.5)
+
+    k = int(cross.notna().sum())
+    top = blended_transform_factory(ax.transData, ax.transAxes)
+    for w, e in closes.items():
+        ax.axvline(e, ls="--", lw=0.9, color=figstyle.RULE, zorder=1)
+        behind = int((cross <= e).sum())
+        ax.text(e, 1.0, f"{_window_label(w)}\n{behind} de {k}", transform=top,
+                ha="center", va="bottom", fontsize=7.5, linespacing=1.4)
+    ax.text(1.0, 1.0, "ventana\nya han cruzado", transform=ax.transAxes,
+            ha="right", va="bottom", fontsize=7.5, linespacing=1.4,
+            color=figstyle.RULE)
+
+    ax.set_xscale("log")
+    ax.set_xlim(1, budget)
+    ticks = [t for t in (1, 2, 4, 10, 20, 40) if t <= budget]
+    ax.set_xticks(ticks)
+    ax.set_xticklabels([str(t) for t in ticks])
+    ax.xaxis.set_minor_formatter(NullFormatter())
+    ax.set_ylim(0, 1)
+    ax.set_yticks([0, 0.25, 0.5, 0.75, 1.0])
+    ax.set_yticklabels([_rate_label(t) for t in (0, 0.25, 0.5, 0.75, 1.0)])
+    ax.set_xlabel("epoch", fontstyle="italic")
+    ax.set_ylabel(r"$\mathit{accuracy}$ de validación suavizada")
+    ax.legend(
+        handles=[Line2D([], [], color=crossed_colour, label="cruza el umbral"),
+                 Line2D([], [], color=censored_colour, label="no lo cruza")],
+        loc="lower right", bbox_to_anchor=(1.0, 0.13), fontsize=7.5,
+        handlelength=1.4,
+    )
+    return figstyle.save(fig, "solape-celda", out_dir)
+
+
+def overlap_map(
+    report_dir: str | Path = REPORTS_DIR,
+    out_dir: Path = figstyle.IMG_DIR,
+) -> Path:
+    """Per speed indicator, each cell's share still ahead of every early window."""
+    detail = window_overlap(report_dir)
+    windows = sorted(detail["window"].unique())
+    slot = {w: i for i, w in enumerate(windows)}
+    offset = {m: (i - (len(MODELS) - 1) / 2) * 0.24 for i, m in enumerate(MODELS)}
+    # Inside an architecture, a hair per (dataset, optimizer) so equal values
+    # stack side by side instead of on top of each other.
+    pairs = sorted(set(zip(detail["dataset"], detail["optimizer"])))
+    hair = {p: (i - (len(pairs) - 1) / 2) * 0.018 for i, p in enumerate(pairs)}
+
+    fig, axes = figstyle.figure(width="full", ratio=0.42, ncols=len(AHEAD_COLUMNS))
+    for ax, key in zip(axes, AHEAD_COLUMNS):
+        for m in MODELS:
+            sub = detail[detail["model"] == m]
+            if sub.empty:
+                continue
+            x = (sub["window"].map(slot) + offset[m]
+                 + [hair[p] for p in zip(sub["dataset"], sub["optimizer"])])
+            ax.plot(x, sub[key], "o", ls="none", ms=3.4, color=MODEL_COLOURS[m],
+                    mec="white", mew=0.5, zorder=3, label=MODEL_LABELS[m])
+        ax.axhline(AHEAD_FLOOR, ls="--", lw=0.9, color=figstyle.RULE, zorder=1)
+        ax.set_title(VD_TITLES[key], fontsize=figstyle.BODY_PT - 1)
+
+        by_window = detail.groupby("window")[key]
+        usable = by_window.apply(lambda s: int((s >= AHEAD_FLOOR).sum()))
+        ax.set_xticks(range(len(windows)))
+        ax.set_xticklabels(
+            [f"{_window_label(w)}\n{usable[w]} de {by_window.count()[w]}"
+             for w in windows],
+            fontsize=7, linespacing=1.4,
+        )
+        ax.set_xlim(-0.6, len(windows) - 0.4)
+        ax.tick_params(axis="x", length=0)
+
+    axes[0].set_ylim(0, 1.04)
+    figstyle.match_limits(axes)
+    axes[0].set_yticks([0, 0.25, 0.5, 0.75, 1.0])
+    axes[0].set_yticklabels([_rate_label(t) for t in (0, 0.25, 0.5, 0.75, 1.0)])
+    axes[0].set_ylabel("parte de la variable por delante")
+    axes[1].text(-0.55, AHEAD_FLOOR + 0.025, "la mitad",
+                 ha="left", fontsize=7.5, color=figstyle.RULE)
+    for ax in axes[1:]:
+        ax.tick_params(axis="y", labelleft=False)
+    axes[0].legend(loc="upper right", fontsize=7.5, handletextpad=0.3)
+    fig.supxlabel("ventana, y cuántas celdas quedan por encima de la mitad",
+                  fontsize=figstyle.BODY_PT - 1)
+    return figstyle.save(fig, "solape-mapa", out_dir)
+
+
 if __name__ == "__main__":
     print(lr_window())
     print(cell_range())
     print(column_range())
+    print(cell_overlap())
+    print(overlap_map())
