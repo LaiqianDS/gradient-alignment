@@ -50,11 +50,6 @@ DATASET_LABELS = {
 MODEL_LABELS = {"fc": "FC", "cnn": "CNN", "resnet18": "ResNet-18"}
 OPTIMIZER_LABELS = {"sgd": "SGD", "adam": "Adam"}
 
-# An anglicism inside a label the rest of which is Spanish: only the term is
-# italic, as in the body. Mathtext, because ``fontstyle`` slants the whole string.
-LR_TERM = r"$\mathit{learning}$ $\mathit{rate}$"
-
-
 def _rate_label(lr: float) -> str:
     """A learning rate in plain decimal, with the comma the body text uses.
 
@@ -156,7 +151,7 @@ def lr_window(
     bar.ax.minorticks_off()
     bar.ax.tick_params(length=0, pad=3)
     fig.supxlabel(
-        "learning rate", fontsize=figstyle.BODY_PT - 1, fontstyle="italic"
+        "learning rate", fontsize=figstyle.BODY_PT - 1
     )
     return figstyle.save(fig, "ventana-lr", out_dir)
 
@@ -171,20 +166,19 @@ EXAMPLE_WINDOW = 0.05
 # Columns that cost nothing to compute: no gradient is differentiated for them.
 FREE_FAMILIES = ("baseline", "monitor")
 
-# The name each logged column carries in the body text, and whether that name is
-# an English term, which the memoria always sets in italics.
+# The name each logged column carries in the body text.
 COLUMN_LABELS = {
-    "var/normalized": ("NGV", False),
-    "noise_scale/simple": ("GNS", False),
-    "gsnr/mean": ("GSNR", False),
-    "mcoh/global": ("m-coherencia", False),
-    "stiffness/cos_within": ("stiffness", True),
-    "gd/scalar": ("gradient disparity", True),
-    "confusion/eta": ("gradient confusion", True),
-    "gwa/value": ("GWA", False),
-    "tse/ema_0_999": ("TSE", False),
-    "val_loss": (r"$\mathit{loss}$ de validación", False),
-    "val_acc": (r"$\mathit{accuracy}$ de validación", False),
+    "var/normalized": "NGV",
+    "noise_scale/simple": "GNS",
+    "gsnr/mean": "GSNR",
+    "mcoh/global": "m-coherencia",
+    "stiffness/cos_within": "stiffness",
+    "gd/scalar": "gradient disparity",
+    "confusion/eta": "gradient confusion",
+    "gwa/value": "GWA",
+    "tse/ema_0_999": "TSE",
+    "val_loss": "loss de validación",
+    "val_acc": "accuracy de validación",
 }
 
 FAMILY_COLOURS = {
@@ -244,11 +238,10 @@ def cell_range(
     ax_raw.set_yticks([0.3, 1, 3, 10])
     ax_raw.set_yticklabels(["0,3", "1", "3", "10"])
     ax_raw.yaxis.set_minor_formatter(NullFormatter())
-    ax_raw.set_ylabel(COLUMN_LABELS[EXAMPLE_KEY][0], fontsize=figstyle.BODY_PT - 1,
-                      fontstyle="italic")
+    ax_raw.set_ylabel(COLUMN_LABELS[EXAMPLE_KEY], fontsize=figstyle.BODY_PT - 1)
     handles, labels = ax_raw.get_legend_handles_labels()
     handles.append(Line2D([], [], color=figstyle.INK, lw=2.2))
-    labels.append(f"media por {LR_TERM}")
+    labels.append("media por learning rate")
     ax_raw.legend(handles, labels, loc="lower left", fontsize=7.5,
                   handletextpad=0.3, borderpad=0.2, labelspacing=0.3)
 
@@ -259,7 +252,7 @@ def cell_range(
                  ha="right", va="top", fontsize=7.5, color=figstyle.RULE)
     ax_rank.set_ylabel("posición en la celda", fontsize=figstyle.BODY_PT - 1)
 
-    fig.supxlabel("learning rate", fontsize=figstyle.BODY_PT - 1, fontstyle="italic")
+    fig.supxlabel("learning rate", fontsize=figstyle.BODY_PT - 1)
     return figstyle.save(fig, "rango-celda", out_dir)
 
 
@@ -298,17 +291,14 @@ def column_range(
         loc="lower right", fontsize=7.5, handlelength=1.1, handletextpad=0.5,
     )
 
-    labels, english = zip(*(COLUMN_LABELS[k] for k in order["key"]))
+    labels = [COLUMN_LABELS[k] for k in order["key"]]
     ax.set_yticks(range(len(order)))
     ax.set_yticklabels(labels, fontsize=7.5)
-    for tick, is_english in zip(ax.get_yticklabels(), english):
-        if is_english:
-            tick.set_style("italic")
     ax.set_ylim(-0.7, len(order) - 0.1)
     ax.set_xlim(0, 1.06)
     ax.set_xticks([0, 0.25, 0.5, 0.75, 1.0])
     ax.set_xticklabels([_dec(t) for t in (0, 0.25, 0.5, 0.75, 1.0)], fontsize=7)
-    ax.set_xlabel(f"dispersión explicada por el {LR_TERM}",
+    ax.set_xlabel("dispersión explicada por el learning rate",
                   fontsize=figstyle.BODY_PT - 1)
     ax.tick_params(axis="y", length=0)
     ax.tick_params(axis="x", length=2, width=0.6, color="#666666")
@@ -320,9 +310,9 @@ def column_range(
 OVERLAP_CELL = ("cifar10", "cnn", "sgd")
 
 VD_TITLES = {
-    "vd1_pairs_ahead": r"$\mathit{epochs}$ hasta el umbral",
-    "vd2_area_ahead": r"área bajo la curva de $\mathit{loss}$",
-    "vd3_pairs_ahead": r"mejor $\mathit{loss}$ de validación",
+    "vd1_pairs_ahead": "epochs hasta τ",
+    "vd2_area_ahead": "AUC",
+    "vd3_pairs_ahead": "mejor validation loss",
 }
 MODEL_COLOURS = dict(zip(MODELS, figstyle.PALETTE[:len(MODELS)]))
 
@@ -366,16 +356,11 @@ def cell_overlap(
     ax.text(budget, tau + 0.012, f"τ = {_threshold_label(tau)}",
             ha="right", va="bottom", fontsize=7.5)
 
-    k = int(cross.notna().sum())
     top = blended_transform_factory(ax.transData, ax.transAxes)
     for w, e in closes.items():
         ax.axvline(e, ls="--", lw=0.9, color=figstyle.RULE, zorder=1)
-        behind = int((cross <= e).sum())
-        ax.text(e, 1.0, f"{_window_label(w)}\n{behind} de {k}", transform=top,
-                ha="center", va="bottom", fontsize=7.5, linespacing=1.4)
-    ax.text(1.0, 1.0, "ventana\nya han cruzado", transform=ax.transAxes,
-            ha="right", va="bottom", fontsize=7.5, linespacing=1.4,
-            color=figstyle.RULE)
+        ax.text(e, 1.0, _window_label(w), transform=top,
+                ha="center", va="bottom", fontsize=7.5)
 
     ax.set_xscale("log")
     ax.set_xlim(1, budget)
@@ -386,8 +371,8 @@ def cell_overlap(
     ax.set_ylim(0, 1)
     ax.set_yticks([0, 0.25, 0.5, 0.75, 1.0])
     ax.set_yticklabels([_rate_label(t) for t in (0, 0.25, 0.5, 0.75, 1.0)])
-    ax.set_xlabel("epoch", fontstyle="italic")
-    ax.set_ylabel(r"$\mathit{accuracy}$ de validación suavizada")
+    ax.set_xlabel("epoch")
+    ax.set_ylabel("validation accuracy suavizada")
     ax.legend(
         handles=[Line2D([], [], color=crossed_colour, label="cruza el umbral"),
                  Line2D([], [], color=censored_colour, label="no lo cruza")],
@@ -424,14 +409,8 @@ def overlap_map(
         ax.axhline(AHEAD_FLOOR, ls="--", lw=0.9, color=figstyle.RULE, zorder=1)
         ax.set_title(VD_TITLES[key], fontsize=figstyle.BODY_PT - 1)
 
-        by_window = detail.groupby("window")[key]
-        usable = by_window.apply(lambda s: int((s >= AHEAD_FLOOR).sum()))
         ax.set_xticks(range(len(windows)))
-        ax.set_xticklabels(
-            [f"{_window_label(w)}\n{usable[w]} de {by_window.count()[w]}"
-             for w in windows],
-            fontsize=7, linespacing=1.4,
-        )
+        ax.set_xticklabels([_window_label(w) for w in windows], fontsize=7)
         ax.set_xlim(-0.6, len(windows) - 0.4)
         ax.tick_params(axis="x", length=0)
 
@@ -439,14 +418,13 @@ def overlap_map(
     figstyle.match_limits(axes)
     axes[0].set_yticks([0, 0.25, 0.5, 0.75, 1.0])
     axes[0].set_yticklabels([_rate_label(t) for t in (0, 0.25, 0.5, 0.75, 1.0)])
-    axes[0].set_ylabel("parte de la variable por delante")
+    axes[0].set_ylabel("parte por delante")
     axes[1].text(-0.55, AHEAD_FLOOR + 0.025, "la mitad",
                  ha="left", fontsize=7.5, color=figstyle.RULE)
     for ax in axes[1:]:
         ax.tick_params(axis="y", labelleft=False)
     axes[0].legend(loc="upper right", fontsize=7.5, handletextpad=0.3)
-    fig.supxlabel("ventana, y cuántas celdas quedan por encima de la mitad",
-                  fontsize=figstyle.BODY_PT - 1)
+    fig.supxlabel("ventana", fontsize=figstyle.BODY_PT - 1)
     return figstyle.save(fig, "solape-mapa", out_dir)
 
 

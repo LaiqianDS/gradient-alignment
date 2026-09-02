@@ -97,11 +97,11 @@ La Figura~\ref{fig:solape-celda} recorre CIFAR-10 con la red convolucional y SGD
 \begin{figure}[ht]
 \centering
 \includegraphics{solape-celda}
-\caption{CIFAR-10 con la red convolucional y SGD. Sobre cada ventana, cuántos de los 20 cruces ya han ocurrido al cerrarla.}
+\caption{CIFAR-10 con la red convolucional y SGD. Las verticales marcan dónde cierra cada ventana.}
 \label{fig:solape-celda}
 \end{figure}
 
-Contado en entrenamientos y sumado sobre las 24 celdas, el 11\,\% de los 571 cruces ya ha ocurrido al cerrar la ventana del 5\,\%, el 35\,\% al cerrar la del 10\,\%, el 72\,\% al cerrar la del 25\,\% y el 85\,\% al cerrar la del 50\,\%. La Figura~\ref{fig:solape-mapa} baja esa cuenta a cada celda, en pares y para las tres variables, y bajo cada ventana anota cuántas celdas conservan al menos la mitad. Para las \emph{epochs} hasta el umbral la ventana del 5\,\% sirve en 22 celdas y la del 10\,\% en 12, y ninguna de las dos posteriores sirve en ninguna. Las dos celdas que fallan ya al 5\,\% son la red \emph{fully connected} con Adam en CIFAR-100 y en Tiny-ImageNet, donde los entrenamientos que cruzan lo hacen en las dos primeras \emph{epochs}. Al 10\,\% el mapa se parte por arquitectura. Quedan por encima de la mitad las seis celdas de MNIST, las cuatro de la convolucional y la ResNet-18 sobre Tiny-ImageNet y las dos de la ResNet-18 con SGD sobre CIFAR, y ninguna red \emph{fully connected} fuera de MNIST pasa de 0,33. Es la misma escalera de la Figura~\ref{fig:ventana-lr}, porque a la red plana se le pide el umbral más bajo y lo alcanza antes.
+Contado en entrenamientos y sumado sobre las 24 celdas, el 11\,\% de los 571 cruces ya ha ocurrido al cerrar la ventana del 5\,\%, el 35\,\% al cerrar la del 10\,\%, el 72\,\% al cerrar la del 25\,\% y el 85\,\% al cerrar la del 50\,\%. La Figura~\ref{fig:solape-mapa} baja esa cuenta a cada celda, en pares y para las tres variables. Para las \emph{epochs} hasta el umbral la ventana del 5\,\% sirve en 22 celdas y la del 10\,\% en 12, y ninguna de las dos posteriores sirve en ninguna. Las dos celdas que fallan ya al 5\,\% son la red \emph{fully connected} con Adam en CIFAR-100 y en Tiny-ImageNet, donde los entrenamientos que cruzan lo hacen en las dos primeras \emph{epochs}. Al 10\,\% el mapa se parte por arquitectura. Quedan por encima de la mitad las seis celdas de MNIST, las cuatro de la convolucional y la ResNet-18 sobre Tiny-ImageNet y las dos de la ResNet-18 con SGD sobre CIFAR, y ninguna red \emph{fully connected} fuera de MNIST pasa de 0,33. Es la misma escalera de la Figura~\ref{fig:ventana-lr}, porque a la red plana se le pide el umbral más bajo y lo alcanza antes.
 
 \begin{figure}[ht]
 \centering
