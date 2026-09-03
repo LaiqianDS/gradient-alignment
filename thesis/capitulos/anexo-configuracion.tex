@@ -1,16 +1,38 @@
 \chapter{Configuración del sistema y reproducibilidad}
 \label{ap:configuracion}
-% Cómo reproducir el estudio. Fuente: README, src/seed.py, pyproject.toml/uv.lock, datasets.md.
+% Fuente: uv.lock, src/seed.py, src/train.py, run_matrix.py, run_pilot.py, git log sobre
+% reports/ y reports_pilot/, y los 960 summary.json. Cifras verificadas el 2026-09-03.
+% Lo que Desarrollo ya cuenta (relojes, reanudación, semillas, normalización) no se repite:
+% este apéndice da versiones, órdenes, máquina y alcance.
+
+Este apéndice recoge lo que hace falta para repetir el estudio: las versiones del software, las órdenes que ejecutan los entrenamientos y los análisis, la máquina, y qué parte del resultado se reproduce en otra máquina.
 
 \section{Entorno software}
 \label{sec:entorno}
-% Versiones (Python, PyTorch); gestión con uv; datasets vía src/load_data.py.
+
+El código es Python, gestionado con \texttt{uv}; los entrenamientos y los análisis corrieron con la versión 3.12.8. Las dependencias están fijadas en \texttt{uv.lock}, y \texttt{uv sync} las instala en un entorno propio del proyecto. Las que intervienen en los cálculos son PyTorch 2.11.0 y torchvision 0.26.0, NumPy 2.4.4, pandas 3.0.3, PyArrow 24.0.0, Pillow 12.2.0, SciPy 1.18.0 y Matplotlib 3.11.0.
+
+Los conjuntos de datos se descargan con \texttt{uv run python src/load\_data.py}, que deja MNIST, CIFAR-10 y CIFAR-100 bajo \texttt{data/}; Tiny-ImageNet hay que colocarlo a mano en \texttt{data/tiny-imagenet-200/}, con sus carpetas \texttt{train/} y \texttt{val/}. La matriz se ejecuta con \texttt{uv run python src/run\_matrix.py}, que con \texttt{--init} escribe los 24 ficheros de celda en \texttt{experiments/} y con \texttt{--status} cuenta los entrenamientos hechos y pendientes; el piloto, con \texttt{src/run\_pilot.py}, que se lee con \texttt{--report}; y un entrenamiento suelto, con \texttt{src/train.py} y las opciones \texttt{--config}, \texttt{--lr} y \texttt{--seed}. Los análisis se regeneran desde \texttt{reports/} con tres órdenes y la memoria con una cuarta:
+\begin{itemize}
+\item \texttt{uv run python src/efficiency.py} imprime los diagnósticos de las Secciones~\ref{sec:res-cobertura} a~\ref{sec:res-solape};
+\item \texttt{uv run python src/contrast.py} calcula el contraste de la Sección~\ref{sec:protocolo-analisis} y escribe en \texttt{results/} las tablas \texttt{tabla\_larga.parquet}, \texttt{tabla\_larga\_960.parquet} y \texttt{seleccion.parquet};
+\item \texttt{uv run python src/figures.py} dibuja las figuras en \texttt{thesis/img/};
+\item \texttt{latexmk -pdf -r thesis/.latexmkrc -cd thesis/main.tex} compila la memoria en \texttt{thesis/render/}.
+\end{itemize}
+La batería de pruebas se ejecuta con \texttt{uv run pytest}.
 
 \section{Hardware y ejecución}
 \label{sec:hardware}
-% GPU única (modelo, memoria), troceado de la matriz para reanudar por tramos, dos relojes
-% (wall-clock y overhead de métricas). No hay cluster: coherente con \ref{sec:motivacion}.
+
+Los 960 entrenamientos y el piloto corrieron en una sola máquina con Linux y una GPU NVIDIA, \textbf{[pendiente: modelo y memoria exactos de la GPU, copiar de nvidia-smi]}, sin clúster ni ejecución en paralelo. La memoria del anfitrión importa tanto como la de la GPU, porque el barrido compartido de la Sección~\ref{sec:des-metricas} reúne en ella la matriz de gradientes por ejemplo para formar el Gram: con $M = 256$ son 14,2 GB para la red \emph{fully connected} sobre Tiny-ImageNet y 11,5 GB para la ResNet-18, además de lo que consume el propio entrenamiento.
+
+Los 960 corrieron con el mismo código de medición, el del repositorio en \texttt{b38f635}: el primer entrenamiento se versionó el 8 de agosto de 2026 (\texttt{9fe77ab}) y el último el 22 (\texttt{f6df900}), sin ningún cambio entre esas fechas en el código de entrenamiento ni en las métricas. El 29 de agosto (\texttt{1ca5f65} y \texttt{a2e1ab8}) los signos de la \emph{stiffness} y la fracción negativa de la \emph{gradient confusion} pasaron a devolver NaN donde el valor es indefinido, en lugar de un cero, también en los datos ya guardados en \texttt{reports/}. Los 24 ficheros de \texttt{experiments/} conservan el umbral de junio porque el lanzador no sobrescribe un fichero existente; ningún cálculo los lee. El piloto son 24 entrenamientos en \texttt{reports\_pilot/} (\texttt{3b84f5b}), ejecutados con el código de junio, y sus seis resúmenes de Tiny-ImageNet llevan la clave \texttt{\_tiny\_test\_note} y una repetición corregida en \texttt{testfix\_40ep/}, según cuenta la Sección~\ref{sec:pilot}. Sumados sobre los 960 resúmenes, la matriz costó 121,7 horas de reloj, 97,6 de entrenamiento y 24,1 de instrumentación; los dos relojes y la reanudación están en las Secciones~\ref{sec:des-metricas} y~\ref{sec:ejecucion}.
 
 \section{Reproducibilidad determinista}
 \label{sec:determinismo}
-% Seeds {0..4}; normalización por dataset; caveat Tiny-ImageNet.
+
+Las semillas y el modo determinista de cuDNN que fija cada entrenamiento, y su alcance, están en la Sección~\ref{sec:reproducibilidad}. El modo determinista general de PyTorch no se activa, y la igualdad bit a bit entre dos ejecuciones se comprobó sobre los 22 gemelos del piloto y no de forma sistemática. Las constantes de normalización de Tiny-ImageNet dependen de la biblioteca que decodifica sus JPEG, así que reproducir la matriz en otra máquina puede exigir fijar también esa biblioteca.
+
+Cuatro campos de \texttt{summary.json} están obsoletos y no se leen: \texttt{epochs\_to\_threshold} y \texttt{seconds\_to\_threshold}, calculados con los umbrales de junio, y \texttt{best\_val\_acc} y \texttt{best\_val\_loss}, calculados con el suavizado anterior al de la Sección~\ref{sec:variables}. La capa de análisis, en \texttt{efficiency.py}, recalcula los cuatro desde \texttt{trajectory.parquet}, y los demás campos del resumen se leen tal cual. Las tablas de \texttt{results/} son derivadas y se regeneran con la orden de la Sección~\ref{sec:entorno}, y cada cifra de la memoria que sale de ellas se cita con la fecha del fichero.
+
+En la misma máquina y con el mismo entorno, un entrenamiento repite su trayectoria. En otra máquina cambian el redondeo de los cálculos y, en Tiny-ImageNet, los propios píxeles, y lo reproducible allí son las estadísticas del estudio y no cada trayectoria.

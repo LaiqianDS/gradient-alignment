@@ -288,3 +288,286 @@
   eprint     = {1412.6806},
   eprinttype = {arxiv},
 }
+
+% ─── Protocolo de análisis (estadístico, población, corrección) ───
+
+@article{somers1962new,
+  author  = {Somers, Robert H.},
+  title   = {A New Asymmetric Measure of Association for Ordinal Variables},
+  journal = {American Sociological Review},
+  volume  = {27},
+  number  = {6},
+  pages   = {799--811},
+  year    = {1962},
+  doi     = {10.2307/2090408},
+}
+
+@article{harrell1982evaluating,
+  author  = {Harrell, Frank E. and Califf, Robert M. and Pryor, David B. and Lee, Kerry L. and Rosati, Robert A.},
+  title   = {Evaluating the Yield of Medical Tests},
+  journal = {JAMA},
+  volume  = {247},
+  number  = {18},
+  pages   = {2543--2546},
+  year    = {1982},
+  doi     = {10.1001/jama.1982.03320430047030},
+}
+
+@article{harrell1996multivariable,
+  author  = {Harrell, Frank E. and Lee, Kerry L. and Mark, Daniel B.},
+  title   = {Multivariable Prognostic Models: Issues in Developing Models, Evaluating Assumptions and Adequacy, and Measuring and Reducing Errors},
+  journal = {Statistics in Medicine},
+  volume  = {15},
+  number  = {4},
+  pages   = {361--387},
+  year    = {1996},
+  doi     = {10.1002/(SICI)1097-0258(19960229)15:4<361::AID-SIM168>3.0.CO;2-4},
+}
+
+@article{newson2002parameters,
+  author  = {Newson, Roger},
+  title   = {Parameters behind ``Nonparametric'' Statistics: {Kendall's} tau, {Somers'} {D} and Median Differences},
+  journal = {The Stata Journal},
+  volume  = {2},
+  number  = {1},
+  pages   = {45--64},
+  year    = {2002},
+  doi     = {10.1177/1536867X0200200103},
+}
+
+@inproceedings{jiang2020fantastic,
+  author     = {Jiang, Yiding and Neyshabur, Behnam and Mobahi, Hossein and Krishnan, Dilip and Bengio, Samy},
+  title      = {Fantastic Generalization Measures and Where to Find Them},
+  booktitle  = {International Conference on Learning Representations (ICLR)},
+  year       = {2020},
+  eprint     = {1912.02178},
+  eprinttype = {arxiv},
+}
+
+@article{benjamini1995controlling,
+  author  = {Benjamini, Yoav and Hochberg, Yosef},
+  title   = {Controlling the False Discovery Rate: A Practical and Powerful Approach to Multiple Testing},
+  journal = {Journal of the Royal Statistical Society: Series B (Methodological)},
+  volume  = {57},
+  number  = {1},
+  pages   = {289--300},
+  year    = {1995},
+  doi     = {10.1111/j.2517-6161.1995.tb02031.x},
+}
+
+@article{nosek2018preregistration,
+  author  = {Nosek, Brian A. and Ebersole, Charles R. and DeHaven, Alexander C. and Mellor, David T.},
+  title   = {The Preregistration Revolution},
+  journal = {Proceedings of the National Academy of Sciences},
+  volume  = {115},
+  number  = {11},
+  pages   = {2600--2606},
+  year    = {2018},
+  doi     = {10.1073/pnas.1708274114},
+}
+
+% ─── Predicción temprana: extrapolación de curvas, parada multi-fidelidad y proxies de coste cero (cap. estado del arte) ───
+
+@inproceedings{domhan2015speeding,
+  author    = {Domhan, Tobias and Springenberg, Jost Tobias and Hutter, Frank},
+  title     = {Speeding Up Automatic Hyperparameter Optimization of Deep Neural Networks by Extrapolation of Learning Curves},
+  booktitle = {Proceedings of the 24th International Joint Conference on Artificial Intelligence (IJCAI)},
+  pages     = {3460--3468},
+  year      = {2015},
+}
+
+@inproceedings{klein2017learning,
+  author    = {Klein, Aaron and Falkner, Stefan and Springenberg, Jost Tobias and Hutter, Frank},
+  title     = {Learning Curve Prediction with Bayesian Neural Networks},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2017},
+}
+
+@inproceedings{jamieson2016nonstochastic,
+  author    = {Jamieson, Kevin and Talwalkar, Ameet},
+  title     = {Non-stochastic Best Arm Identification and Hyperparameter Optimization},
+  booktitle = {Proceedings of the 19th International Conference on Artificial Intelligence and Statistics (AISTATS)},
+  series    = {Proceedings of Machine Learning Research},
+  volume    = {51},
+  pages     = {240--248},
+  publisher = {PMLR},
+  year      = {2016},
+}
+
+@article{li2018hyperband,
+  author     = {Li, Lisha and Jamieson, Kevin and DeSalvo, Giulia and Rostamizadeh, Afshin and Talwalkar, Ameet},
+  title      = {Hyperband: A Novel Bandit-Based Approach to Hyperparameter Optimization},
+  journal    = {Journal of Machine Learning Research},
+  volume     = {18},
+  number     = {185},
+  pages      = {1--52},
+  year       = {2018},
+  eprint     = {1603.06560},
+  eprinttype = {arxiv},
+}
+
+@inproceedings{falkner2018bohb,
+  author    = {Falkner, Stefan and Klein, Aaron and Hutter, Frank},
+  title     = {{BOHB}: Robust and Efficient Hyperparameter Optimization at Scale},
+  booktitle = {Proceedings of the 35th International Conference on Machine Learning (ICML)},
+  series    = {Proceedings of Machine Learning Research},
+  volume    = {80},
+  pages     = {1437--1446},
+  publisher = {PMLR},
+  year      = {2018},
+}
+
+@inproceedings{golovin2017vizier,
+  author    = {Golovin, Daniel and Solnik, Benjamin and Moitra, Subhodeep and Kochanski, Greg and Karro, John and Sculley, D.},
+  title     = {Google Vizier: A Service for Black-Box Optimization},
+  booktitle = {Proceedings of the 23rd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining},
+  pages     = {1487--1495},
+  year      = {2017},
+  doi       = {10.1145/3097983.3098043},
+}
+
+@inproceedings{abdelfattah2021zerocost,
+  author     = {Abdelfattah, Mohamed S. and Mehrotra, Abhinav and Dudziak, {\L}ukasz and Lane, Nicholas D.},
+  title      = {Zero-Cost Proxies for Lightweight {NAS}},
+  booktitle  = {International Conference on Learning Representations (ICLR)},
+  year       = {2021},
+  eprint     = {2101.08134},
+  eprinttype = {arxiv},
+}
+
+@misc{white2022deeper,
+  author       = {White, Colin and Khodak, Mikhail and Tu, Renbo and Shah, Shital and Bubeck, S{\'e}bastien and Dey, Debadeepta},
+  title        = {A Deeper Look at Zero-Cost Proxies for Lightweight {NAS}},
+  howpublished = {ICLR Blog Track},
+  year         = {2022},
+}
+
+@inproceedings{ning2021evaluating,
+  author     = {Ning, Xuefei and Tang, Changcheng and Li, Wenshuo and Zhou, Zixuan and Liang, Shuang and Yang, Huazhong and Wang, Yu},
+  title      = {Evaluating Efficient Performance Estimators of Neural Architectures},
+  booktitle  = {Advances in Neural Information Processing Systems},
+  volume     = {34},
+  year       = {2021},
+  eprint     = {2008.03064},
+  eprinttype = {arxiv},
+}
+
+@inproceedings{krishnakumar2022nasbenchsuitezero,
+  author     = {Krishnakumar, Arjun and White, Colin and Zela, Arber and Tu, Renbo and Safari, Mahmoud and Hutter, Frank},
+  title      = {{NAS-Bench-Suite-Zero}: Accelerating Research on Zero Cost Proxies},
+  booktitle  = {Advances in Neural Information Processing Systems, Datasets and Benchmarks Track},
+  volume     = {35},
+  year       = {2022},
+  eprint     = {2210.03230},
+  eprinttype = {arxiv},
+}
+
+% ─── Evaluación de medidas de generalización y estadística del contraste ───
+
+@inproceedings{dziugaite2020search,
+  author     = {Dziugaite, Gintare Karolina and Drouin, Alexandre and Neal, Brady and Rajkumar, Nitarshan and Caballero, Ethan and Wang, Linbo and Mitliagkas, Ioannis and Roy, Daniel M.},
+  title      = {In Search of Robust Measures of Generalization},
+  booktitle  = {Advances in Neural Information Processing Systems},
+  volume     = {33},
+  year       = {2020},
+  eprint     = {2010.11924},
+  eprinttype = {arxiv},
+}
+
+@inproceedings{hardt2016train,
+  author     = {Hardt, Moritz and Recht, Benjamin and Singer, Yoram},
+  title      = {Train Faster, Generalize Better: Stability of Stochastic Gradient Descent},
+  booktitle  = {Proceedings of the 33rd International Conference on Machine Learning (ICML)},
+  series     = {Proceedings of Machine Learning Research},
+  volume     = {48},
+  pages      = {1225--1234},
+  publisher  = {PMLR},
+  year       = {2016},
+  eprint     = {1509.01240},
+  eprinttype = {arxiv},
+}
+
+@inproceedings{cohen2021gradient,
+  author     = {Cohen, Jeremy M. and Kaur, Simran and Li, Yuanzhi and Kolter, J. Zico and Talwalkar, Ameet},
+  title      = {Gradient Descent on Neural Networks Typically Occurs at the Edge of Stability},
+  booktitle  = {International Conference on Learning Representations (ICLR)},
+  year       = {2021},
+  eprint     = {2103.00065},
+  eprinttype = {arxiv},
+}
+
+@article{schwartz2020green,
+  author  = {Schwartz, Roy and Dodge, Jesse and Smith, Noah A. and Etzioni, Oren},
+  title   = {Green {AI}},
+  journal = {Communications of the ACM},
+  volume  = {63},
+  number  = {12},
+  pages   = {54--63},
+  year    = {2020},
+  doi     = {10.1145/3381831},
+}
+
+@inproceedings{yin2018gradient,
+  author     = {Yin, Dong and Pananjady, Ashwin and Lam, Max and Papailiopoulos, Dimitris and Ramchandran, Kannan and Bartlett, Peter},
+  title      = {Gradient Diversity: A Key Ingredient for Scalable Distributed Learning},
+  booktitle  = {Proceedings of the 21st International Conference on Artificial Intelligence and Statistics (AISTATS)},
+  series     = {Proceedings of Machine Learning Research},
+  volume     = {84},
+  pages      = {1998--2007},
+  publisher  = {PMLR},
+  year       = {2018},
+  eprint     = {1706.05699},
+  eprinttype = {arxiv},
+}
+
+@inproceedings{smith2018dont,
+  author     = {Smith, Samuel L. and Kindermans, Pieter-Jan and Ying, Chris and Le, Quoc V.},
+  title      = {Don't Decay the Learning Rate, Increase the Batch Size},
+  booktitle  = {International Conference on Learning Representations (ICLR)},
+  year       = {2018},
+  eprint     = {1711.00489},
+  eprinttype = {arxiv},
+}
+
+@article{anderson1983analysis,
+  author  = {Anderson, James R. and Cain, Kevin C. and Gelber, Richard D.},
+  title   = {Analysis of Survival by Tumor Response},
+  journal = {Journal of Clinical Oncology},
+  volume  = {1},
+  number  = {11},
+  pages   = {710--719},
+  year    = {1983},
+  doi     = {10.1200/JCO.1983.1.11.710},
+}
+
+@article{dafni2011landmark,
+  author  = {Dafni, Urania},
+  title   = {Landmark Analysis at the 25-Year Landmark Point},
+  journal = {Circulation: Cardiovascular Quality and Outcomes},
+  volume  = {4},
+  number  = {3},
+  pages   = {363--371},
+  year    = {2011},
+  doi     = {10.1161/CIRCOUTCOMES.110.957951},
+}
+
+@book{efron1982jackknife,
+  author    = {Efron, Bradley},
+  title     = {The Jackknife, the Bootstrap and Other Resampling Plans},
+  publisher = {Society for Industrial and Applied Mathematics},
+  series    = {CBMS-NSF Regional Conference Series in Applied Mathematics},
+  volume    = {38},
+  address   = {Philadelphia},
+  year      = {1982},
+  doi       = {10.1137/1.9781611970319},
+}
+
+@article{willroth2024best,
+  author  = {Willroth, Emily C. and Atherton, Olivia E.},
+  title   = {Best Laid Plans: A Guide to Reporting Preregistration Deviations},
+  journal = {Advances in Methods and Practices in Psychological Science},
+  volume  = {7},
+  number  = {1},
+  year    = {2024},
+  doi     = {10.1177/25152459231213802},
+}
