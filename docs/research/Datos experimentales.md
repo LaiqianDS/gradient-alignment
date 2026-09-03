@@ -92,16 +92,16 @@ Para que el cotejo con la bibliografía sea honesto, así entrena este estudio (
 - **`weight_decay = 0.0`** (sin regularización explícita), **`batch_size = 128`**, **`probe_size = 256`** (fijo: es un knob científico que fija el número de muestras del estimador de gradiente, así que no se mueve por la rejilla).
 - El train loader **baraja con un generador sembrado** por la semilla del run y **descarta el último batch parcial** (`drop_last = True`); por eso los ejemplos efectivos por época quedan justo por debajo del nominal (MNIST 50 000 → 390 batches × 128 = 49 920). Val y test no se barajan ni descartan nada.
 - El **probe** es un batch fijo de 256 ejemplos del train, determinista en `(dataset, probe_size, semilla del run)`, **congelado y reutilizado** en todas las medidas de métricas a lo largo del entrenamiento (no se vuelve a muestrear cada época).
-- **Presupuesto de épocas y umbral de val-acc por dataset** (calibrados en el pilot, por debajo del techo ajustado de cada dataset para que los modelos fuertes crucen sin censurar):
+- **Presupuesto de épocas por dataset** (calibrado en el pilot) **y umbral de val-acc por dataset y arquitectura** (fijado el 2026-09-01 sobre la matriz con la norma del 60 %, [[1 - Diseño]] §Matriz de runs; los YAML de `experiments/` conservan un umbral viejo por dataset que ningún cálculo lee):
 
-  | Dataset | Épocas | Umbral val-acc (VD1) |
-  |---|---|---|
-  | MNIST | 20 | 0,97 |
-  | CIFAR-10 | 40 | 0,65 |
-  | CIFAR-100 | 40 | 0,35 |
-  | Tiny-ImageNet | 40 | 0,20 |
+  | Dataset | Épocas | Umbral FC | Umbral CNN | Umbral ResNet-18 |
+  |---|---|---|---|---|
+  | MNIST | 20 | 0,975 | 0,98 | 0,99 |
+  | CIFAR-10 | 40 | 0,50 | 0,60 | 0,75 |
+  | CIFAR-100 | 40 | 0,20 | 0,30 | 0,40 |
+  | Tiny-ImageNet | 40 | 0,08 | 0,22 | 0,36 |
 
-  El entrenamiento corre **siempre el presupuesto completo de épocas**, y no hay early-stop al cruzar el umbral. El umbral solo se usa **después**, para leer VD1 (épocas hasta cruzarlo) sobre la curva de val-acc suavizada. Por eso VD2 y VD3 («dentro del presupuesto») están bien definidas, porque la trayectoria completa siempre existe.
+  El entrenamiento corre **siempre el presupuesto completo de épocas**, y no hay early-stop al cruzar el umbral. El umbral solo se usa **después**, para leer VD1 (épocas hasta cruzarlo) sobre la curva de val-acc suavizada, con el valor crudo en la primera y la última época desde el 2026-09-03. Por eso VD2 y VD3 («dentro del presupuesto») están bien definidas, porque la trayectoria completa siempre existe.
 
 Implicación: nuestros números **no** son comparables 1:1 con el SOTA augmentado. Son la referencia de «cuánto se puede esperar entrenando desde cero, supervisado y sin trucos». El gap con la bibliografía es la diferencia atribuible a augmentation, weight decay, schedules de LR y presupuesto.
 
@@ -129,7 +129,7 @@ Los runs de `reports_pilot/` para Tiny-ImageNet tienen el `final_test_acc` **mal
 
 ### 5.2 Hipótesis y contrastes
 
-Las seis hipótesis H1-H6 viven en [[1 - Diseño]] §Hipótesis a contrastar, enunciadas como afirmaciones falsables. El método con el que se decidirá cada una está **por definir**. El plan de análisis anterior se retiró el 2026-08-25 ([[2 - Decisiones]]), así que hoy no existe criterio escrito para ninguna.
+Las seis hipótesis H1-H6 viven en [[1 - Diseño]] §Hipótesis a contrastar, enunciadas como afirmaciones falsables. El método con el que se decide cada una está fijado desde el 2026-09-03 en [[1 - Diseño]] §Método de análisis, con su base en [[2 - Decisiones]]; el plan anterior se retiró el 2026-08-25, así que el método es posterior a los datos y anterior a cualquier coeficiente.
 
 Las ventanas `f`, la fracción del presupuesto de épocas en la que se leen las métricas, sí están fijadas en `src/config.py` (`windows = (0.05, 0.10, 0.25, 0.50, 1.0)`) y se registran en `metrics_at_window.parquet`.
 
@@ -152,7 +152,7 @@ Qué signo predice el paper de cada métrica frente a VD1 (épocas hasta el umbr
 | `val-acc@f` (baseline) | − | por construcción |
 | TSE / `val-loss@f` (baselines) | + | por construcción |
 
-Verificado contra los papers el 2026-07-17 (veredictos y citas en [[2 - Decisiones]]). El reparto real de predicciones fuertes: GSNR la lleva sobre el gap (signo −, vía OSGR; el gap del paper es en loss, la misma cantidad que VD5), y su + vs VD4 es derivación, no claim del paper. GWA la lleva sobre VD4 (signo +; Pearson 0,99 solo en ConvNeXt/CIFAR-10, 0,92 cross-arquitectura, medida sobre el máximo de alineamiento de la trayectoria completa, no en ventana temprana), y su − vs el gap es direccional cualitativo (el paper nunca mide test loss − train loss). m-coherence mantiene el − vs el gap con la salvedad del propio paper (conexión "complicated": con 100% label noise la coherencia también alcanza valores altos; lo informativo según la teoría es la coherencia temprana, lo que favorece la ventana del TFG). La aparente contradicción de signos (+ vs VD4 pero − vs el gap) es solo aritmética, porque VD4 y el gap apuntan a sentidos opuestos de «bueno» (más test-acc es mejor, más gap es peor).
+Verificado contra los papers el 2026-07-17 (veredictos y citas en [[2 - Decisiones]]). NGV y m-coherence están podadas desde el 2026-09-03 y sus predicciones se leen sobre la escala de ruido, la de la m-coherence con el signo cambiado; la disparidad cuenta como variabilidad desde esa fecha. El reparto real de predicciones fuertes: GSNR la lleva sobre el gap (signo −, vía OSGR; el gap del paper es en loss, la misma cantidad que VD5), y su + vs VD4 es derivación, no claim del paper. GWA la lleva sobre VD4 (signo +; Pearson 0,99 solo en ConvNeXt/CIFAR-10, 0,92 cross-arquitectura, medida sobre el máximo de alineamiento de la trayectoria completa, no en ventana temprana), y su − vs el gap es direccional cualitativo (el paper nunca mide test loss − train loss). m-coherence mantiene el − vs el gap con la salvedad del propio paper (conexión "complicated": con 100% label noise la coherencia también alcanza valores altos; lo informativo según la teoría es la coherencia temprana, lo que favorece la ventana del TFG). La aparente contradicción de signos (+ vs VD4 pero − vs el gap) es solo aritmética, porque VD4 y el gap apuntan a sentidos opuestos de «bueno» (más test-acc es mejor, más gap es peor).
 
 ---
 
