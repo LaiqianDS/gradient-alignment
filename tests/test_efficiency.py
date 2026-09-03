@@ -27,6 +27,7 @@ def _write_run(
     seed: int = 0,
     window_value: float | None = None,
     window_epochs: dict[float, int] | None = None,
+    window_columns: dict[str, float] | None = None,
     best_val_acc: float = 0.7,
     val_acc: tuple[float, ...] | None = None,
     val_loss: tuple[float, ...] | None = None,
@@ -41,6 +42,7 @@ def _write_run(
     final_test_f1_macro: float | None = None,
     final_gap_loss: float = 0.1,
     final_gap_acc: float = 0.05,
+    train_eval_acc: float | None = None,
 ) -> None:
     """One run directory: a trajectory and the summary the loaders expect.
 
@@ -49,6 +51,8 @@ def _write_run(
     ``stale_vd1`` is what the summary carries in ``epochs_to_threshold``, which
     nothing may read. ``window_epochs`` maps each window to the 0-indexed epoch
     its row was read from, as ``train.snap_windows`` records it.
+    ``train_eval_acc`` defaults to the best val accuracy, so a run that learned
+    clears the gap floor unless told otherwise.
     """
     curve = list(val_acc) if val_acc is not None else [best_val_acc] * len(train_loss)
     losses = list(val_loss) if val_loss is not None else [1.0 / (i + 1) for i in range(len(curve))]
@@ -80,12 +84,14 @@ def _write_run(
                                 else final_test_f1_macro),
         "final_gap_loss": final_gap_loss,
         "final_gap_acc": final_gap_acc,
+        "final_train_eval_acc": best if train_eval_acc is None else train_eval_acc,
     }))
-    if window_value is not None or window_epochs is not None:
+    if window_value is not None or window_epochs is not None or window_columns is not None:
         pd.DataFrame([{
             "run_name": name, "dataset": dataset, "model": model,
             "optimizer": optimizer, "lr": lr, "seed": seed,
             "window": w, "epoch": e, "gd/scalar": window_value,
+            **(window_columns or {}),
         } for w, e in (window_epochs or {0.05: 0}).items()]
         ).to_parquet(d / "metrics_at_window.parquet")
 
@@ -232,6 +238,15 @@ def test_the_map_counts_only_values_that_are_measurements(tmp_path):
     assert row["epochs_to_threshold"] == 1  # one crossed, one censored, one blew up
     assert row["final_gap_loss"] == 2
     assert list(cells.columns) == list(E.VD_FIELDS)
+
+
+def test_the_best_loss_comes_from_the_curve_with_raw_edges(tmp_path):
+    # the summary says 0.5; the curve bottoms out in its last epoch, which
+    # keeps its raw value, where a mean of the last two would read 0.35
+    _write_run(tmp_path, "late", val_loss=(1.0, 0.8, 0.4, 0.3), best_val_loss=0.5)
+    status = E.vd_status(tmp_path).set_index(["run_name", "vd"])
+    assert status.loc[("late", "best_val_loss"), "value"] == 0.3
+    assert E.smoothed_fields(E.load_trajectories(tmp_path)).loc["late", "best_val_acc"] == 0.7
 
 
 def test_vd1_comes_from_the_curve_and_not_from_the_summary(tmp_path):
@@ -478,3 +493,164 @@ def test_the_agreement_summary_aggregates_per_dataset():
     assert s.loc["cifar10", "beyond_noise_frac"] == pytest.approx(7 / 70)
     assert s.loc["cifar10", "max_f1_gap"] == 0.002
     assert s.loc["mnist", "median_tau_acc"] == 0.2
+
+
+# Four consecutive rates of the SGD grid, three seeds each, on cifar10 with a
+# cnn, which asks 0.60. Four epochs per run.
+_LRS = (1e-3, 3e-3, 1e-2, 3e-2)
+_CROSS4 = {  # smoothed val accuracy first reaches 0.60 in this epoch
+    1: (0.65, 0.66, 0.67, 0.68),
+    2: (0.40, 0.62, 0.65, 0.66),
+    3: (0.40, 0.50, 0.62, 0.66),
+}
+_CENSORED4 = (0.55,) * 4  # learned, never crossed
+
+
+def test_shape_counts_the_sign_changes_of_the_steps():
+    assert E.shape((1, 2, 3, 4)) == "up"
+    assert E.shape((4, 3, 2, 1)) == "down"
+    assert E.shape((1, 3, 2)) == "peak"
+    assert E.shape((3, 1, 2)) == "valley"
+    assert E.shape((1, 3, 2, 4)) == "wiggly"
+    assert E.shape((2, 2, 2)) == "flat"
+    assert E.shape((1, 2)) == "short"
+
+
+def test_a_step_under_the_tolerance_is_not_a_change_of_sign():
+    # the dip of 0,05 is a fortieth of the range of 2, under the 5 % rule
+    assert E.shape((1, 2, 1.95, 3)) == "up"
+    assert E.shape((1, 2, 1.95, 3), tol=0.0) == "wiggly"
+
+
+def test_shape_skips_a_missing_rate():
+    assert E.shape((1, NAN, 3, 2)) == "peak"
+    assert E.shape((NAN, 1, NAN)) == "short"
+
+
+def test_the_census_reads_each_side_along_the_learning_rate(tmp_path):
+    # test accuracy peaks at the third rate while the predictor climbs with the
+    # rate; a fifth rate with only two runs is skipped
+    for lr, acc in zip(_LRS, (0.60, 0.70, 0.80, 0.65)):
+        for s in range(3):
+            _write_run(tmp_path, f"lr{lr}_s{s}", lr=lr, seed=s,
+                       final_test_acc=acc + s * 0.001, window_value=lr)
+    for s in range(2):
+        _write_run(tmp_path, f"extra_s{s}", lr=1e-1, seed=s,
+                   final_test_acc=0.99, window_value=0.0)
+    census = E.shape_census(tmp_path).set_index(["side", "column"])
+    assert census.loc[("vd", "final_test_acc"), "shape"] == "peak"
+    assert census.loc[("vd", "final_test_acc"), "n_lr"] == 4
+    assert census.loc[("predictor", "gd/scalar"), "shape"] == "up"
+    assert set(census.index.get_level_values("column")) == {*E.VD_FIELDS, "gd/scalar"}
+
+
+def test_the_census_counts_only_the_runs_that_learned(tmp_path):
+    # the fourth rate keeps two learned runs and one dead one, so it is skipped
+    # and the accuracy that dropped there is never seen
+    for lr, acc in zip(_LRS[:3], (0.60, 0.70, 0.80)):
+        for s in range(3):
+            _write_run(tmp_path, f"lr{lr}_s{s}", lr=lr, seed=s,
+                       final_test_acc=acc, window_value=1.0)
+    for s in range(2):
+        _write_run(tmp_path, f"live_s{s}", lr=_LRS[3], seed=s,
+                   final_test_acc=0.65, window_value=1.0)
+    _write_run(tmp_path, "dead", lr=_LRS[3], seed=2, best_val_acc=0.1,
+               final_test_acc=0.65, window_value=1.0)
+    census = E.shape_census(tmp_path).set_index(["side", "column"])
+    assert census.loc[("vd", "final_test_acc"), "shape"] == "up"
+    assert census.loc[("vd", "final_test_acc"), "n_lr"] == 3
+
+
+def test_a_censored_run_is_placed_after_every_crossing_in_the_shape(tmp_path):
+    # censored at the first rate, then crossings in epochs 1, 2 and 3: the
+    # censored runs sit past the budget, so the shape is a valley and not a
+    # climb over three rates
+    curves = (_CENSORED4, _CROSS4[1], _CROSS4[2], _CROSS4[3])
+    for lr, curve in zip(_LRS, curves):
+        for s in range(3):
+            _write_run(tmp_path, f"lr{lr}_s{s}", lr=lr, seed=s, val_acc=curve,
+                       window_value=1.0)
+    census = E.shape_census(tmp_path).set_index(["side", "column"])
+    assert census.loc[("vd", "epochs_to_threshold"), "shape"] == "valley"
+    assert census.loc[("vd", "epochs_to_threshold"), "n_lr"] == 4
+
+
+def test_declared_cells_pair_a_monotone_predictor_with_a_bent_variable():
+    census = pd.DataFrame({
+        "dataset": ["cifar10"] * 4, "model": ["cnn"] * 4, "optimizer": ["sgd"] * 4,
+        "side": ["predictor", "predictor", "vd", "vd"],
+        "column": ["gd/scalar", "gwa/value", "final_test_acc", "final_gap_loss"],
+        "n_lr": [8] * 4,
+        "shape": ["up", "wiggly", "peak", "down"],
+    })
+    out = E.declared_cells(census)
+    assert len(out) == 1
+    assert out.loc[0, "column"] == "gd/scalar"
+    assert out.loc[0, "vd"] == "final_test_acc"
+
+
+def test_somers_d_skips_outcome_ties_and_zeroes_predictor_ties():
+    assert E.somers_d((1, 2, 3), (1, 2, 3)) == 1.0
+    assert E.somers_d((1, 2, 3), (3, 2, 1)) == -1.0
+    # the pair tied on the outcome is not comparable; the other two agree
+    assert E.somers_d((1, 2, 3), (1, 1, 2)) == 1.0
+    # the pair tied on the predictor counts zero out of three comparable pairs
+    assert E.somers_d((1, 1, 2), (1, 2, 3)) == pytest.approx(2 / 3)
+    assert E.somers_d((1, NAN, 2), (2, 5, 1)) == -1.0
+    assert pd.isna(E.somers_d((1, 2), (1, 1)))
+
+
+def test_a_censored_run_is_slower_than_every_crossing_and_never_meets_another():
+    # crossings in epochs 2 and 3, then two censored runs: 5 comparable pairs
+    # out of 6, the censored pair being the one left out
+    crossed = (True, True, False, False)
+    assert E.concordance((1, 2, 3, 4), (2, 3, NAN, NAN), crossed) == (5.0, 5)
+    assert E.somers_d((4, 3, 2, 1), (2, 3, NAN, NAN), crossed) == -1.0
+    # a crossing in the last epoch is still faster than a censored run
+    assert E.somers_d((1, 2), (8, NAN), (True, False)) == 1.0
+    # two crossings tied on the epoch are not comparable
+    assert pd.isna(E.somers_d((1, 2), (2, 2), (True, True)))
+    # without the flag a NaN outcome is dropped, with it the run is censored
+    assert E.concordance((1, 2, 3), (1, NAN, 2)) == (1.0, 1)
+    # the censored run is slower than the one crossing in epoch 2 and has the
+    # smaller predictor, so that pair is discordant: 1 + 1 - 1 over 3 pairs
+    assert E.concordance((1, 2, 3), (1, NAN, 2), (True, False, True)) == (1.0, 3)
+
+
+def test_d_stats_gives_the_jackknife_error_of_the_coefficient():
+    # a perfect order: every replicate is 1, so the error is zero
+    assert E.d_stats((1, 2, 3, 4), (1, 2, 3, 4)) == (1.0, 6, 0.0)
+    # pairs (1,2) and (1,3) agree and (2,3) disagrees: D = 1/3. Leaving out run
+    # 1 keeps (2,3) alone, D = -1; leaving out 2 or 3 keeps one agreeing pair,
+    # D = 1. Mean 1/3, squares 16/9 + 4/9 + 4/9, error sqrt(2/3 * 24/9) = 4/3.
+    d, n, se = E.d_stats((1, 2, 3), (1, 3, 2))
+    assert (d, n) == (pytest.approx(1 / 3), 3)
+    assert se == pytest.approx(4 / 3)
+    # two runs leave no replicate with a pair, and no pair leaves nothing
+    assert pd.isna(E.d_stats((1, 2), (1, 2))[2])
+    d, n, _ = E.d_stats((1, 2), (1, 1))
+    assert pd.isna(d) and n == 0
+
+
+def test_d_stats_with_strata_reads_only_the_pairs_within_one_stratum():
+    # within each stratum the order agrees; across them it reverses
+    x, y, z = (1, 2, 10, 11), (1, 2, -1, 0), ("a", "a", "b", "b")
+    assert E.d_stats(x, y, strata=z)[:2] == (1.0, 2)
+    assert E.d_stats(x, y)[:2] == (pytest.approx(-2 / 6), 6)
+    # censoring composes with the strata: the censored run of stratum b is
+    # slower than its partner and never meets the other stratum
+    assert E.d_stats(x, (1, 2, 3, NAN), (True, True, True, False), strata=z)[:2] == (1.0, 2)
+
+
+def test_pair_agreement_is_read_within_each_cell(tmp_path):
+    for i, (a, b) in enumerate(((1, 10), (2, 20), (3, 30), (4, 40))):
+        _write_run(tmp_path, f"same{i}", seed=i,
+                   window_columns={"var/normalized": a, "gsnr/mean": b})
+    for i, (a, b) in enumerate(((1, 40), (2, 30), (3, 20), (4, 10))):
+        _write_run(tmp_path, f"flip{i}", seed=i, optimizer="adam",
+                   window_columns={"var/normalized": a, "gsnr/mean": b})
+    _write_run(tmp_path, "dead", seed=9, best_val_acc=0.1,
+               window_columns={"var/normalized": 0, "gsnr/mean": 99})
+    d = E.pair_agreement(tmp_path)
+    assert d[("cifar10", "cnn", "sgd")] == 1.0
+    assert d[("cifar10", "cnn", "adam")] == -1.0

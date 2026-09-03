@@ -73,8 +73,10 @@ def run_health(
 ) -> pd.DataFrame:
     """One row per run: how far it got, what broke, and for how long.
 
-    ``learned``: the run beat ``margin`` times chance. ``failure`` is the
-    signature seen in any epoch: ``diverged`` when ``train_loss`` went NaN,
+    ``learned``: the run beat ``margin`` times chance, read on
+    ``best_val_acc`` recomputed from the val curve with the current
+    smoothing (the summary's copy is stale). ``failure`` is the signature
+    seen in any epoch: ``diverged`` when ``train_loss`` went NaN,
     ``collapsed`` when ``gwa/score_mean`` was exactly 0.0, else ``none``.
     """
     traj = load_trajectories(report_dir)
@@ -87,8 +89,9 @@ def run_health(
         "collapsed_frac": per_run["gwa/score_mean"].apply(lambda s: (s == 0.0).mean()),
     })
 
-    axes = ["dataset", "model", "optimizer", "lr", "seed", "best_val_acc"]
+    axes = ["dataset", "model", "optimizer", "lr", "seed"]
     out = load_summaries(report_dir).set_index("run_name")[axes].join(extent)
+    out["best_val_acc"] = smoothed_fields(traj)["best_val_acc"]
     out["chance"] = out["dataset"].map(chance_level)
     out["acc_ratio"] = out["best_val_acc"] / out["chance"]
     out["learned"] = out["acc_ratio"] >= margin
@@ -114,6 +117,20 @@ def health_counts(health: pd.DataFrame) -> pd.DataFrame:
         )
         .sort_values("n_runs", ascending=False)
     )
+
+
+def smoothed_fields(traj: pd.DataFrame) -> pd.DataFrame:
+    """Per run, the two extrema ``train.efficiency_summary`` reads on the
+    smoothed val curve, ``best_val_acc`` and ``best_val_loss``, recomputed
+    with the current ``train.median3``. The summaries were written with an
+    older smoothing, so their copies are stale."""
+    rows = {}
+    for name, g in traj.sort_values("epoch").groupby("run_name"):
+        acc = median3(g["val_acc"].reset_index(drop=True))
+        loss = median3(g["val_loss"].reset_index(drop=True))
+        rows[name] = (float(acc.max()), float(loss.min()))
+    return (pd.DataFrame.from_dict(rows, orient="index", columns=["best_val_acc", "best_val_loss"])
+            .rename_axis("run_name"))
 
 
 def crossing_epochs(traj: pd.DataFrame) -> pd.Series:
@@ -326,14 +343,17 @@ def vd_status(
     loss-side fields go absent instead, since NaN propagates through arithmetic
     but not through an ``argmax``.
 
-    ``epochs_to_threshold`` comes from :func:`vd1_epochs`, not from the summary,
-    whose stored value is stale. The other five are read as written.
+    ``epochs_to_threshold`` and ``best_val_loss`` come from the val curve
+    (:func:`crossing_epochs`, :func:`smoothed_fields`), not from the summary,
+    whose smoothed fields are stale. The other four are read as written.
 
     Nothing is dropped here.
     """
     health = run_health(report_dir, margin)
+    traj = load_trajectories(report_dir)
     wide = load_summaries(report_dir)[["run_name", *VD_FIELDS]].copy()
-    wide["epochs_to_threshold"] = wide["run_name"].map(vd1_epochs(report_dir))
+    wide["epochs_to_threshold"] = wide["run_name"].map(crossing_epochs(traj))
+    wide["best_val_loss"] = wide["run_name"].map(smoothed_fields(traj)["best_val_loss"])
     long = wide.melt(id_vars="run_name", var_name="vd", value_name="value")
 
     axes = ["run_name", "dataset", "model", "optimizer", "lr", "seed",
@@ -420,6 +440,220 @@ def health_by_cell(health: pd.DataFrame) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------------------
+# Shape along the learning rate, and the pruning of the variability family.
+# ---------------------------------------------------------------------------
+
+EARLY_WINDOW = 0.05
+
+
+SHAPE_TOL = 0.05
+
+
+SHAPE_MIN_RUNS = 3
+
+
+MONOTONE = ("up", "down")
+
+
+NOT_MONOTONE = ("peak", "valley", "wiggly")
+
+
+PRUNE_PAIR = ("var/normalized", "gsnr/mean")
+
+
+PRUNE_D = 0.8
+
+
+_CELL = ["dataset", "model", "optimizer"]
+
+
+def shape(values: Iterable[float], tol: float = SHAPE_TOL) -> str:
+    """The shape of a series read in order, by how many times its steps change
+    sign: ``up``, ``down``, ``peak``, ``valley`` or ``wiggly``.
+
+    A step smaller than ``tol`` times the range is not a change of sign.
+    ``flat`` when no step survives, ``short`` under three values. NaN are
+    skipped.
+    """
+    v = np.asarray(list(values), dtype=float)
+    v = v[~np.isnan(v)]
+    if len(v) < 3:
+        return "short"
+    step = np.diff(v)
+    step = step[np.abs(step) > tol * (v.max() - v.min())]
+    if len(step) == 0:
+        return "flat"
+    s = np.sign(step)
+    changes = int((s[1:] != s[:-1]).sum())
+    if changes == 0:
+        return "up" if s[0] > 0 else "down"
+    if changes == 1:
+        return "peak" if s[0] > 0 else "valley"
+    return "wiggly"
+
+
+def _lr_shapes(frame: pd.DataFrame, keys: Iterable[str], tol: float, min_runs: int) -> list[dict]:
+    rows = []
+    for (dset, model, opt), g in frame.groupby(_CELL, sort=False):
+        by_lr = g.groupby("lr")
+        for key in keys:
+            med = by_lr[key].median().reindex(LR_GRID[opt])
+            med[by_lr[key].count().reindex(LR_GRID[opt]) < min_runs] = np.nan
+            rows.append({
+                "dataset": dset, "model": model, "optimizer": opt, "column": key,
+                "n_lr": int(med.notna().sum()), "shape": shape(med, tol),
+            })
+    return rows
+
+
+def shape_census(
+    report_dir: str | Path = REPORTS_DIR,
+    window: float = EARLY_WINDOW,
+    tol: float = SHAPE_TOL,
+    min_runs: int = SHAPE_MIN_RUNS,
+) -> pd.DataFrame:
+    """Per cell, the shape of every dependent variable and of every headline
+    column along the learning rate: the median over the runs that learned at
+    each rate, rates with fewer than ``min_runs`` of them skipped.
+
+    Predictors are read at ``window``. A censored run is placed one epoch past
+    the budget, slower than any crossing, for the shape only. ``side`` tells
+    the two apart.
+    """
+    health = run_health(report_dir).set_index("run_name")
+    learned = health.index[health["learned"]]
+
+    summ = load_summaries(report_dir).set_index("run_name")
+    traj = load_trajectories(report_dir)
+    vd1 = crossing_epochs(traj)
+    summ["epochs_to_threshold"] = vd1.reindex(summ.index).fillna(health["epochs"] + 1)
+    summ["best_val_loss"] = smoothed_fields(traj)["best_val_loss"].reindex(summ.index)
+    vds = summ.loc[summ.index.isin(learned), [*_CELL, "lr", *VD_FIELDS]]
+
+    win = load_windows(report_dir)
+    win = win[(win["window"] == window) & win["run_name"].isin(learned)]
+    keys = [k for k in headline_columns() if k in win.columns]
+
+    return pd.DataFrame(
+        [{"side": "vd", **r} for r in _lr_shapes(vds, VD_FIELDS, tol, min_runs)]
+        + [{"side": "predictor", **r} for r in _lr_shapes(win, keys, tol, min_runs)]
+    )
+
+
+def declared_cells(census: pd.DataFrame) -> pd.DataFrame:
+    """The (cell, predictor, dependent variable) triples where the relation
+    cannot be monotone: the predictor is monotone along the learning rate and
+    the dependent variable is not. Declared before any coefficient is computed.
+    """
+    pred = census[census["side"] == "predictor"]
+    vd = census[census["side"] == "vd"].rename(columns={"column": "vd", "shape": "vd_shape"})
+    both = pred.merge(vd[[*_CELL, "vd", "vd_shape"]], on=_CELL)
+    keep = both["shape"].isin(MONOTONE) & both["vd_shape"].isin(NOT_MONOTONE)
+    return both.loc[keep, [*_CELL, "column", "shape", "vd", "vd_shape"]].reset_index(drop=True)
+
+
+def _pair_terms(
+    predictor: Iterable[float],
+    outcome: Iterable[float],
+    event: Iterable[bool] | None,
+    strata: Iterable | None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Two symmetric run-by-run matrices: the sign product of each pair, and
+    whether the pair is comparable. Rows with a NaN predictor are dropped,
+    and so is a NaN outcome unless the run had no event."""
+    x = np.asarray(list(predictor), dtype=float)
+    y = np.asarray(list(outcome), dtype=float)
+    if event is not None:
+        y = np.where(np.asarray(list(event), dtype=bool), y, np.inf)
+    keep = ~(np.isnan(x) | np.isnan(y))
+    x, y = x[keep], y[keep]
+    with np.errstate(invalid="ignore"):
+        dy = y[:, None] - y[None, :]
+        comparable = (dy != 0) & ~np.isnan(dy)
+        if strata is not None:
+            z = np.asarray(list(strata))[keep]
+            comparable &= z[:, None] == z[None, :]
+        signed = np.where(comparable, np.sign(x[:, None] - x[None, :]) * np.sign(dy), 0.0)
+    return signed, comparable
+
+
+def concordance(
+    predictor: Iterable[float],
+    outcome: Iterable[float],
+    event: Iterable[bool] | None = None,
+) -> tuple[float, int]:
+    """Concordant minus discordant pairs, and how many pairs were comparable.
+
+    A pair is comparable when the outcomes differ. With ``event``, a run
+    without its event is slower than every run that had it and is never
+    compared with another one without it, so the run with the smaller outcome
+    is always one that had it. A pair tied on the predictor counts zero. Rows
+    with a NaN predictor are dropped, and so is a NaN outcome unless the run
+    had no event.
+    """
+    signed, comparable = _pair_terms(predictor, outcome, event, None)
+    return float(signed.sum() / 2), int(comparable.sum() // 2)
+
+
+def somers_d(
+    predictor: Iterable[float],
+    outcome: Iterable[float],
+    event: Iterable[bool] | None = None,
+) -> float:
+    """:func:`concordance` as a ratio, in ``[-1, 1]``; Harrell's C is
+    ``(D + 1) / 2``. NaN with no comparable pair."""
+    signed, n = concordance(predictor, outcome, event)
+    return signed / n if n else np.nan
+
+
+def d_stats(
+    predictor: Iterable[float],
+    outcome: Iterable[float],
+    event: Iterable[bool] | None = None,
+    strata: Iterable | None = None,
+) -> tuple[float, int, float]:
+    """Somers' D, how many pairs were comparable, and the standard error of
+    D by the delete-one jackknife over the runs.
+
+    With ``strata``, only the pairs within one stratum are comparable, so D
+    pools the strata by their pairs. Each jackknife replicate leaves one run
+    out; a replicate with no pair left is skipped, and the error is NaN with
+    fewer than three replicates.
+    """
+    signed, comparable = _pair_terms(predictor, outcome, event, strata)
+    pairs = int(comparable.sum() // 2)
+    if pairs == 0:
+        return np.nan, 0, np.nan
+    total = signed.sum() / 2
+    left = pairs - comparable.sum(1)
+    ok = left > 0
+    reps = (total - signed.sum(1)[ok]) / left[ok]
+    n = len(reps)
+    se = float(np.sqrt((n - 1) / n * ((reps - reps.mean()) ** 2).sum())) if n >= 3 else np.nan
+    return float(total / pairs), pairs, se
+
+
+def pair_agreement(
+    report_dir: str | Path = REPORTS_DIR,
+    pair: tuple[str, str] = PRUNE_PAIR,
+    window: float = EARLY_WINDOW,
+) -> pd.Series:
+    """Per cell, Somers' D between the two columns of ``pair`` at ``window``
+    over the runs that learned: how far the two order the same runs the same
+    way. The second column plays the outcome.
+    """
+    health = run_health(report_dir)
+    learned = set(health.loc[health["learned"], "run_name"])
+    win = load_windows(report_dir)
+    win = win[(win["window"] == window) & win["run_name"].isin(learned)]
+    return (
+        win.groupby(_CELL, sort=False)[list(pair)]
+        .apply(lambda g: somers_d(g[pair[0]], g[pair[1]]))
+        .rename("D")
+    )
+
+
+# ---------------------------------------------------------------------------
 # Console report: `uv run python src/efficiency.py [report_dir]`.
 # ---------------------------------------------------------------------------
 
@@ -485,6 +719,20 @@ def _main(report_dir: str | Path = REPORTS_DIR) -> None:
         print(detail.set_index(["dataset", "model", "optimizer"])
               [["n", "tau_acc", "tau_loss", "median_diff_acc", "n_beyond_noise",
                 "test_acc_range"]].round(3))
+
+    print("\n== shape along the learning rate, runs that learned, 5 % window ==")
+    census = shape_census(report_dir)
+    print(census.groupby(["side", "column"], sort=False)["shape"]
+          .value_counts().unstack(fill_value=0))
+    print("\ncells declared before computing: predictor monotone, dependent variable not")
+    print(declared_cells(census).groupby(["column", "vd"], sort=False).size()
+          .unstack(fill_value=0).reindex(columns=list(VD_FIELDS), fill_value=0)
+          .to_string())
+
+    print("\n== pruning: D between NGV and GSNR within each cell ==")
+    d = pair_agreement(report_dir)
+    print(d.round(3).to_string())
+    print(f"median |D| = {d.abs().median():.3f}; one stays if it reaches {PRUNE_D}")
 
 
 if __name__ == "__main__":

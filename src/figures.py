@@ -12,11 +12,13 @@ from matplotlib.colors import (
     BoundaryNorm,
     LinearSegmentedColormap,
     ListedColormap,
-    Normalize,
 )
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch, Rectangle
 from matplotlib.transforms import blended_transform_factory
+
+import numpy as np
+import pandas as pd
 
 import figstyle
 from analysis import (
@@ -36,9 +38,8 @@ from config import (
     SEEDS,
     THRESHOLD_ACC,
 )
+from contrast import LOG_LR, PRIMARY_VDS, RESULTS_DIR, excludes_zero, primary_family
 from efficiency import (
-    AHEAD_COLUMNS,
-    AHEAD_FLOOR,
     crossing_by_lr,
     crossing_epochs,
     run_health,
@@ -195,6 +196,7 @@ FREE_FAMILIES = ("baseline", "monitor")
 
 # The name each logged column carries in the body text.
 COLUMN_LABELS = {
+    LOG_LR: "posición del learning rate",
     "var/normalized": "NGV",
     "noise_scale/simple": "GNS",
     "gsnr/mean": "GSNR",
@@ -204,8 +206,8 @@ COLUMN_LABELS = {
     "confusion/eta": "gradient confusion",
     "gwa/value": "GWA",
     "tse/ema_0_999": "TSE",
-    "val_loss": "validation loss",
-    "val_acc": "validation accuracy",
+    "val_loss": "loss de validación",
+    "val_acc": "accuracy de validación",
 }
 
 FAMILY_COLOURS = {
@@ -362,10 +364,7 @@ def column_range(
 # the four windows, five in each stretch.
 OVERLAP_CELL = ("cifar10", "cnn", "sgd")
 
-# The whole range, zero included: the floor is a decision drawn on top, not a
-# reason to leave two thirds of the map blank.
-AHEAD_CMAP = LinearSegmentedColormap.from_list(
-    "ahead", ["#dbe9f3", figstyle.PALETTE[0]])
+DATASET_COLOURS = dict(zip(DATASETS, figstyle.PALETTE[:len(DATASETS)]))
 
 
 def _window_label(w: float) -> str:
@@ -439,7 +438,7 @@ def cell_overlap(
     ax.set_yticks([0, 0.25, 0.5, 0.75, 1.0])
     ax.set_yticklabels([_rate_label(t) for t in (0, 0.25, 0.5, 0.75, 1.0)])
     ax_n.set_xlabel("epoch")
-    ax.set_ylabel("validation accuracy suavizada")
+    ax.set_ylabel("accuracy de validación suavizado")
     ax.text(budget, 0.99, " ".join((DATASET_LABELS[dset], MODEL_LABELS[model],
                                     OPTIMIZER_LABELS[opt])),
             ha="right", va="top", fontsize=7.5)
@@ -447,92 +446,11 @@ def cell_overlap(
         handles=[Line2D([], [], color=crossed_colour, label="cruza el umbral"),
                  Line2D([], [], color=censored_colour, label="no lo cruza"),
                  Line2D([], [], color=crossed_colour, marker="o", ls="none",
-                        ms=3.2, mec="white", mew=0.5, label="época de cruce")],
+                        ms=3.2, mec="white", mew=0.5, label="epoch de cruce")],
         loc="lower right", bbox_to_anchor=(1.0, 0.16), fontsize=7.5,
         handlelength=1.4,
     )
     return figstyle.save(fig, "solape-celda", out_dir)
-
-
-def overlap_map(
-    report_dir: str | Path = REPORTS_DIR,
-    out_dir: Path = figstyle.IMG_DIR,
-) -> Path:
-    """Per cell, how much of the main speed variable each early window leaves.
-
-    The main variable only. The other two are reported as counts in the body: the
-    AUC survives every window by construction, so a panel of it would show a
-    result the text then has to take back.
-    """
-    detail = window_overlap(report_dir)
-    windows = sorted(detail["window"].unique())
-    present = set(zip(detail["dataset"], detail["model"], detail["optimizer"]))
-    cells = [c for c in product(DATASETS, MODELS, OPTIMIZERS) if c in present]
-
-    y, ypos = 0.0, {}
-    for i, cell in enumerate(cells):
-        if i and cell[0] != cells[i - 1][0]:
-            y += 0.55
-        ypos[cell] = y
-        y += 1.0
-
-    share = {(d, m, o, w): v for d, m, o, w, v in zip(
-        detail["dataset"], detail["model"], detail["optimizer"],
-        detail["window"], detail[AHEAD_COLUMNS[0]])}
-
-    fig, ax = figstyle.figure(width="full", ratio=0.62)
-    edge = {}
-    for cell in cells:
-        row = [share.get((*cell, w)) for w in windows]
-        for j, v in enumerate(row):
-            if v is None:
-                continue
-            ax.add_patch(Rectangle((j - 0.5, ypos[cell] - 0.5), 1, 1,
-                                   facecolor=AHEAD_CMAP(v), edgecolor="white",
-                                   linewidth=0.6))
-        # The share only falls as the window grows, so the windows that clear the
-        # floor are always the first ones and one step marks the boundary.
-        edge[cell] = sum(v is not None and v >= AHEAD_FLOOR for v in row) - 0.5
-    for i, cell in enumerate(cells):
-        ax.vlines(edge[cell], ypos[cell] - 0.5, ypos[cell] + 0.5,
-                  color=figstyle.INK, lw=1.0, zorder=4)
-        if i and cells[i - 1][0] == cell[0]:
-            ax.hlines(ypos[cell] - 0.5, *sorted((edge[cells[i - 1]], edge[cell])),
-                      color=figstyle.INK, lw=1.0, zorder=4)
-
-    ax.set_xlim(-0.5, len(windows) - 0.5)
-    ax.set_ylim(y - 0.5, -0.5)
-    ax.set_xticks(range(len(windows)))
-    ax.set_xticklabels([_window_label(w) for w in windows])
-    # The architecture and the optimizer on the tick, the dataset once per block
-    # on a minor tick pushed clear of them.
-    ax.set_yticks([ypos[c] for c in cells])
-    ax.set_yticklabels([f"{MODEL_LABELS[m]} {OPTIMIZER_LABELS[o]}"
-                        for _, m, o in cells], fontsize=7)
-    blocks = {d: [ypos[c] for c in cells if c[0] == d] for d in DATASETS
-              if any(c[0] == d for c in cells)}
-    ax.set_yticks([sum(v) / len(v) for v in blocks.values()], minor=True)
-    ax.set_yticklabels([DATASET_LABELS[d] for d in blocks], minor=True, fontsize=8)
-    ax.tick_params(axis="y", which="minor", length=0, pad=52)
-    ax.tick_params(axis="y", which="major", length=0)
-    ax.tick_params(axis="x", length=2, width=0.6, color="#666666", pad=1)
-    for spine in ax.spines.values():
-        spine.set_visible(False)
-    ax.set_xlabel("ventana")
-
-    bar = fig.colorbar(
-        ScalarMappable(norm=Normalize(0.0, 1.0), cmap=AHEAD_CMAP), ax=ax,
-        ticks=[0, 0.25, 0.5, 0.75, 1.0], pad=0.02, aspect=30,
-    )
-    bar.set_ticklabels([_dec(t) for t in (0, 0.25, 0.5, 0.75, 1.0)])
-    bar.set_label("desenlace por ocurrir", fontsize=figstyle.BODY_PT - 1)
-    bar.ax.axhline(AHEAD_FLOOR, color=figstyle.INK, lw=1.0)
-    bar.ax.text(-0.4, AHEAD_FLOOR, "suelo", transform=bar.ax.get_yaxis_transform(),
-                ha="right", va="center", fontsize=7)
-    bar.outline.set_visible(False)
-    bar.ax.minorticks_off()
-    bar.ax.tick_params(length=0, pad=3)
-    return figstyle.save(fig, "solape-mapa", out_dir)
 
 
 def crossings_consumed(
@@ -639,9 +557,6 @@ def crossing_bands(
     return figstyle.save(fig, "solape-bandas", out_dir)
 
 
-DATASET_COLOURS = dict(zip(DATASETS, figstyle.PALETTE[:len(DATASETS)]))
-
-
 def val_test(
     report_dir: str | Path = REPORTS_DIR,
     out_dir: Path = figstyle.IMG_DIR,
@@ -673,8 +588,8 @@ def val_test(
     ax_acc.set_yticks(ticks)
     ax_acc.set_xticklabels([_rate_label(t) for t in ticks])
     ax_acc.set_yticklabels([_rate_label(t) for t in ticks])
-    ax_acc.set_xlabel("validation accuracy")
-    ax_acc.set_ylabel("test accuracy")
+    ax_acc.set_xlabel("accuracy de validación")
+    ax_acc.set_ylabel("accuracy de test")
     ax_acc.legend(loc="upper left", fontsize=7.5, handletextpad=0.3)
 
     ax_loss.set_xscale("log")
@@ -684,8 +599,8 @@ def val_test(
     ax_loss.set_xlim(lo, hi)
     ax_loss.set_ylim(lo, hi)
     ax_loss.plot([lo, hi], [lo, hi], color=figstyle.RULE, lw=0.8, zorder=1)
-    ax_loss.set_xlabel("validation loss")
-    ax_loss.set_ylabel("test loss")
+    ax_loss.set_xlabel("loss de validación")
+    ax_loss.set_ylabel("loss de test")
     for ax in (ax_acc, ax_loss):
         ax.set_aspect("equal")
         # Both panels are square and share their limits, so the diagonal runs at
@@ -696,6 +611,75 @@ def val_test(
     return figstyle.save(fig, "val-test", out_dir)
 
 
+# The primary family of the protocol at the early window: the D of every
+# predictor against every dependent variable, one dot per cell with its
+# jackknife interval, per cell and granulated. Reads the long table
+# contrast.py writes.
+PRIMARY_ORDER = (
+    LOG_LR, "val_loss", "val_acc", "tse/ema_0_999",
+    "noise_scale/simple", "gsnr/mean", "gd/scalar",
+    "stiffness/cos_within", "confusion/eta", "gwa/value",
+)
+VD_LABELS = {
+    "epochs_to_threshold": "epochs hasta el umbral, por hitos",
+    "final_test_acc": "accuracy de test",
+    "final_gap_loss": "gap de loss",
+}
+
+
+def sign_strip(
+    table_path: Path = RESULTS_DIR / "tabla_larga.parquet",
+    out_dir: Path = figstyle.IMG_DIR,
+) -> Path:
+    """Every cell's D in the primary family, one row per predictor and one
+    panel per dependent variable. A filled dot is a cell whose 95 % jackknife
+    interval leaves zero out; a hollow one includes it."""
+    table = primary_family(pd.read_parquet(table_path))
+    rng = np.random.default_rng(0)
+    fig, axes = figstyle.figure(width="full", ratio=0.46, ncols=3)
+    for c, vd in enumerate(PRIMARY_VDS):
+        ax = axes[c]
+        sub = table[table["vd"] == vd]
+        for i, pred in enumerate(PRIMARY_ORDER):
+            g = sub[sub["predictor"] == pred]
+            d = g["D"].to_numpy()
+            y = i + rng.uniform(-0.22, 0.22, len(g))
+            colours = np.array([DATASET_COLOURS[k] for k in g["dataset"]])
+            shown = excludes_zero(g["D"], g["se"]).to_numpy()
+            ax.scatter(d[shown], y[shown], s=13, c=colours[shown],
+                       edgecolors="white", linewidths=0.3, zorder=3)
+            ax.scatter(d[~shown], y[~shown], s=13, facecolors="none",
+                       edgecolors=colours[~shown], linewidths=0.6, zorder=2)
+            ax.vlines(np.nanmedian(d), i - 0.34, i + 0.34, color=figstyle.INK,
+                      lw=1.2, zorder=4)
+        ax.axvline(0, color=figstyle.RULE, lw=0.8, zorder=1)
+        for boundary in (3.5, 6.5):  # free predictors | variability | alignment
+            ax.axhline(boundary, color=figstyle.RULE, lw=0.5, zorder=1)
+        ax.set_xlim(-1.05, 1.05)
+        ax.set_ylim(len(PRIMARY_ORDER) - 0.4, -0.6)
+        ax.set_xticks((-1, -0.5, 0, 0.5, 1))
+        ax.set_xticklabels(["−1", "−0,5", "0", "0,5", "1"], fontsize=7)
+        ax.set_yticks(range(len(PRIMARY_ORDER)))
+        ax.set_yticklabels([COLUMN_LABELS[p] for p in PRIMARY_ORDER] if c == 0 else [],
+                           fontsize=7.5)
+        ax.tick_params(axis="y", length=0)
+        ax.tick_params(axis="x", length=2, width=0.6, color="#666666")
+        ax.set_title(VD_LABELS[vd], fontsize=figstyle.BODY_PT - 1)
+        ax.set_xlabel("D por celda", fontsize=figstyle.BODY_PT - 1)
+    fig.legend(
+        handles=[Line2D([], [], marker="o", ls="none", ms=4, color=DATASET_COLOURS[d],
+                        label=DATASET_LABELS[d]) for d in DATASETS]
+        + [Line2D([], [], color=figstyle.INK, lw=1.2, label="mediana de las celdas"),
+           Line2D([], [], marker="o", ls="none", ms=4, color=figstyle.INK,
+                  label="intervalo del 95 % sin el cero"),
+           Line2D([], [], marker="o", ls="none", ms=4, mfc="none", mec=figstyle.INK,
+                  label="intervalo con el cero")],
+        loc="outside lower center", ncol=4, fontsize=7.5, handletextpad=0.4,
+        columnspacing=1.2, frameon=False,
+    )
+    return figstyle.save(fig, "signos-h1", out_dir)
+
+
 if __name__ == "__main__":
     print(lr_window())
     print(cell_range())
@@ -703,5 +687,5 @@ if __name__ == "__main__":
     print(cell_overlap())
     print(crossings_consumed())
     print(crossing_bands())
-    print(overlap_map())
     print(val_test())
+    print(sign_strip())

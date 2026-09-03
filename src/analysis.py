@@ -82,6 +82,8 @@ SPECS: tuple[MetricSpec, ...] = (
     MetricSpec("gsnr/mean", "gsnr", "variability", 0.0, None, None, headline=True),
     MetricSpec("gsnr/median", "gsnr", "variability", 0.0, None, None),
     MetricSpec("gsnr/p95", "gsnr", "variability", 0.0, None, None),
+    # sqrt(2 tr(Sigma) / 51) up to sampling: a spread, not an angle
+    MetricSpec("gd/scalar", "gd", "variability", 0.0, None, None, headline=True),
     # --- alignment / coherence family ---------------------------------------
     MetricSpec("mcoh/global", "mcoh", "alignment", 0.0, float(PROBE_SIZE), -1, headline=True),
     MetricSpec("stiffness/cos_within", "stiffness", "alignment", -1.0, 1.0, -1, headline=True),
@@ -90,7 +92,6 @@ SPECS: tuple[MetricSpec, ...] = (
     MetricSpec("stiffness/sign_within", "stiffness", "alignment", -1.0, 1.0, -1),
     MetricSpec("stiffness/sign_global", "stiffness", "alignment", -1.0, 1.0, None),
     MetricSpec("stiffness/sign_between", "stiffness", "alignment", -1.0, 1.0, None),
-    MetricSpec("gd/scalar", "gd", "alignment", 0.0, None, None, headline=True),
     MetricSpec("confusion/eta", "confusion", "alignment", -1.0, 1.0, None, headline=True),
     MetricSpec("confusion/min_cos", "confusion", "alignment", -1.0, 1.0, None),
     MetricSpec("confusion/median_cos", "confusion", "alignment", -1.0, 1.0, None),

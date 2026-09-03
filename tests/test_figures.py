@@ -64,14 +64,6 @@ def test_the_cell_overlap_builds_and_writes_a_pdf(tmp_path):
     assert path.exists() and path.suffix == ".pdf"
 
 
-def test_the_overlap_map_builds_and_writes_a_pdf(tmp_path):
-    reports, img = tmp_path / "reports", tmp_path / "img"
-    reports.mkdir()
-    _speed_cell(reports)
-    path = figures.overlap_map(reports, img)
-    assert path.exists() and path.suffix == ".pdf"
-
-
 def test_the_crossing_count_builds_and_writes_a_pdf(tmp_path):
     reports, img = tmp_path / "reports", tmp_path / "img"
     reports.mkdir()

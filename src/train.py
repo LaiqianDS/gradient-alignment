@@ -170,8 +170,9 @@ def snap_windows(df: pd.DataFrame, windows) -> pd.DataFrame:
 
 
 def median3(series: pd.Series) -> pd.Series:
-    """Centered 3-epoch moving median; the window shrinks at the edges."""
-    return series.rolling(3, center=True, min_periods=1).median()
+    """Centered 3-epoch moving median; an epoch whose window has fewer than
+    three values, the first and the last, keeps its raw value."""
+    return series.rolling(3, center=True).median().fillna(series)
 
 
 def efficiency_summary(df: pd.DataFrame, cfg: Config) -> dict:
