@@ -78,12 +78,7 @@ def default_run_name(cfg: Config) -> str:
 
 
 def warn_probe_memory(num_params: int, probe_size: int, chunk_size: int) -> float:
-    """Print the streamed per-sample-grad memory profile; return the device peak.
-
-    The dense [M, P] Jacobian is never materialised: per-sample grads stream in
-    row-chunks, so the device peak is [chunk_size, P] and only the host holds
-    the full [M, P] used to form the [M, M] Gram.
-    """
+    """Print the per-sample-grad memory profile; return the device peak in GB."""
     device_gb = chunk_size * num_params * 4 / 1e9
     host_gb = probe_size * num_params * 4 / 1e9
     msg = (f"[train] per-sample grad: device peak ~{device_gb:.2f} GB "
@@ -96,12 +91,7 @@ def warn_probe_memory(num_params: int, probe_size: int, chunk_size: int) -> floa
 
 
 def epoch_mean_losses(step_losses: list[float], steps_per_epoch: int) -> list[float]:
-    """Collapse per-step losses into per-epoch means ℓ̄_1..ℓ̄_t for the TSE baseline.
-
-    TSE is defined over epochs, so feeding it raw per-step losses would shrink
-    the EMA half-life by ``steps_per_epoch``. A trailing partial epoch
-    contributes its running mean, so any history length is accepted.
-    """
+    """Per-epoch mean losses; a trailing partial epoch contributes its own mean."""
     full = len(step_losses) // steps_per_epoch
     means = [
         sum(step_losses[i * steps_per_epoch : (i + 1) * steps_per_epoch]) / steps_per_epoch
@@ -178,7 +168,8 @@ def median3(series: pd.Series) -> pd.Series:
 def efficiency_summary(df: pd.DataFrame, cfg: Config) -> dict:
     """Training-efficiency indicators from the val curve.
 
-    Threshold crossing and bests read the smoothed curve; the AUC the raw one.
+    Threshold crossing and bests read the smoothed curve; the trapezoidal AUC
+    over the epoch axis reads the raw one.
     """
     epoch_df = df.sort_values("epoch")
     val_loss = epoch_df["val_loss"]
@@ -186,7 +177,6 @@ def efficiency_summary(df: pd.DataFrame, cfg: Config) -> dict:
     smooth_loss = median3(val_loss)
     smooth_acc = median3(val_acc)
 
-    # Trapezoidal AUC of the raw val loss over the epoch axis.
     raw_loss = val_loss.tolist()
     auc = (
         sum((a + b) * 0.5 for a, b in zip(raw_loss, raw_loss[1:]))
@@ -261,7 +251,6 @@ def train(cfg: Config) -> dict:
         device_sync(device)
         t0 = time.perf_counter()
         row = measure(model, probe_X, probe_y, loss_fn, metrics)
-        # TSE takes per-epoch mean losses, never raw per-step losses.
         row.update(baseline_row(epoch_mean_losses(loss_history, len(train_loader))))
         device_sync(device)
         metric_seconds += time.perf_counter() - t0

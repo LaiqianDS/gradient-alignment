@@ -9,15 +9,12 @@ import torchvision.datasets as datasets
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader, Dataset, Subset
 
-from config import NUM_CLASSES, SPLIT_SEED, VAL_SIZE
+from config import NUM_CLASSES, ROOT, SPLIT_SEED, VAL_SIZE
 
-ROOT = Path(__file__).parent.parent
 DATA_PATH = ROOT / "data"
 
-# Per-dataset spec: num_classes, in_shape=(C, H, W), normalization mean/std and
-# val_size, the number of samples carved out of the official train split.
-# mean/std are per-channel pixel statistics of the training split, in the
-# [0, 1] range produced by ToTensor (population std over all pixels).
+# num_classes, in_shape=(C, H, W), per-channel mean/std of the train split in
+# ToTensor's [0, 1] range, and val_size carved out of the official train split.
 DATASET_SPECS: dict[str, dict] = {
     "mnist": {
         "num_classes": NUM_CLASSES["mnist"],
@@ -49,8 +46,7 @@ DATASET_SPECS: dict[str, dict] = {
     },
 }
 
-# torchvision.datasets classes for auto-downloadable datasets.
-_TV_CLASSES = {
+TV_CLASSES = {
     "mnist": datasets.MNIST,
     "cifar10": datasets.CIFAR10,
     "cifar100": datasets.CIFAR100,
@@ -121,7 +117,7 @@ def _build_dataset(
             return datasets.ImageFolder(root, transform=transform)
         return _TinyImageNetVal(root, class_to_idx, transform)
 
-    cls = _TV_CLASSES[dataset]
+    cls = TV_CLASSES[dataset]
     return cls(data_root / dataset, train=train, download=True, transform=transform)
 
 

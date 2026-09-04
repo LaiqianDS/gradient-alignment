@@ -20,7 +20,6 @@ class RunLogger:
         self._rows: list[dict] = []
 
     def log(self, row: dict) -> None:
-        """Buffer one measurement row."""
         self._rows.append(row)
 
     def dataframe(self) -> pd.DataFrame:
@@ -28,7 +27,6 @@ class RunLogger:
         return pd.DataFrame(self._rows)
 
     def save_table(self, name: str, df: pd.DataFrame) -> Path:
-        """Write ``df`` to ``<name>.parquet`` and return its path."""
         path = self.dir / f"{name}.parquet"
         df.to_parquet(path, index=False)
         return path
@@ -37,9 +35,7 @@ class RunLogger:
         """Write ``obj`` to ``<name>.json`` atomically and return its path.
 
         The write goes to a sibling temp file and is renamed with
-        ``os.replace``, so the target path is either absent or complete. The
-        launchers treat ``summary.json`` as the "run finished" marker, so a
-        half-written one would mark a dead run as done.
+        ``os.replace``, so the target path is either absent or complete.
         """
         path = self.dir / f"{name}.json"
         tmp = path.with_name(path.name + ".tmp")

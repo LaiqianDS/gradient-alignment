@@ -1,16 +1,5 @@
-"""Contract every metric in the registry conforms to.
-
-A metric maps a frozen model + a fixed data probe to a flat dict of scalar
-floats keyed by canonical log names (e.g. ``{"var/normalized": 0.42}``), so the
-pipeline can merge every metric into one row without per-metric branching.
-
-Rules:
-  * Operate on the RAW loss gradient ∇L, never the optimiser's preconditioned
-    update.
-  * Split each metric into a pure ``_core(...)`` over gradient tensors and a
-    thin ``compute(...)`` that extracts the gradients via ``metrics.primitives``
-    and calls the core.
-  * Expose a module-level ``METRIC`` instance so the registry can collect it.
+"""A metric maps a frozen model and a fixed probe to a flat dict of floats keyed
+by log name. The TSE baseline is the one exception: it consumes losses.
 """
 
 from __future__ import annotations
@@ -32,5 +21,4 @@ class Metric(Protocol):
         y: torch.Tensor,
         loss_fn: nn.Module,
     ) -> dict[str, float]:
-        """Return ``{canonical_log_key: scalar_float}`` for one probe."""
         ...

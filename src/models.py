@@ -1,10 +1,7 @@
 """Model architectures behind a single factory.
 
 Every model ends in an ``nn.Linear`` classifier head, which is how the gradient
-metrics locate the head (the last ``nn.Linear`` in the network):
-  * ``fc``:       MLP, flatten -> 2 hidden layers -> logits.
-  * ``cnn``:      3-block conv net, adaptive-pooled to any HxW.
-  * ``resnet18``: torchvision ResNet-18 with a small-image stem.
+metrics locate the head (the last ``nn.Linear`` in the network).
 """
 
 from __future__ import annotations
@@ -17,7 +14,6 @@ from config import MODELS
 
 
 def _build_fc(in_shape: tuple[int, int, int], num_classes: int) -> nn.Module:
-    """Flatten then ``Linear -> ReLU -> Linear -> ReLU -> Linear`` (1024 hidden)."""
     c, h, w = in_shape
     in_features = c * h * w
     return nn.Sequential(
@@ -31,7 +27,6 @@ def _build_fc(in_shape: tuple[int, int, int], num_classes: int) -> nn.Module:
 
 
 def _build_cnn(in_shape: tuple[int, int, int], num_classes: int) -> nn.Module:
-    """3 conv blocks (16, 32, 32) -> adaptive 4x4 pool -> flatten -> linear head."""
     c, _, _ = in_shape
     widths = (16, 32, 32)
     layers: list[nn.Module] = []
@@ -52,7 +47,6 @@ def _build_cnn(in_shape: tuple[int, int, int], num_classes: int) -> nn.Module:
 
 
 def _build_resnet18(in_shape: tuple[int, int, int], num_classes: int) -> nn.Module:
-    """torchvision ResNet-18 with a 3x3 stride-1 stem for small (<=64px) images."""
     c, _, _ = in_shape
     model = torchvision.models.resnet18(weights=None, num_classes=num_classes)
     # Small-image stem: the stock 7x7 stride-2 conv + maxpool shrink a 32x32

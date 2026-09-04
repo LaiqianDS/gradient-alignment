@@ -34,8 +34,7 @@ from train import median3
 # Multiple of the chance floor a run must reach to count as having learned.
 CHANCE_MARGIN = 1.25
 
-# A window still predicts a speed indicator in a cell when at least this share
-# of the indicator lies ahead of it.
+# A window still predicts a speed indicator when at least this share of it lies ahead.
 AHEAD_FLOOR = 0.5
 
 # Two accuracies of one model on two independent splits differ by measurement
@@ -46,8 +45,9 @@ NOISE_SIGMAS = 2.0
 # Metric and baseline columns, excluding the run's own learning curve.
 _MEASURED = tuple(s.key for s in SPECS if s.family != "monitor")
 
-# The six efficiency indicators. ``epochs_to_threshold`` (VD1) is the only
-# censored one: NaN when the run never reaches its threshold, never the budget.
+CELL = ["dataset", "model", "optimizer"]
+
+# The six efficiency indicators; ``epochs_to_threshold`` is censored: NaN when it never crosses.
 VD_FIELDS = (
     "epochs_to_threshold",
     "val_loss_auc",
@@ -73,9 +73,8 @@ def run_health(
 ) -> pd.DataFrame:
     """One row per run: how far it got, what broke, and for how long.
 
-    ``learned``: the run beat ``margin`` times chance, read on
-    ``best_val_acc`` recomputed from the val curve with the current
-    smoothing (the summary's copy is stale). ``failure`` is the signature
+    ``learned``: the run beat ``margin`` times chance, read on the
+    ``best_val_acc`` of :func:`smoothed_fields`. ``failure`` is the signature
     seen in any epoch: ``diverged`` when ``train_loss`` went NaN,
     ``collapsed`` when ``gwa/score_mean`` was exactly 0.0, else ``none``.
     """
@@ -120,10 +119,10 @@ def health_counts(health: pd.DataFrame) -> pd.DataFrame:
 
 
 def smoothed_fields(traj: pd.DataFrame) -> pd.DataFrame:
-    """Per run, the two extrema ``train.efficiency_summary`` reads on the
-    smoothed val curve, ``best_val_acc`` and ``best_val_loss``, recomputed
-    with the current ``train.median3``. The summaries were written with an
-    older smoothing, so their copies are stale."""
+    """Per run, ``best_val_acc`` and ``best_val_loss`` on the val curve
+    smoothed with ``train.median3``. The ``best_val_acc``, ``best_val_loss``
+    and ``epochs_to_threshold`` stored in ``summary.json`` are stale and are
+    recomputed from the trajectory."""
     rows = {}
     for name, g in traj.sort_values("epoch").groupby("run_name"):
         acc = median3(g["val_acc"].reset_index(drop=True))
@@ -134,7 +133,10 @@ def smoothed_fields(traj: pd.DataFrame) -> pd.DataFrame:
 
 
 def crossing_epochs(traj: pd.DataFrame) -> pd.Series:
-    """:func:`vd1_epochs` over trajectories already loaded."""
+    """Epochs to threshold per run (1-indexed) on the val curve smoothed with
+    ``train.median3``, the smoothing of ``best_val_acc``, so a run crosses
+    exactly when ``best_val_acc >= tau``. NaN when the run never reaches its
+    (dataset, model) threshold."""
     epochs = {}
     for name, g in traj.sort_values("epoch").groupby("run_name"):
         row = g.iloc[0]
@@ -145,15 +147,7 @@ def crossing_epochs(traj: pd.DataFrame) -> pd.Series:
 
 
 def vd1_epochs(report_dir: str | Path = REPORTS_DIR) -> pd.Series:
-    """Epochs to threshold per run (1-indexed), recomputed from the val curve.
-
-    Not read from ``summary.json``, whose stored field is stale. The threshold
-    is keyed by (dataset, model) and the smoothing is ``train.median3``, the
-    same one that produced ``best_val_acc``, so a run crosses here exactly when
-    ``best_val_acc >= tau``.
-
-    NaN where the run never reaches its threshold, never the budget.
-    """
+    """:func:`crossing_epochs` over the trajectories under ``report_dir``."""
     return crossing_epochs(load_trajectories(report_dir))
 
 
@@ -194,16 +188,13 @@ def window_overlap(
     runs: Iterable[str] | None = None,
 ) -> pd.DataFrame:
     """Per cell and early window: how much of each speed indicator still lies
-    ahead when the window closes.
-
-    The window closes at the epoch ``metrics_at_window.parquet`` was read
-    from, so an event in that same epoch is already behind it. Epochs to
-    threshold and best val loss are events, and their ``ahead`` share is
-    counted in comparable pairs: a pair still predicts when neither run has
-    had its event, and a censored run never has. The val-loss AUC is a
-    weighted sum, so its ``ahead`` share is the part of the sum the window has
-    not fixed yet, median over the cell's runs. ``runs`` restricts the pass.
-    """
+    ahead when the window closes, at the epoch ``metrics_at_window.parquet``
+    was read from (an event in that epoch is already behind it). Epochs to
+    threshold and best val loss are events, counted in comparable pairs: a
+    pair still predicts when neither run has had its event, and a censored
+    run never has. The val-loss AUC is a weighted sum, so its ``ahead`` share
+    is the part not yet fixed, median over the cell's runs. ``runs`` restricts
+    the pass."""
     traj = load_trajectories(report_dir)
     events = pd.DataFrame({
         "t_cross": crossing_epochs(traj),
@@ -273,15 +264,11 @@ def val_test_agreement(
     runs: Iterable[str] | None = None,
 ) -> pd.DataFrame:
     """Per cell, whether the end of the validation curve agrees with the single
-    test evaluation, in order and in level.
-
-    Order is Kendall's tau-b across the cell's runs, for accuracy and for the
-    loss. Level is the median of validation minus test, plus how many runs sit
-    more than :data:`NOISE_SIGMAS` standard errors apart, the error being that
-    of two independent accuracies on the two split sizes. Diverged runs are
-    left out, since their test accuracy is not a measurement. ``runs``
-    restricts the pass.
-    """
+    test evaluation. Order is Kendall's tau-b across the cell's runs, for
+    accuracy and for the loss; level is the median of validation minus test,
+    plus how many runs sit more than :data:`NOISE_SIGMAS` binomial standard
+    errors apart. Diverged runs are left out, since their test accuracy is not
+    a measurement. ``runs`` restricts the pass."""
     health = run_health(report_dir)
     keep = health["failure"] != "diverged"
     if runs is not None:
@@ -334,21 +321,14 @@ def vd_status(
     report_dir: str | Path = REPORTS_DIR,
     margin: float = CHANCE_MARGIN,
 ) -> pd.DataFrame:
-    """One row per run and dependent variable, in one of three states.
-
-    ``ok``: the value is present and is a measurement. ``absent``: NaN.
-    ``suspect``: present but not a measurement. A diverged run ends with NaN
-    weights, and ``argmax`` over NaN logits always returns index 0, so its test
-    accuracy is the frequency of class 0 and its accuracy gap is near zero. The
-    loss-side fields go absent instead, since NaN propagates through arithmetic
-    but not through an ``argmax``.
-
-    ``epochs_to_threshold`` and ``best_val_loss`` come from the val curve
-    (:func:`crossing_epochs`, :func:`smoothed_fields`), not from the summary,
-    whose smoothed fields are stale. The other four are read as written.
-
-    Nothing is dropped here.
-    """
+    """One row per run and dependent variable, in one of three states:
+    ``ok`` (present and a measurement), ``absent`` (NaN) and ``suspect``
+    (present but not a measurement). A diverged run ends with NaN weights,
+    and ``argmax`` over NaN logits always returns index 0, so its test
+    accuracy is the frequency of class 0 and its accuracy gap is near zero;
+    its loss-side fields go absent instead. ``epochs_to_threshold`` and
+    ``best_val_loss`` come from :func:`crossing_epochs` and
+    :func:`smoothed_fields`. Nothing is dropped here."""
     health = run_health(report_dir, margin)
     traj = load_trajectories(report_dir)
     wide = load_summaries(report_dir)[["run_name", *VD_FIELDS]].copy()
@@ -381,15 +361,11 @@ def availability_by_cell(status: pd.DataFrame) -> pd.DataFrame:
 
 
 def vd1_information(status: pd.DataFrame) -> pd.DataFrame:
-    """How much of ``epochs_to_threshold`` survives censoring, counted in pairs.
-
-    Two censored runs cannot be ordered against each other, but a censored run
-    can be ordered against every run that crossed, so ``pair_frac`` is
+    """Per cell, how much of ``epochs_to_threshold`` survives censoring. Two
+    censored runs cannot be ordered against each other, but a censored run can
+    be ordered against every run that crossed, so ``pair_frac`` is
     ``(C(k,2) + k*(n-k)) / C(n,2)`` with ``k`` crossings out of ``n`` runs.
-
-    ``median_short_by`` is how far the cell's censored runs ended below the
-    threshold.
-    """
+    ``median_short_by`` is how far the censored runs ended below the threshold."""
     vd1 = status[status["vd"] == "epochs_to_threshold"].copy()
     vd1["crossed"] = vd1["status"] == "ok"
     tau = pd.Series(list(zip(vd1["dataset"], vd1["model"])), index=vd1.index)
@@ -409,7 +385,8 @@ def vd1_information(status: pd.DataFrame) -> pd.DataFrame:
 
 
 def crossing_by_lr(status: pd.DataFrame) -> pd.DataFrame:
-    """Fraction of runs that carry VD1, per cell and learning-rate position.
+    """Fraction of runs that carry ``epochs_to_threshold``, per cell and
+    learning-rate position.
 
     The two optimizers sweep different rates, so the axis is the position in
     ``LR_GRID`` and not the value; position 1 is each optimizer's smallest.
@@ -439,9 +416,7 @@ def health_by_cell(health: pd.DataFrame) -> pd.DataFrame:
     })
 
 
-# ---------------------------------------------------------------------------
 # Shape along the learning rate, and the pruning of the variability family.
-# ---------------------------------------------------------------------------
 
 EARLY_WINDOW = 0.05
 
@@ -462,9 +437,6 @@ PRUNE_PAIR = ("var/normalized", "gsnr/mean")
 
 
 PRUNE_D = 0.8
-
-
-_CELL = ["dataset", "model", "optimizer"]
 
 
 def shape(values: Iterable[float], tol: float = SHAPE_TOL) -> str:
@@ -494,7 +466,7 @@ def shape(values: Iterable[float], tol: float = SHAPE_TOL) -> str:
 
 def _lr_shapes(frame: pd.DataFrame, keys: Iterable[str], tol: float, min_runs: int) -> list[dict]:
     rows = []
-    for (dset, model, opt), g in frame.groupby(_CELL, sort=False):
+    for (dset, model, opt), g in frame.groupby(CELL, sort=False):
         by_lr = g.groupby("lr")
         for key in keys:
             med = by_lr[key].median().reindex(LR_GRID[opt])
@@ -528,7 +500,7 @@ def shape_census(
     vd1 = crossing_epochs(traj)
     summ["epochs_to_threshold"] = vd1.reindex(summ.index).fillna(health["epochs"] + 1)
     summ["best_val_loss"] = smoothed_fields(traj)["best_val_loss"].reindex(summ.index)
-    vds = summ.loc[summ.index.isin(learned), [*_CELL, "lr", *VD_FIELDS]]
+    vds = summ.loc[summ.index.isin(learned), [*CELL, "lr", *VD_FIELDS]]
 
     win = load_windows(report_dir)
     win = win[(win["window"] == window) & win["run_name"].isin(learned)]
@@ -543,13 +515,13 @@ def shape_census(
 def declared_cells(census: pd.DataFrame) -> pd.DataFrame:
     """The (cell, predictor, dependent variable) triples where the relation
     cannot be monotone: the predictor is monotone along the learning rate and
-    the dependent variable is not. Declared before any coefficient is computed.
+    the dependent variable is not.
     """
     pred = census[census["side"] == "predictor"]
     vd = census[census["side"] == "vd"].rename(columns={"column": "vd", "shape": "vd_shape"})
-    both = pred.merge(vd[[*_CELL, "vd", "vd_shape"]], on=_CELL)
+    both = pred.merge(vd[[*CELL, "vd", "vd_shape"]], on=CELL)
     keep = both["shape"].isin(MONOTONE) & both["vd_shape"].isin(NOT_MONOTONE)
-    return both.loc[keep, [*_CELL, "column", "shape", "vd", "vd_shape"]].reset_index(drop=True)
+    return both.loc[keep, [*CELL, "column", "shape", "vd", "vd_shape"]].reset_index(drop=True)
 
 
 def _pair_terms(
@@ -582,15 +554,11 @@ def concordance(
     outcome: Iterable[float],
     event: Iterable[bool] | None = None,
 ) -> tuple[float, int]:
-    """Concordant minus discordant pairs, and how many pairs were comparable.
-
-    A pair is comparable when the outcomes differ. With ``event``, a run
-    without its event is slower than every run that had it and is never
-    compared with another one without it, so the run with the smaller outcome
-    is always one that had it. A pair tied on the predictor counts zero. Rows
-    with a NaN predictor are dropped, and so is a NaN outcome unless the run
-    had no event.
-    """
+    """Concordant minus discordant pairs, and how many pairs were comparable
+    (the outcomes differ). With ``event``, a run without its event is slower
+    than every run that had it and is never compared with another one without
+    it. A pair tied on the predictor counts zero. Rows with a NaN predictor
+    are dropped, and so is a NaN outcome unless the run had no event."""
     signed, comparable = _pair_terms(predictor, outcome, event, None)
     return float(signed.sum() / 2), int(comparable.sum() // 2)
 
@@ -679,15 +647,11 @@ def pair_agreement(
     win = load_windows(report_dir)
     win = win[(win["window"] == window) & win["run_name"].isin(learned)]
     return (
-        win.groupby(_CELL, sort=False)[list(pair)]
+        win.groupby(CELL, sort=False)[list(pair)]
         .apply(lambda g: somers_d(g[pair[0]], g[pair[1]]))
         .rename("D")
     )
 
-
-# ---------------------------------------------------------------------------
-# Console report: `uv run python src/efficiency.py [report_dir]`.
-# ---------------------------------------------------------------------------
 
 def _main(report_dir: str | Path = REPORTS_DIR) -> None:
     pd.set_option("display.width", 140)
@@ -719,14 +683,13 @@ def _main(report_dir: str | Path = REPORTS_DIR) -> None:
     print(status[status["status"] == "suspect"]
           .groupby(["dataset", "model", "optimizer"])["run_name"].nunique())
 
-    print("\n== VD1 under censoring ==")
+    print("\n== epochs_to_threshold under censoring ==")
     print(vd1_information(status).round(3))
 
-    print("\n== VD1 across the learning-rate grid ==")
+    print("\n== epochs_to_threshold across the learning-rate grid ==")
     print(crossing_by_lr(status).round(2))
 
-    # The same statistic analysis.py prints over every run, restricted to the
-    # runs that learned: a dead run reports a constant, which reads as range.
+    # Over the runs that learned only: a dead run reports a constant, which reads as range.
     print("\n== dynamic range, runs that learned only ==")
     alive = set(health.loc[health["learned"], "run_name"])
     win = load_windows(report_dir)
@@ -756,7 +719,8 @@ def _main(report_dir: str | Path = REPORTS_DIR) -> None:
     census = shape_census(report_dir)
     print(census.groupby(["side", "column"], sort=False)["shape"]
           .value_counts().unstack(fill_value=0))
-    print("\ncells declared before computing: predictor monotone, dependent variable not")
+    print("\ncells where the relation cannot be monotone: predictor monotone, "
+          "dependent variable not")
     print(declared_cells(census).groupby(["column", "vd"], sort=False).size()
           .unstack(fill_value=0).reindex(columns=list(VD_FIELDS), fill_value=0)
           .to_string())

@@ -20,7 +20,6 @@ import torch.nn as nn
 
 from .primitives import EPS, iter_per_sample_grad_dicts, named_last_linear
 
-# Excess-kurtosis correction constant in the GWA_T denominator.
 _BETA = 1.2
 
 
@@ -46,11 +45,9 @@ def _gwa_aggregate(gammas: torch.Tensor) -> dict[str, float]:
             "gwa/kurt": float("nan"),
             "gwa/value": float("nan"),
         }
-    kurt = m4 / m2**2 - 3.0  # excess kurtosis
+    kurt = m4 / m2**2 - 3.0
 
     denom = kurt + _BETA
-    # Push the denominator away from zero in its own direction (+EPS at exactly
-    # zero) so the ratio is finite and sign-stable.
     sign = torch.where(denom >= 0, torch.ones_like(denom), -torch.ones_like(denom))
     value = M1 / (denom + sign * EPS)
 
@@ -76,8 +73,6 @@ class GwaMetric:
         w = module.weight.detach().reshape(-1)  # [W] classifier weight vector
         wn = w / w.norm().clamp_min(EPS)
 
-        # cos(g_i, w) per sample, accumulated over streamed chunks; only the
-        # [M] cosines survive.
         chunks = []
         for grads, _ in iter_per_sample_grad_dicts(model, X, y, loss_fn):
             g = grads[lname + ".weight"].flatten(start_dim=1)  # [c, W], bias excluded
@@ -87,7 +82,6 @@ class GwaMetric:
         return _gwa_aggregate(torch.cat(chunks))
 
     def reduce(self, sweep) -> dict[str, float]:
-        """Same result as :meth:`compute`, off the shared sweep's cosines."""
         return _gwa_aggregate(sweep.gwa_cos)
 
 

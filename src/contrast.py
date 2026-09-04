@@ -1,13 +1,12 @@
-"""The contrast of phase B: one Somers' D per cell, window, predictor and
-dependent variable over comparable pairs, with its jackknife standard error;
-the same D within the learning rates (the granulated count), among the runs
-still to cross when the window closes (the landmark reading of speed) and
-against the reference predictor of the variable (redundancy); and the
-selection reading, the test accuracy lost by picking the learning rate with a
-predictor at the early window.
-
-Nothing here decides a hypothesis. The objectives read the long table this
-module writes and add their own comparison on top.
+"""One Somers' D per cell, window, predictor and dependent variable over
+comparable pairs, with its jackknife standard error; the same D within the
+learning rates (the granulated count), among the runs still to cross when the
+window closes (the landmark reading of speed) and against the reference
+predictor of the variable (redundancy); and the selection reading, the test
+accuracy lost by picking the learning rate with a predictor at the early
+window. The count tables on top of the long one (sign, ranking, optimizer
+pairs, agreement with the papers, increment over the reference, change between
+windows) count cells and never pool their runs.
 """
 
 from __future__ import annotations
@@ -18,9 +17,10 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from analysis import REPORTS_DIR, ROOT, SPECS, headline_columns, load_summaries, load_windows
-from config import THRESHOLD_ACC
+from analysis import REPORTS_DIR, SPECS, headline_columns, load_summaries, load_windows
+from config import ROOT, THRESHOLD_ACC
 from efficiency import (
+    CELL,
     PRUNE_D,
     d_diff_stats,
     EARLY_WINDOW,
@@ -34,16 +34,13 @@ from efficiency import (
 
 RESULTS_DIR = ROOT / "results"
 
-# Out before any contrast: m-coherence is the noise scale by identity, and the
-# normalized variance is the noise scale estimated from ten subsamples of 25.
+# Left out: m-coherence is the noise scale by identity, the normalized variance by estimate.
 PRUNED = ("mcoh/global", "var/normalized")
 
-# The grid position, log10 of the learning rate: the free predictor that
-# bounds every monotone reading of the rate.
+# log10 of the learning rate: the free predictor that bounds every monotone reading of the rate.
 LOG_LR = "log_lr"
 
-# The family each predictor is read under: the two gradient families, and
-# "free" for every column the training produces without a gradient.
+# "free" is every column the training produces without a gradient.
 FREE_FAMILIES = ("baseline", "monitor")
 FAMILY = {spec.key: ("free" if spec.family in FREE_FAMILIES else spec.family)
           for spec in SPECS}
@@ -55,17 +52,14 @@ GAP_VDS = ("final_gap_loss", "final_gap_acc")
 
 SPEED_VD = "epochs_to_threshold"
 
-# The window H4 compares the early one with, and the later of the two
-# windows that still predict speed.
+# The late window for the end variables, and the later of the two windows that still predict speed.
 LATE_WINDOW = 0.5
 SPEED_LATE_WINDOW = 0.10
 
-# The variables measured at the end of a run: the ones a later window can
-# still predict.
+# Measured at the end of a run, so a later window can still predict them.
 END_VDS = ("final_test_acc", "final_gap_loss", "final_gap_acc")
 
-# The free predictor each variable is compared with under H2, named before
-# any coefficient: the validation curve read at the window.
+# The free predictor each variable is compared with: the validation curve read at the window.
 REFERENCE = {
     "epochs_to_threshold": "val_acc",
     "val_loss_auc": "val_loss",
@@ -78,13 +72,10 @@ REFERENCE = {
 # |D| beyond this many standard errors excludes zero (normal, 95 %).
 Z = 1.96
 
-# |D_ref| from which a predictor is its reference under another name: the
-# pruning rule's threshold, nine pairs in ten ordered the same way.
+# |D_ref| from which a predictor is its reference under another name: nine pairs in ten agree.
 REDUNDANT_D = PRUNE_D
 
-# The end of each predictor its source calls good, for the selection reading:
-# +1 picks the largest value and -1 the smallest. From the sign table of the
-# vault, with GWA converted to raw gradients.
+# The end each paper calls good (GWA on raw gradients): +1 picks the largest value, -1 the smallest.
 GOOD_END = {
     "val_acc": +1,
     "val_loss": -1,
@@ -97,11 +88,7 @@ GOOD_END = {
     "gwa/value": -1,
 }
 
-# The sign each paper predicts for the D between its metric and a dependent
-# variable, from the same sign table: ``paper`` where the article states it
-# (GWA converted to raw gradients; the m-coherence read on the noise scale
-# with its sign turned) and ``extrapolated`` where this work carries the
-# claim to another variable and reports it without a contrast.
+# The sign each paper predicts; "extrapolated" carries it to a variable the paper did not test.
 PREDICTED = pd.DataFrame([
     ("stiffness/cos_within", "epochs_to_threshold", -1, "paper"),
     ("confusion/eta", "epochs_to_threshold", +1, "paper"),
@@ -123,8 +110,6 @@ _AHEAD = {
     "best_val_loss": "vd3_pairs_ahead",
 }
 
-_CELL = ["dataset", "model", "optimizer"]
-
 _SE = {"D": "se", "D_gran": "se_gran", "D_land": "se_land"}
 
 
@@ -140,7 +125,7 @@ def outcomes(report_dir: str | Path = REPORTS_DIR) -> pd.DataFrame:
     status.loc[status["status"] != "ok", "value"] = np.nan
     wide = status.pivot(index="run_name", columns="vd", values="value")[list(VD_FIELDS)]
     summ = load_summaries(report_dir).set_index("run_name")
-    out = summ[[*_CELL, "lr", "seed"]].join(wide)
+    out = summ[[*CELL, "lr", "seed"]].join(wide)
     tau = pd.Series(list(zip(out["dataset"], out["model"])), index=out.index).map(THRESHOLD_ACC)
     out["crossed"] = out[SPEED_VD].notna()
     out["gap_ok"] = summ["final_train_eval_acc"] >= tau
@@ -183,21 +168,17 @@ def long_table(
 ) -> pd.DataFrame:
     """One row per cell, window, predictor and dependent variable.
 
-    ``D`` is Somers' D over the cell's runs, ``n_pairs`` how many pairs were
-    comparable, ``n`` how many runs entered and ``se`` the jackknife standard
-    error of ``D``. ``D_gran``, ``n_pairs_gran`` and ``se_gran`` are the same
-    over the pairs within one learning rate, pooled over the ``n_lr`` rates
-    with at least ``min_runs`` runs. ``D_ref`` is the D between the predictor
-    and the variable's :data:`REFERENCE` predictor over the same runs. For
-    the speed variable ``D_land``, ``n_land``, ``n_pairs_land`` and
-    ``se_land`` read only the runs still to cross when the window closes, and
-    for the three speed variables ``ahead`` is the share of the outcome still
-    ahead then, from :func:`efficiency.window_overlap`; all of them are NaN
-    elsewhere. ``D_diff`` is |D| of the predictor minus |D| of the reference
-    over the same runs, with its jackknife error ``se_diff``; ``D_diff_land``
-    and ``se_diff_land`` are the same among the runs at risk. The predictors are the headline columns plus :data:`LOG_LR`.
-    ``epoch`` is 1-indexed. ``runs`` restricts the population; the default is
-    every run under ``report_dir``.
+    ``D`` is Somers' D over the cell's runs, ``n_pairs`` how many pairs were comparable, ``n`` how
+    many runs entered and ``se`` the jackknife standard error of ``D``. ``D_gran``, ``n_pairs_gran``
+    and ``se_gran`` are the same over the pairs within one learning rate, pooled over the ``n_lr``
+    rates with at least ``min_runs`` runs. ``D_ref`` is the D between the predictor and the
+    variable's :data:`REFERENCE` predictor over the same runs; ``D_diff`` is |D| of the predictor
+    minus |D| of the reference, with its jackknife error ``se_diff``. For the speed variable
+    ``D_land``, ``n_land``, ``n_pairs_land``, ``se_land``, ``D_diff_land`` and ``se_diff_land`` read
+    only the runs still to cross when the window closes, and for the three speed variables
+    ``ahead`` is the share of the outcome still ahead then (:func:`efficiency.window_overlap`);
+    all of them are NaN elsewhere. The predictors are the headline columns plus :data:`LOG_LR`.
+    ``epoch`` is 1-indexed. ``runs`` restricts the population.
     """
     out = outcomes(report_dir)
     win = load_windows(report_dir)
@@ -209,10 +190,10 @@ def long_table(
     win = win[["run_name", "window", "epoch", *logged]].join(out, on="run_name")
     win[LOG_LR] = np.log10(win["lr"])
     preds = [LOG_LR, *logged]
-    ahead = window_overlap(report_dir, runs).set_index([*_CELL, "window"])
+    ahead = window_overlap(report_dir, runs).set_index([*CELL, "window"])
 
     rows = []
-    for (dset, model, opt, w), g in win.groupby([*_CELL, "window"], sort=False):
+    for (dset, model, opt, w), g in win.groupby([*CELL, "window"], sort=False):
         key = (dset, model, opt, w)
         epoch = int(g["epoch"].iloc[0]) + 1
         for pred in preds:
@@ -253,12 +234,12 @@ def primary_family(
     table: pd.DataFrame,
     window: float | None = EARLY_WINDOW,
 ) -> pd.DataFrame:
-    """The rows every objective tests first: the early window, one dependent
-    variable per construct, and the predictors that survived the pruning. The
-    speed variable takes its landmark reading, so its ``D``, ``se``, ``n``,
-    ``n_pairs``, ``D_diff`` and ``se_diff`` are those among the runs still to
-    cross when the window closed; ``reading`` says which reading each row
-    carries. ``window=None`` keeps every window."""
+    """The primary family: the rows at ``window`` for :data:`PRIMARY_VDS` and
+    the predictors not in :data:`PRUNED`. The speed variable takes its
+    landmark reading, so its ``D``, ``se``, ``n``, ``n_pairs``, ``D_diff`` and
+    ``se_diff`` are those among the runs still to cross when the window
+    closed; ``reading`` says which reading each row carries. ``window=None``
+    keeps every window."""
     keep = (
         ((table["window"] == window) if window is not None else table["window"].notna())
         & table["vd"].isin(PRIMARY_VDS)
@@ -309,13 +290,13 @@ def ranking_table(
     table: pd.DataFrame,
     by: Iterable[str] = (),
 ) -> pd.DataFrame:
-    """Per dependent variable, and per ``by`` on top, the H3 ranking. A
-    predictor's majority sign is the sign of more of its cells, the median D
-    deciding a tie; ``n_major`` counts the cells whose interval leaves zero
-    out with that sign and ``n_other`` those with the opposite one. Rows are
-    ordered by ``n_major`` and then by the median |D|, and ``rank`` numbers
-    the gradient metrics in that order; a free predictor keeps its row and
-    no rank.
+    """Per dependent variable, and per ``by`` on top, one row per predictor,
+    ranked. A predictor's majority sign is the sign of more of its cells, the
+    median D deciding a tie; ``n_major`` counts the cells whose interval
+    leaves zero out with that sign and ``n_other`` those with the opposite
+    one. Rows are ordered by ``n_major`` and then by the median |D|, and
+    ``rank`` numbers the gradient metrics in that order; a free predictor
+    keeps its row and no rank.
     """
     keys = ["vd", *by]
     rows = []
@@ -339,18 +320,17 @@ def ranking_table(
     return pd.concat(parts, ignore_index=True)
 
 
-# The two arms of every pair of cells that differ only in the optimizer, in
-# the order the H5 difference subtracts them.
+# The two arms of each optimizer pair, in the order their difference subtracts them.
 ARMS = ("sgd", "adam")
 
 
 def optimizer_table(table: pd.DataFrame) -> pd.DataFrame:
-    """Per dependent variable and predictor, the H5 reading over the pairs of
-    cells that differ only in the optimizer: the pairs whose two D leave zero
-    out and share the sign (``n_agree``) or oppose it (``n_invert``), the
-    pairs whose difference D with SGD minus D with Adam leaves zero out by
-    the interval that adds the two variances (``n_diff_ci``), and the median
-    |D| of each arm. A pair with either D over zero counts for neither side.
+    """Per dependent variable and predictor, over the pairs of cells that
+    differ only in the optimizer: the pairs whose two D leave zero out and
+    share the sign (``n_agree``) or oppose it (``n_invert``), the pairs whose
+    difference D with SGD minus D with Adam leaves zero out by the interval
+    that adds the two variances (``n_diff_ci``), and the median |D| of each
+    arm. A pair with either D over zero counts for neither side.
     """
     rows = []
     for (vd, pred), s in table.groupby(["vd", "predictor"], sort=False):
@@ -376,11 +356,10 @@ def concordance_table(
     predicted: pd.DataFrame = PREDICTED,
     by: Iterable[str] = (),
 ) -> pd.DataFrame:
-    """Per predicted sign, and per ``by`` on top, the H6 reading: the cells
-    whose interval leaves zero out with the predicted sign (``n_for``) and
-    with the opposite one (``n_against``), and the median |D|. One-sided
-    because the sign is given; the cell criterion is the one every other
-    table uses."""
+    """Per row of ``predicted``, and per ``by`` on top: the cells whose
+    interval leaves zero out with the predicted sign (``n_for``) and with the
+    opposite one (``n_against``), and the median |D|. One-sided because the
+    sign is given."""
     t = predicted.merge(table, on=["predictor", "vd"])
     hit = np.sign(t["D"]) * t["sign"]
     sure = excludes_zero(t["D"], t["se"])
@@ -396,7 +375,7 @@ def incremental_table(
     table: pd.DataFrame,
     regret: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
-    """Per window, dependent variable and predictor: the H2 reading against
+    """Per window, dependent variable and predictor, the predictor against
     the variable's :data:`REFERENCE`. ``n_win`` and ``n_lose`` count the
     cells where |D| of the predictor is above and below |D| of the reference;
     ``n_win_ci`` and ``n_lose_ci`` those where the jackknife interval of the
@@ -424,7 +403,7 @@ def incremental_table(
             "n_redundant": int((dref >= REDUNDANT_D).sum()),
         }
         if regret is not None and vd == "final_test_acc" and w == EARLY_WINDOW:
-            r = regret.set_index([*_CELL, "predictor"])["regret"]
+            r = regret.set_index([*CELL, "predictor"])["regret"]
             own = r.xs(pred, level="predictor") if pred in r.index.get_level_values("predictor") else None
             if own is not None:
                 val = r.xs(REFERENCE[vd], level="predictor").reindex(own.index)
@@ -463,7 +442,7 @@ def window_table(
 
     e, l, sl = at(early), at(late), at(speed_late)
     rows = []
-    for (dset, model, opt), g in out.groupby(_CELL, sort=False):
+    for (dset, model, opt), g in out.groupby(CELL, sort=False):
         ge, gl, gs = e.reindex(g.index), l.reindex(g.index), sl.reindex(g.index)
         epoch_e, epoch_s = int(ge["epoch"].iloc[0]) + 1, int(gs["epoch"].iloc[0]) + 1
         for pred in preds:
@@ -517,7 +496,7 @@ def window_counts(table: pd.DataFrame) -> pd.DataFrame:
 
 def flipped_ends(ends: dict[str, int] = GOOD_END) -> dict[str, int]:
     """The good ends with every gradient metric reversed; the free predictors
-    keep theirs. An exploratory reading: the sign the papers give, turned."""
+    keep theirs."""
     free = set(REFERENCE.values()) | {"tse/ema_0_999"}
     return {k: (v if k in free else -v) for k, v in ends.items()}
 
@@ -546,7 +525,7 @@ def selection_regret(
     win = win[win["window"] == window][["run_name", *preds]].join(out, on="run_name")
 
     rows = []
-    for (dset, model, opt, seed), g in win.groupby([*_CELL, "seed"], sort=False):
+    for (dset, model, opt, seed), g in win.groupby([*CELL, "seed"], sort=False):
         g = g[g[vd].notna()]
         if len(g) < 2:
             continue
@@ -563,7 +542,7 @@ def selection_regret(
             })
     return (
         pd.DataFrame(rows)
-        .groupby([*_CELL, "predictor"], sort=False)
+        .groupby([*CELL, "predictor"], sort=False)
         .agg(regret=("regret", "mean"), regret_random=("regret_random", "mean"),
              n_seeds=("seed", "nunique"), n_lr=("n_lr", "mean"))
         .reset_index()
@@ -594,8 +573,8 @@ def _main(report_dir: str | Path = REPORTS_DIR, out_dir: Path = RESULTS_DIR) -> 
     regret = selection_regret(report_dir, learned)
     flipped = selection_regret(report_dir, learned, ends=flipped_ends())
     regret = regret.merge(
-        flipped[[*_CELL, "predictor", "regret"]].rename(columns={"regret": "regret_flipped"}),
-        on=[*_CELL, "predictor"], how="left")
+        flipped[[*CELL, "predictor", "regret"]].rename(columns={"regret": "regret_flipped"}),
+        on=[*CELL, "predictor"], how="left")
     regret.to_parquet(out_dir / "seleccion.parquet", index=False)
     print("\n== selection at the early window: test accuracy lost per cell, "
           "median over cells; flipped = the papers' sign reversed ==")
@@ -606,39 +585,39 @@ def _main(report_dir: str | Path = REPORTS_DIR, out_dir: Path = RESULTS_DIR) -> 
 
     inc = incremental_table(primary_family(tables["tabla_larga"], window=None), regret)
     inc.reset_index().to_parquet(out_dir / "incremental.parquet", index=False)
-    print("\n== H2, primary family at the early window: the predictor against its reference ==")
+    print("\n== predictor against its reference, primary family at the early window ==")
     print(inc.xs(EARLY_WINDOW, level="window").round(3).to_string())
 
     ranking = ranking_table(primary)
     ranking.to_parquet(out_dir / "ranking.parquet", index=False)
-    print("\n== H3, primary family at the early window: cells with the majority sign "
-          "and the interval off zero, then the median |D| ==")
+    print("\n== ranking by cells with the majority sign and the interval off zero, then "
+          "the median |D|, primary family at the early window ==")
     print(ranking.round(3).to_string(index=False))
     groups = pd.concat(
         [ranking_table(primary, by=(level,)).rename(columns={level: "group"}).assign(level=level)
          for level in ("dataset", "model")], ignore_index=True)
     groups.to_parquet(out_dir / "ranking_grupos.parquet", index=False)
-    print("\n== H3 by dataset and by architecture: the first gradient metric of each group ==")
+    print("\n== ranking by dataset and by architecture: the first gradient metric of each group ==")
     print(groups[groups["rank"] == 1].round(3).to_string(index=False))
 
     pairs = optimizer_table(primary)
     pairs.reset_index().to_parquet(out_dir / "optimizadores.parquet", index=False)
-    print("\n== H5, primary family at the early window: the pairs of cells that differ "
-          "only in the optimizer ==")
+    print("\n== pairs of cells that differ only in the optimizer, primary family at the "
+          "early window ==")
     print(pairs.round(3).to_string())
 
     signs = pd.concat([concordance_table(primary).assign(model="all"),
                        concordance_table(primary, by=("model",))], ignore_index=True)
     signs.to_parquet(out_dir / "signos.parquet", index=False)
-    print("\n== H6, primary family at the early window: cells with the interval off zero "
-          "for and against the sign each paper predicts ==")
+    print("\n== cells for and against the sign each paper predicts, interval off zero, "
+          "primary family at the early window ==")
     print(signs[signs["model"] == "all"].round(3).to_string(index=False))
 
     windows = window_table(report_dir, learned)
     windows.to_parquet(out_dir / "ventanas.parquet", index=False)
     counts = window_counts(windows[~windows["predictor"].isin(PRUNED)])
     counts.reset_index().to_parquet(out_dir / "ventanas_recuento.parquet", index=False)
-    print("\n== H4: |D| at the late window minus |D| at the early one, cells that grow "
+    print("\n== |D| at the late window minus |D| at the early one, cells that grow "
           "and shrink ==")
     print(counts.round(3).to_string())
 

@@ -1,17 +1,15 @@
 """Training Speed Estimator (TSE) (Ru et al., 2021).
 
-Consumes a sequence of per-epoch mean training losses ℓ̄_1..ℓ̄_T, never a model,
-so its ``compute`` signature differs from the ``Metric`` protocol in
-``metrics.base``. ``t`` indexes epochs, so callers must aggregate per-step
-losses first (``train.epoch_mean_losses``).
+Consumes per-epoch mean training losses ℓ̄_1..ℓ̄_T, never a model, so its
+``compute`` signature differs from the ``Metric`` protocol. ``t`` indexes
+epochs: aggregate per-step losses into epoch means before calling.
 
 Variants:
   * TSE      = Σ_t ℓ_t                        -> ``tse/cumulative``
   * TSE-E    = Σ_{t=T-E+1}^T ℓ_t (burn-in E)  -> ``tse/e_window``
   * TSE-EMA  = Σ_t γ^(T-t) ℓ_t, γ∈{0.9,0.999} -> ``tse/ema_0_9``, ``tse/ema_0_999``
 
-In TSE-EMA the most recent loss (t=T) carries weight γ^0 = 1 and earlier losses
-decay geometrically.
+In TSE-EMA the most recent loss (t=T) carries weight γ^0 = 1.
 """
 
 from __future__ import annotations
@@ -42,7 +40,6 @@ def compute_tse(
         "tse/e_window": float(L[max(T - e, 0) :].sum()),
     }
     for g in gammas:
-        # weight γ^(T-t): exponents T-1, T-2, ..., 0 so the last loss weighs 1
         exps = torch.arange(T - 1, -1, -1, dtype=torch.float64)
         weights = float(g) ** exps
         key = "tse/ema_" + str(g).replace(".", "_")
@@ -51,8 +48,6 @@ def compute_tse(
 
 
 class TseMetric:
-    """``compute`` takes a loss sequence ℓ_1..ℓ_T, not a model + data probe."""
-
     name = "tse"
 
     def compute(

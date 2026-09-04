@@ -61,7 +61,6 @@ class GnsSimpleMetric:
         return _gns_from_moments(S, Q, M)
 
     def reduce(self, sweep) -> dict[str, float]:
-        """Same result as :meth:`compute`, off the shared sweep."""
         return _gns_from_moments(sweep.S, sweep.Q, sweep.M)
 
 

@@ -19,12 +19,8 @@ from .primitives import EPS, stream_gram
 
 
 def _mean_upper(M: torch.Tensor, mask: torch.Tensor) -> float:
-    """Mean of ``M`` over the strict upper triangle entries selected by ``mask``.
-
-    ``mask`` is a boolean ``[M, M]`` matrix of admissible pairs; combined with the
-    strict-upper triangle it picks each unordered pair ``i < j`` once. Returns
-    ``0.0`` when no pair qualifies (e.g. a within/between subset that is empty).
-    """
+    """Mean of ``M`` over the unordered pairs ``i < j`` admitted by the boolean
+    ``[M, M]`` ``mask``; ``0.0`` when no pair qualifies."""
     upper = torch.triu(torch.ones_like(M, dtype=torch.bool), diagonal=1)
     sel = upper & mask
     if not sel.any():
@@ -61,11 +57,7 @@ def _stiffness_from_gram(
 
 
 def _stiffness_core(G: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
-    """Pairwise stiffness over per-sample gradients ``G`` [M, P], labels ``y`` [M].
-
-    Forms the Gram and row norms, then delegates to
-    :func:`_stiffness_from_gram`, the one math path both routes share.
-    """
+    """:func:`_stiffness_from_gram` on the dense ``[M, P]`` matrix ``G``."""
     return _stiffness_from_gram(G @ G.T, G.norm(dim=1), y)
 
 
@@ -84,7 +76,6 @@ class StiffnessMetric:
         return _stiffness_from_gram(gram, norms, y)
 
     def reduce(self, sweep) -> dict[str, float]:
-        """Same result as :meth:`compute`, off the shared sweep."""
         return _stiffness_from_gram(sweep.gram, sweep.norms, sweep.y)
 
 

@@ -23,8 +23,6 @@ def test_measure_returns_flat_float_dict_and_restores_mode():
 def test_measure_skips_failing_metric():
     # A metric that raises must not abort measure(); its keys are just absent.
     class Exploding:
-        name = "boom"
-
         def compute(self, *args, **kwargs):
             raise RuntimeError("simulated OOM")
 

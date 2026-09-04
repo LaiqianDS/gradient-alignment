@@ -15,43 +15,28 @@ from pathlib import Path
 
 import yaml
 
+ROOT = Path(__file__).resolve().parent.parent
+
 
 @dataclass
 class Config:
-    # --- data & model ---------------------------------------------------
     dataset: str = "cifar10"   # mnist | cifar10 | cifar100 | tiny_imagenet
     model: str = "cnn"         # fc | cnn | resnet18
-
-    # --- optimisation ---------------------------------------------------
     optimizer: str = "sgd"     # sgd | adam
     lr: float = 0.01
     batch_size: int = 128
     epochs: int = 30
     momentum: float = 0.9      # SGD only
     weight_decay: float = 0.0
-
-    # --- reproducibility ------------------------------------------------
     seed: int = 42
-
-    # --- metric probing -------------------------------------------------
-    # probe_size is M, the per-sample gradient count. Also pinned in FIXED_KNOBS.
-    probe_size: int = 256
-
-    # chunk_size is rows-per-chunk for the streamed per-sample-grad sweeps. The
-    # streamed statistics are chunk-invariant, so it only caps the device peak at
-    # [chunk_size, P] instead of the full [M, P] Jacobian.
+    probe_size: int = 256      # M, the per-sample gradient count; also pinned in FIXED_KNOBS
+    # Operational only: caps the device memory of the streamed per-sample sweep, never a statistic.
     chunk_size: int = 32
-
-    # --- efficiency target ----------------------------------------------
     threshold_acc: float | None = None  # val-acc level for "epochs-to-threshold"
-
-    # --- io & device ----------------------------------------------------
     out_dir: str = "reports"
     run_name: str | None = None
     device: str = "auto"        # auto | cpu | cuda | mps
-
-    # --- YAML-only knobs (not exposed as CLI flags) ---------------------
-    windows: tuple[float, ...] = (0.05, 0.10, 0.25, 0.50, 1.0)
+    windows: tuple[float, ...] = (0.05, 0.10, 0.25, 0.50, 1.0)  # YAML-only, no CLI flag
 
     def __post_init__(self) -> None:
         self.windows = tuple(self.windows)
@@ -103,26 +88,19 @@ def config_to_dict(cfg: Config) -> dict:
     return d
 
 
-# ---------------------------------------------------------------------------
-# Static axes of the grid swept by ``run_matrix.py``.
-# ---------------------------------------------------------------------------
-
 DATASETS = ("mnist", "cifar10", "cifar100", "tiny_imagenet")
 MODELS = ("fc", "cnn", "resnet18")
 OPTIMIZERS = ("sgd", "adam")
 SEEDS = (0, 1, 2, 3, 4)
 
-# Train/val split seed: one shared partition for every run, independent of the
-# run seed.
+# Train/val split seed, shared by every run and independent of the run seed.
 SPLIT_SEED = 42
 
-# Per-optimizer learning-rate grids: 8 half-decade points each.
 LR_GRID = {
     "sgd": (3e-4, 1e-3, 3e-3, 1e-2, 3e-2, 1e-1, 3e-1, 1.0),
     "adam": (3e-5, 1e-4, 3e-4, 1e-3, 3e-3, 1e-2, 3e-2, 1e-1),
 }
 
-# Classes per dataset.
 NUM_CLASSES = {
     "mnist": 10,
     "cifar10": 10,
@@ -145,7 +123,6 @@ TEST_SIZE = {
     "tiny_imagenet": 10_000,
 }
 
-# Epoch budget per dataset; it does not depend on the architecture.
 DATASET_BUDGET = {
     "mnist": {"epochs": 20},
     "cifar10": {"epochs": 40},
@@ -153,11 +130,8 @@ DATASET_BUDGET = {
     "tiny_imagenet": {"epochs": 40},
 }
 
-# Val-accuracy level for epochs-to-threshold, keyed by (dataset, model) and
-# shared across optimizers. Each value is the highest round level that at least
-# 60% of the cell's runs that learned reach. The ``epochs_to_threshold`` stored
-# in every summary.json predates these values and must not be read;
-# efficiency.py recomputes it from the val curve.
+# Val-accuracy threshold per (dataset, model), shared across optimizers: the highest round level
+# that at least 60% of the cell's runs that learned reach.
 THRESHOLD_ACC = {
     ("mnist", "fc"): 0.975, ("mnist", "cnn"): 0.98, ("mnist", "resnet18"): 0.99,
     ("cifar10", "fc"): 0.50, ("cifar10", "cnn"): 0.60, ("cifar10", "resnet18"): 0.75,
@@ -166,8 +140,7 @@ THRESHOLD_ACC = {
     ("tiny_imagenet", "resnet18"): 0.36,
 }
 
-# Knobs held fixed across every cell. They are written into each generated cell
-# YAML, so a later change to a Config default does not move them.
+# Written into each cell YAML, so a later change to a Config default cannot move them.
 FIXED_KNOBS = {
     "batch_size": 128,
     "momentum": 0.9,

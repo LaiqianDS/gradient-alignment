@@ -1,11 +1,8 @@
 """Drive the metric registry against a frozen model on the fixed probe.
 
-The two metric groups have different call signatures: the gradient metrics take
-``(model, X, y, loss_fn)``, the TSE baseline takes a loss history. Per-metric
-failures are isolated, so one metric raising never aborts a run.
-
 ``measure`` builds the shared per-sample ∇L sweep once and feeds it to every
-metric exposing a ``reduce``; the rest keep their own ``compute``.
+metric exposing a ``reduce``; the rest keep their own ``compute``. Per-metric
+failures are isolated, so one metric raising never aborts a run.
 """
 
 from __future__ import annotations
@@ -34,8 +31,6 @@ def measure(
     model.eval()
     row: dict[str, float] = {}
 
-    # If the shared sweep raises, leave it None: those metrics fall back to
-    # their own compute() instead of dropping out of the row.
     sweep = None
     if any(hasattr(m, "reduce") for m in metrics.values()):
         try:
@@ -57,9 +52,5 @@ def measure(
 
 
 def baseline_row(losses) -> dict[str, float]:
-    """TSE baseline scalars from per-epoch mean training losses ℓ̄_1..ℓ̄_t.
-
-    Callers must aggregate per-step losses into epoch means first
-    (``train.epoch_mean_losses``); TSE is defined over epochs, not steps.
-    """
+    """TSE baseline scalars from per-epoch mean training losses."""
     return BASELINE.compute(losses)

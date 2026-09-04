@@ -1,5 +1,4 @@
-"""Figures. One function per figure; ``analysis.py`` and ``efficiency.py`` own
-the numbers and stay plotting-free."""
+"""One function per figure; each reads numbers computed elsewhere and writes one PDF."""
 
 from __future__ import annotations
 
@@ -25,7 +24,6 @@ from analysis import (
     REPORTS_DIR,
     dynamic_range_report,
     headline_columns,
-    load_summaries,
     load_trajectories,
     load_windows,
 )
@@ -33,7 +31,6 @@ from config import (
     DATASETS,
     LR_GRID,
     MODELS,
-    NUM_CLASSES,
     OPTIMIZERS,
     SEEDS,
     THRESHOLD_ACC,
@@ -50,17 +47,15 @@ from contrast import (
     primary_family,
 )
 from efficiency import (
+    chance_level,
     crossing_by_lr,
     crossing_epochs,
     run_health,
     vd_status,
-    window_overlap,
 )
 from train import median3
 
-# One step per possible count, light to dark in a single hue, because the count
-# drawn cannot take any other value. Zero is white and its cell is left unpainted,
-# so the scale carries the meaning of an empty square instead of leaving it open.
+# One colour step per seed count; zero is white, so an empty square reads as zero.
 _RAMP = LinearSegmentedColormap.from_list("count", ["#b3d5e8", figstyle.PALETTE[0]])
 CMAP = ListedColormap(
     ["white"] + [_RAMP(i / (len(SEEDS) - 1)) for i in range(len(SEEDS))]
@@ -77,44 +72,40 @@ MODEL_LABELS = {"fc": "FC", "cnn": "CNN", "resnet18": "ResNet-18"}
 OPTIMIZER_LABELS = {"sgd": "SGD", "adam": "Adam"}
 
 def _rate_label(lr: float) -> str:
-    """A learning rate in plain decimal, with the comma the body text uses.
-
-    Ten decimals then trimmed, so the binary noise of a rate such as 0,0003
-    never reaches the tick.
-    """
+    """A plain decimal with a decimal comma, trimmed of float noise."""
     return f"{lr:.10f}".rstrip("0").rstrip(".").replace(".", ",")
 
 
 def _dec(v: float, places: int = 2) -> str:
-    """A number with the decimal comma the body text uses."""
+    """A number with a decimal comma."""
     return f"{v:.{places}f}".replace(".", ",")
 
 
 def _threshold_label(tau: float) -> str:
-    """Two decimals, three when the third is not a zero, as the table prints them."""
+    """Two decimals, three when the third is not a zero."""
     text = f"{tau:.3f}"
     return (text[:-1] if text.endswith("0") else text).replace(".", ",")
 
 
+def _window_label(w: float) -> str:
+    return f"{round(w * 100)} %"
+
+
 def lr_window(
     report_dir: str | Path = REPORTS_DIR,
-    out_dir: Path = figstyle.IMG_DIR,
+    out_dir: Path = figstyle.FIGURE_DIR,
 ) -> Path:
-    """Where VD1 survives across the learning-rate grid, one panel per optimizer."""
+    """How many runs cross their threshold at each learning rate, one panel per optimizer."""
     frac = crossing_by_lr(vd_status(report_dir))
     present = set(frac.index.get_level_values("optimizer"))
     optimizers = [o for o in OPTIMIZERS if o in present]
     order = {cell: i for i, cell in enumerate(product(DATASETS, MODELS))}
-    # The two optimizers were swept over different rates, so both panels are laid
-    # out on the union of the grids: one horizontal position is one rate in both.
+    # Both panels share the union of the two rate grids, so one column is one rate in both.
     union = sorted(set().union(*(LR_GRID[o] for o in OPTIMIZERS)))
     uslot = {lr: i for i, lr in enumerate(union)}
-    # Every cell an optimizer shows, so both panels share one row layout;
-    # a cell missing from one of them simply draws nothing there.
     rows = sorted(set(frac.index.droplevel("optimizer")), key=order.get)
 
-    # A gap where the dataset changes, so the four problems read as four blocks
-    # without spending a rule on the separation.
+    # A gap where the dataset changes, so the datasets read as blocks.
     y, ypos = 0.0, {}
     for i, cell in enumerate(rows):
         if i and cell[0] != rows[i - 1][0]:
@@ -136,9 +127,7 @@ def lr_window(
         xs = [uslot[grid[p - 1]] for p in block.columns]
         for cell, row in zip(rows, counts):
             for j, n in zip(xs, row):
-                # A rate this optimizer was swept over always leaves a square, so
-                # a blank position means the rate is outside its grid and an
-                # empty square means none of its runs crossed.
+                # Blank: a rate outside this grid. Empty square: no run crossed.
                 ax.add_patch(Rectangle(
                     (j - 0.5, ypos[cell] - 0.5), 1, 1, facecolor=CMAP(n),
                     edgecolor="white" if n else "#dcdcdc", linewidth=0.6))
@@ -146,9 +135,6 @@ def lr_window(
         ax.set_title(OPTIMIZER_LABELS[opt], fontsize=figstyle.BODY_PT - 1)
         ax.set_xlim(-0.5, len(union) - 0.5)
         ax.set_ylim(*limits)
-        # Only the rates this optimizer was swept over, so no tick points at an
-        # empty stretch; the positions are shared, which is what makes the two
-        # panels comparable.
         ax.set_xticks([uslot[lr] for lr in grid])
         ax.set_xticklabels(
             [_rate_label(lr) for lr in grid],
@@ -167,8 +153,7 @@ def lr_window(
         for spine in ax.spines.values():
             spine.set_visible(False)
 
-    # The threshold each row is read against, in a column of its own so the
-    # twelve values line up instead of trailing their names.
+    # The thresholds in a column of their own, so the values line up.
     ax_tau.set_axis_off()
     ax_tau.set_xlim(0, 1)
     ax_tau.set_ylim(*limits)
@@ -182,8 +167,7 @@ def lr_window(
         ticks=range(len(SEEDS) + 1), pad=0.02, aspect=30, drawedges=True,
     )
     bar.set_label("entrenamientos que cruzan el umbral", fontsize=figstyle.BODY_PT - 1)
-    # A light frame, because the swatch for zero is white and would otherwise
-    # have no edge at all.
+    # A light frame, because the zero swatch is white.
     bar.outline.set(edgecolor="#dcdcdc", linewidth=0.6)
     bar.dividers.set(color="#dcdcdc", linewidth=0.8)
     bar.ax.minorticks_off()
@@ -194,14 +178,12 @@ def lr_window(
     return figstyle.save(fig, "ventana-lr", out_dir)
 
 
-# The cell the range figure walks through. MNIST with the CNN under SGD carries
-# both halves of the claim in one grid: runs that learned next to runs that did
-# not, and a column whose peak sits in the middle of the grid instead of at an end.
+# MNIST CNN SGD: runs that learned next to runs that did not, and a peak inside the grid.
 EXAMPLE_CELL = ("mnist", "cnn", "sgd")
 EXAMPLE_KEY = "gd/scalar"
 EXAMPLE_WINDOW = 0.05
 
-# The name each logged column carries in the body text.
+# Label of each logged column.
 COLUMN_LABELS = {
     LOG_LR: "posición del learning rate",
     "var/normalized": "NGV",
@@ -236,7 +218,7 @@ def _range_markers(ax, x, y, live, labels: bool = False) -> None:
 
 def cell_range(
     report_dir: str | Path = REPORTS_DIR,
-    out_dir: Path = figstyle.IMG_DIR,
+    out_dir: Path = figstyle.FIGURE_DIR,
 ) -> Path:
     """One cell's column against the learning-rate grid, raw and then ranked."""
     dset, model, opt = EXAMPLE_CELL
@@ -258,8 +240,7 @@ def cell_range(
     fig, (ax_raw, ax_rank) = figstyle.figure(width="full", ratio=0.46, ncols=2)
     for ax, y in ((ax_raw, value), (ax_rank, rank)):
         _range_markers(ax, x, y, live, labels=ax is ax_raw)
-        # The group mean as a short bar and not a line: the rates are grid
-        # points, and a line would draw a path between them never measured.
+        # The mean per rate as a bar, not a line: the rates are grid points.
         for lr in grid:
             hit = lrs == lr
             if hit.any():
@@ -270,8 +251,7 @@ def cell_range(
                            rotation=45, ha="right", rotation_mode="anchor")
         ax.set_xlim(-0.7, len(grid) - 0.3)
 
-    # Linear and from zero. The rates at the top of the grid then pile onto the
-    # floor, which is the fact: those runs collapsed and share one value.
+    # Linear from zero, so the collapsed runs pile on the floor.
     ax_raw.set_ylim(0, value.max() * 1.08)
     ax_raw.set_ylabel(
         f"{COLUMN_LABELS[EXAMPLE_KEY]}, ventana {_window_label(EXAMPLE_WINDOW)}",
@@ -283,13 +263,11 @@ def cell_range(
     ax_raw.legend(handles, labels, loc="upper right", fontsize=7.5,
                   handletextpad=0.3, borderpad=0.2, labelspacing=0.3)
 
-    # The grand mean of the ranks, which every group mean is measured against.
     grand = rank.mean()
     ax_rank.axhline(grand, ls="--", lw=0.9, color=figstyle.RULE, zorder=1)
     ax_rank.text(len(grid) - 0.35, grand - 0.9, "posición media",
                  ha="right", va="top", fontsize=7.5, color=figstyle.RULE)
-    # The last position is a tick of its own: it says how many runs the cell
-    # ranks, which is not always the full five seeds by eight rates.
+    # The last rank is a tick of its own: it says how many runs the cell holds.
     ax_rank.set_ylim(0, len(rank) + 1)
     ax_rank.set_yticks([1, *range(10, len(rank) - 4, 10), len(rank)])
     ax_rank.set_ylabel("posición en la celda, 1 = más bajo",
@@ -305,7 +283,7 @@ def cell_range(
 
 def column_range(
     report_dir: str | Path = REPORTS_DIR,
-    out_dir: Path = figstyle.IMG_DIR,
+    out_dir: Path = figstyle.FIGURE_DIR,
 ) -> Path:
     """Per logged column, the median share of its spread the learning rate moves."""
     win = load_windows(report_dir)
@@ -319,8 +297,6 @@ def column_range(
              .reset_index().sort_values("lr_share"))
     ref = float(at["lr_ref"].median())
 
-    # The bar is a median over cells, so the cells' middle half rides on top of
-    # it: the claim is about a centre and the spread has to be visible.
     quartiles = at.groupby("key")["lr_share"].quantile([0.25, 0.75]).unstack()
     q1 = quartiles.loc[order["key"], 0.25].to_numpy()
     q3 = quartiles.loc[order["key"], 0.75].to_numpy()
@@ -367,20 +343,13 @@ def column_range(
     return figstyle.save(fig, "rango-columnas", out_dir)
 
 
-# The cell the overlap figure walks through: its crossings spread evenly over
-# the four windows, five in each stretch.
+# CIFAR-10 CNN SGD: its crossings spread evenly over the four windows.
 OVERLAP_CELL = ("cifar10", "cnn", "sgd")
-
-DATASET_COLOURS = dict(zip(DATASETS, figstyle.PALETTE[:len(DATASETS)]))
-
-
-def _window_label(w: float) -> str:
-    return f"{round(w * 100)} %"
 
 
 def cell_overlap(
     report_dir: str | Path = REPORTS_DIR,
-    out_dir: Path = figstyle.IMG_DIR,
+    out_dir: Path = figstyle.FIGURE_DIR,
 ) -> Path:
     """One cell's smoothed val-accuracy curves against its threshold, with the
     epochs where the early windows close and how many crossings each has behind it."""
@@ -414,9 +383,8 @@ def cell_overlap(
     ax.text(budget, tau + 0.012, f"τ = {_threshold_label(tau)}",
             ha="right", va="bottom", fontsize=7.5)
 
-    # The chance floor, named where the collapsed runs already draw it. A rule of
-    # its own would only lie under them and break their line into dashes.
-    chance = 1.0 / NUM_CLASSES[dset]
+    # The chance floor is only named: the collapsed runs already draw it.
+    chance = chance_level(dset)
     ax.text(budget, chance + 0.014, f"azar {_dec(chance)}",
             ha="right", va="bottom", fontsize=7.5, color=figstyle.RULE)
 
@@ -425,8 +393,7 @@ def cell_overlap(
         ax.text(e, 1.0, _window_label(w), transform=top,
                 ha="center", va="bottom", fontsize=7.5)
 
-    # The volume the curves cannot show: the crossings pile up on the left of the
-    # top panel and nobody counts dots. Here they are read off an axis.
+    # Cumulative crossings on an axis, because piled dots cannot be counted.
     times = sorted(int(v) for v in cross.values if not math.isnan(v))
     epochs = range(1, budget + 1)
     ax_n.step(list(epochs), [sum(1 for t in times if t <= e) for e in epochs],
@@ -460,168 +427,7 @@ def cell_overlap(
     return figstyle.save(fig, "solape-celda", out_dir)
 
 
-def crossings_consumed(
-    report_dir: str | Path = REPORTS_DIR,
-    out_dir: Path = figstyle.IMG_DIR,
-) -> Path:
-    """Pooled over the cells: how many crossings each window already has behind it.
-
-    Counted in runs, which is not the unit the decision uses. It sizes the
-    problem; the map decides.
-    """
-    g = window_overlap(report_dir).groupby("window")
-    total = int(g["n_crossed"].sum().iloc[0])
-    behind = (g["n_crossed"].sum() - g["n_crossed_ahead"].sum()).astype(int)
-    windows = list(behind.index)
-    xs = range(len(windows))
-
-    fig, ax = figstyle.figure(width="narrow", ratio=0.62)
-    # The whole behind the part, in the same bar, so the share needs no second axis.
-    ax.bar(xs, [total] * len(windows), width=0.62, color="#e4e9ed", zorder=1)
-    ax.bar(xs, behind.to_numpy(), width=0.62, color=figstyle.PALETTE[1], zorder=2)
-    for i, v in enumerate(behind):
-        ax.text(i, v + total * 0.02, str(v), ha="center", va="bottom", fontsize=7.5)
-    ax.text(len(windows) - 0.5, total, f"{total} cruces", ha="right", va="bottom",
-            fontsize=7.5, color=figstyle.RULE)
-
-    ax.set_xticks(list(xs))
-    ax.set_xticklabels([_window_label(w) for w in windows])
-    ax.set_ylim(0, total * 1.1)
-    ax.set_yticks([0, *range(200, total, 200), total])
-    ax.set_xlabel("ventana")
-    ax.set_ylabel("cruces ya ocurridos")
-    ax.tick_params(axis="x", length=2, width=0.6, color="#666666")
-    return figstyle.save(fig, "solape-cruces", out_dir)
-
-
-def crossing_bands(
-    report_dir: str | Path = REPORTS_DIR,
-    out_dir: Path = figstyle.IMG_DIR,
-) -> Path:
-    """Share of a cell's crossings already behind, against the budget spent.
-
-    Both axes are fractions, and the horizontal one is the unit the windows are
-    already defined in, so the four datasets sit on one axis without any
-    measurement being rescaled. Median and interquartile band over the cells of
-    each group, by dataset and then by architecture. The two panels reuse the
-    palette: their legends name different things, so nothing can be confused.
-    """
-    import numpy as np
-
-    traj = load_trajectories(report_dir)
-    health = run_health(report_dir).set_index("run_name")
-    cross = crossing_epochs(traj)
-    budget = traj.groupby("run_name")["epoch"].max() + 1
-
-    cells: dict[tuple[str, str, str], list[float]] = {}
-    for name, t in cross.items():
-        row = health.loc[name]
-        key = (row["dataset"], row["model"], row["optimizer"])
-        cells.setdefault(key, []).append(t / budget[name])
-
-    grid = np.linspace(0.0, 1.0, 101)
-    curves = {}
-    for key, done in cells.items():
-        done = [f for f in done if not math.isnan(f)]
-        if done:
-            curves[key] = np.array([sum(f <= g for f in done) / len(done)
-                                    for g in grid])
-
-    windows = sorted(w for w in load_windows(report_dir)["window"].unique() if w < 1.0)
-    ticks = (0, 0.25, 0.5, 0.75, 1.0)
-    # Stacked and not side by side: each panel gets the whole text width, and the
-    # shared horizontal axis is what lets the two cuts be read against each other.
-    fig, axes = figstyle.figure(width="full", ratio=0.74, nrows=2)
-    cuts = ((0, DATASETS, DATASET_LABELS), (1, MODELS, MODEL_LABELS))
-    for ax, (level, groups, labels) in zip(axes, cuts):
-        for i, g in enumerate(groups):
-            rows = [c for k, c in curves.items() if k[level] == g]
-            if not rows:
-                continue
-            lo, mid, hi = (np.percentile(np.vstack(rows), p, axis=0)
-                           for p in (25, 50, 75))
-            ax.fill_between(grid, lo, hi, color=figstyle.PALETTE[i], alpha=0.18,
-                            lw=0, zorder=2)
-            ax.plot(grid, mid, color=figstyle.PALETTE[i], lw=1.6, zorder=3,
-                    label=labels[g])
-        for w in windows:
-            ax.axvline(w, ls="--", lw=0.9, color=figstyle.RULE, zorder=1)
-        ax.set_xlim(0, 1)
-        ax.set_ylim(0, 1)
-        ax.set_xticks(ticks)
-        ax.set_yticks(ticks)
-        ax.set_yticklabels([_rate_label(t) for t in ticks])
-        ax.legend(loc="lower right", fontsize=7.5, handlelength=1.4)
-
-    top = blended_transform_factory(axes[0].transData, axes[0].transAxes)
-    for w in windows:
-        axes[0].text(w, 1.0, _window_label(w), transform=top, ha="center",
-                     va="bottom", fontsize=7.5)
-    axes[0].set_xticklabels([])
-    axes[1].set_xticklabels([_rate_label(t) for t in ticks])
-    axes[1].set_xlabel("parte del presupuesto consumida")
-    fig.supylabel("cruces ya ocurridos", fontsize=figstyle.BODY_PT - 1)
-    return figstyle.save(fig, "solape-bandas", out_dir)
-
-
-def val_test(
-    report_dir: str | Path = REPORTS_DIR,
-    out_dir: Path = figstyle.IMG_DIR,
-) -> Path:
-    """Every run's end-of-training validation reading against its single test
-    evaluation, accuracy and loss, with the line of equality."""
-    health = run_health(report_dir).set_index("run_name")
-    summ = load_summaries(report_dir).set_index("run_name")
-    summ = summ[health.loc[summ.index, "failure"] != "diverged"].copy()
-    traj = load_trajectories(report_dir).sort_values("epoch")
-    summ["final_val_loss"] = traj.groupby("run_name")["val_loss"].last().reindex(summ.index)
-
-    fig, (ax_acc, ax_loss) = figstyle.figure(width="full", ratio=0.5, ncols=2)
-    for dset in DATASETS:
-        g = summ[summ["dataset"] == dset]
-        if g.empty:
-            continue
-        style = dict(marker="o", ls="none", ms=2.6, mec="white", mew=0.3, alpha=0.85,
-                     color=DATASET_COLOURS[dset], zorder=3)
-        ax_acc.plot(g["final_val_acc"], g["final_test_acc"], label=DATASET_LABELS[dset],
-                    **style)
-        ax_loss.plot(g["final_val_loss"], g["final_test_loss"], **style)
-
-    ax_acc.set_xlim(0, 1)
-    ax_acc.set_ylim(0, 1)
-    ax_acc.plot([0, 1], [0, 1], color=figstyle.RULE, lw=0.8, zorder=1)
-    ticks = (0, 0.25, 0.5, 0.75, 1.0)
-    ax_acc.set_xticks(ticks)
-    ax_acc.set_yticks(ticks)
-    ax_acc.set_xticklabels([_rate_label(t) for t in ticks])
-    ax_acc.set_yticklabels([_rate_label(t) for t in ticks])
-    ax_acc.set_xlabel("accuracy de validación")
-    ax_acc.set_ylabel("accuracy de test")
-    ax_acc.legend(loc="upper left", fontsize=7.5, handletextpad=0.3)
-
-    ax_loss.set_xscale("log")
-    ax_loss.set_yscale("log")
-    lo = min(ax_loss.get_xlim()[0], ax_loss.get_ylim()[0])
-    hi = max(ax_loss.get_xlim()[1], ax_loss.get_ylim()[1])
-    ax_loss.set_xlim(lo, hi)
-    ax_loss.set_ylim(lo, hi)
-    ax_loss.plot([lo, hi], [lo, hi], color=figstyle.RULE, lw=0.8, zorder=1)
-    ax_loss.set_xlabel("loss de validación")
-    ax_loss.set_ylabel("loss de test")
-    for ax in (ax_acc, ax_loss):
-        ax.set_aspect("equal")
-        # Both panels are square and share their limits, so the diagonal runs at
-        # 45 degrees and the label can sit on it in axes coordinates.
-        ax.text(0.78, 0.70, "igualdad", transform=ax.transAxes, rotation=45,
-                rotation_mode="anchor", ha="center", va="center", fontsize=7.5,
-                color=figstyle.RULE)
-    return figstyle.save(fig, "val-test", out_dir)
-
-
-# The primary family of the protocol at the early window: the D of every
-# predictor against every dependent variable, one dot per cell with its
-# jackknife interval, per cell and granulated. Reads the long table
-# contrast.py writes.
+# Predictor row order shared by the sign strip and the window curves.
 PRIMARY_ORDER = (
     LOG_LR, "val_loss", "val_acc", "tse/ema_0_999",
     "noise_scale/simple", "gsnr/mean", "gd/scalar",
@@ -636,12 +442,13 @@ VD_LABELS = {
 
 def sign_strip(
     table_path: Path = RESULTS_DIR / "tabla_larga.parquet",
-    out_dir: Path = figstyle.IMG_DIR,
+    out_dir: Path = figstyle.FIGURE_DIR,
 ) -> Path:
     """Every cell's D in the primary family, one row per predictor and one
     panel per dependent variable. A filled dot is a cell whose 95 % jackknife
     interval leaves zero out; a hollow one includes it."""
     table = primary_family(pd.read_parquet(table_path))
+    dataset_colour = dict(zip(DATASETS, figstyle.PALETTE[:len(DATASETS)]))
     rng = np.random.default_rng(0)
     fig, axes = figstyle.figure(width="full", ratio=0.46, ncols=3)
     for c, vd in enumerate(PRIMARY_VDS):
@@ -651,7 +458,7 @@ def sign_strip(
             g = sub[sub["predictor"] == pred]
             d = g["D"].to_numpy()
             y = i + rng.uniform(-0.22, 0.22, len(g))
-            colours = np.array([DATASET_COLOURS[k] for k in g["dataset"]])
+            colours = np.array([dataset_colour[k] for k in g["dataset"]])
             shown = excludes_zero(g["D"], g["se"]).to_numpy()
             ax.scatter(d[shown], y[shown], s=13, c=colours[shown],
                        edgecolors="white", linewidths=0.3, zorder=3)
@@ -674,7 +481,7 @@ def sign_strip(
         ax.set_title(VD_LABELS[vd], fontsize=figstyle.BODY_PT - 1)
         ax.set_xlabel("D por celda", fontsize=figstyle.BODY_PT - 1)
     fig.legend(
-        handles=[Line2D([], [], marker="o", ls="none", ms=4, color=DATASET_COLOURS[d],
+        handles=[Line2D([], [], marker="o", ls="none", ms=4, color=dataset_colour[d],
                         label=DATASET_LABELS[d]) for d in DATASETS]
         + [Line2D([], [], color=figstyle.INK, lw=1.2, label="mediana de las celdas"),
            Line2D([], [], marker="o", ls="none", ms=4, color=figstyle.INK,
@@ -684,12 +491,12 @@ def sign_strip(
         loc="outside lower center", ncol=4, fontsize=7.5, handletextpad=0.4,
         columnspacing=1.2, frameon=False,
     )
-    return figstyle.save(fig, "signos-h1", out_dir)
+    return figstyle.save(fig, "signos", out_dir)
 
 
 def selection_bars(
     table_path: Path = RESULTS_DIR / "seleccion.parquet",
-    out_dir: Path = figstyle.IMG_DIR,
+    out_dir: Path = figstyle.FIGURE_DIR,
 ) -> Path:
     """Per predictor, the median over cells of the test accuracy lost by
     picking the learning rate with it at the early window, the cells on top
@@ -739,7 +546,7 @@ _MARKERS = ("o", "s", "^", "D")
 
 def window_curves(
     table_path: Path = RESULTS_DIR / "tabla_larga.parquet",
-    out_dir: Path = figstyle.IMG_DIR,
+    out_dir: Path = figstyle.FIGURE_DIR,
 ) -> Path:
     """Per predictor, the median over cells of |D| at each early window: the
     three primary variables, the speed one by its landmark reading over the
@@ -797,9 +604,6 @@ if __name__ == "__main__":
     print(cell_range())
     print(column_range())
     print(cell_overlap())
-    print(crossings_consumed())
-    print(crossing_bands())
-    print(val_test())
     print(sign_strip())
     print(selection_bars())
     print(window_curves())

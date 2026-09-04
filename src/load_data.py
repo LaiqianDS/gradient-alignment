@@ -1,17 +1,17 @@
 """Download the auto-downloadable datasets to data/.
 
-Classes and on-disk paths come from ``data._TV_CLASSES``. Tiny ImageNet is not
+Classes and on-disk paths come from ``data.TV_CLASSES``. Tiny ImageNet is not
 auto-downloadable and must be placed under ``data/tiny-imagenet-200/`` by hand.
 """
 
 import torchvision.datasets as datasets
 
-from data import DATA_PATH, _TV_CLASSES
+from data import DATA_PATH, TV_CLASSES
 
 if __name__ == "__main__":
     DATA_PATH.mkdir(exist_ok=True)
 
-    for name, cls in _TV_CLASSES.items():
+    for name, cls in TV_CLASSES.items():
         train = cls(DATA_PATH / name, train=True, download=True)
         test = cls(DATA_PATH / name, train=False, download=True)
         print(f"{name}: {len(train)} train, {len(test)} test samples")

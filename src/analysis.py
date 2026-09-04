@@ -27,10 +27,8 @@ import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
 
-from config import FIXED_KNOBS
+from config import FIXED_KNOBS, ROOT
 
-ROOT = Path(__file__).resolve().parent.parent
-PILOT_DIR = ROOT / "reports_pilot"
 REPORTS_DIR = ROOT / "reports"
 
 # Probe size M: the per-sample gradient count, and the upper bound of
@@ -65,16 +63,13 @@ class MetricSpec:
 # Ranges: cosines -> [-1, 1]; variances / distances / GSNR / TSE -> [0, inf);
 # fractions -> [0, 1]; m-coherence -> [0, M]; GWA excess kurtosis -> [-2, inf).
 SPECS: tuple[MetricSpec, ...] = (
-    # --- the run's own learning curve ---------------------------------------
     MetricSpec("train_loss", "train_loss", "monitor", 0.0, None, -1),
     MetricSpec("val_loss", "val_loss", "monitor", 0.0, None, None, headline=True),
     MetricSpec("val_acc", "val_acc", "monitor", 0.0, 1.0, +1, headline=True),
-    # --- TSE baseline predictor ---------------------------------------------
     MetricSpec("tse/cumulative", "tse", "baseline", 0.0, None, +1),  # running sum
     MetricSpec("tse/e_window", "tse", "baseline", 0.0, None, None),
     MetricSpec("tse/ema_0_9", "tse", "baseline", 0.0, None, None),
     MetricSpec("tse/ema_0_999", "tse", "baseline", 0.0, None, None, headline=True),
-    # --- variability family -------------------------------------------------
     MetricSpec("var/normalized", "ngv", "variability", 0.0, None, +1, headline=True),
     MetricSpec("var/avg", "ngv", "variability", 0.0, None, -1),
     MetricSpec("noise_scale/simple", "gns", "variability", 0.0, None, +1, headline=True),
@@ -84,7 +79,6 @@ SPECS: tuple[MetricSpec, ...] = (
     MetricSpec("gsnr/p95", "gsnr", "variability", 0.0, None, None),
     # sqrt(2 tr(Sigma) / 51) up to sampling: a spread, not an angle
     MetricSpec("gd/scalar", "gd", "variability", 0.0, None, None, headline=True),
-    # --- alignment / coherence family ---------------------------------------
     MetricSpec("mcoh/global", "mcoh", "alignment", 0.0, float(PROBE_SIZE), -1, headline=True),
     MetricSpec("stiffness/cos_within", "stiffness", "alignment", -1.0, 1.0, -1, headline=True),
     MetricSpec("stiffness/cos_global", "stiffness", "alignment", -1.0, 1.0, -1),
@@ -98,7 +92,7 @@ SPECS: tuple[MetricSpec, ...] = (
     MetricSpec("confusion/p05_cos", "confusion", "alignment", -1.0, 1.0, None),
     MetricSpec("confusion/frac_neg", "confusion", "alignment", 0.0, 1.0, None),
     MetricSpec("gwa/score_mean", "gwa", "alignment", -1.0, 1.0, None),
-    MetricSpec("gwa/kurt", "gwa", "alignment", -2.0, None, None),  # excess kurtosis
+    MetricSpec("gwa/kurt", "gwa", "alignment", -2.0, None, None),
     MetricSpec("gwa/value", "gwa", "alignment", None, None, None, headline=True),
 )
 
@@ -114,10 +108,6 @@ def headline_columns() -> list[str]:
     """The columns flagged ``headline`` in :data:`SPECS`."""
     return [s.key for s in SPECS if s.headline]
 
-
-# ---------------------------------------------------------------------------
-# Loaders: concatenate the per-run files of a report directory into one frame.
-# ---------------------------------------------------------------------------
 
 def _run_dirs(report_dir: str | Path) -> list[Path]:
     return sorted(p for p in Path(report_dir).iterdir() if p.is_dir())
@@ -147,8 +137,8 @@ def load_windows(report_dir: str | Path = REPORTS_DIR) -> pd.DataFrame:
 def load_summaries(report_dir: str | Path = REPORTS_DIR) -> pd.DataFrame:
     """One row per run: the ``summary.json`` scalars (final test/val/gap, timing).
 
-    A summary carrying a ``_tiny_test_note`` key declares its own test/gap
-    fields invalid; its val-side and timing fields stay valid.
+    A summary with a ``_tiny_test_note`` key has invalid test and gap fields;
+    its val and timing fields are valid.
     """
     rows = [
         json.loads((d / "summary.json").read_text())
@@ -182,10 +172,6 @@ def absent_columns(
         index=pd.Index(list(absent), name="key"),
     )
 
-
-# ---------------------------------------------------------------------------
-# Diagnostic 1a: validity & ranges (NaN / Inf / out-of-theoretical-bound).
-# ---------------------------------------------------------------------------
 
 def validity_report(traj: pd.DataFrame, tol: float = 1e-6) -> pd.DataFrame:
     """One row per known metric column: observed range, bad-value counts, status.
@@ -239,10 +225,6 @@ def validity_report(traj: pd.DataFrame, tol: float = 1e-6) -> pd.DataFrame:
     return pd.DataFrame(out).set_index("key")
 
 
-# ---------------------------------------------------------------------------
-# Diagnostic 1b: hard cross-column identities that must hold every row.
-# ---------------------------------------------------------------------------
-
 def identity_report(traj: pd.DataFrame, tol: float = 1e-5) -> pd.DataFrame:
     """Deterministic invariants between columns, aggregated over all rows.
 
@@ -265,7 +247,6 @@ def identity_report(traj: pd.DataFrame, tol: float = 1e-5) -> pd.DataFrame:
     if {"gsnr/median", "gsnr/p95"} <= set(traj.columns):
         checks.append(("gsnr median <= p95", col("gsnr/median") - col("gsnr/p95")))
     if "tse/cumulative" in traj.columns:
-        # a drop is a violation, hence the sign flip below
         drops = traj.sort_values("epoch").groupby("run_name")["tse/cumulative"].diff()
         checks.append(("tse/cumulative non-decreasing", (-drops).to_numpy()))
 
@@ -282,10 +263,6 @@ def identity_report(traj: pd.DataFrame, tol: float = 1e-5) -> pd.DataFrame:
         })
     return pd.DataFrame(out).set_index("identity")
 
-
-# ---------------------------------------------------------------------------
-# Diagnostic 2: degeneracy, does a metric move inside a run at all?
-# ---------------------------------------------------------------------------
 
 def degeneracy_report(
     traj: pd.DataFrame,
@@ -313,9 +290,9 @@ def degeneracy_report(
             if step > 0:
                 ratio = sd / step
             elif sd > 0:
-                ratio = np.inf  # perfectly linear: all signal, no jitter
+                ratio = np.inf
             else:
-                ratio = 0.0  # constant
+                ratio = 0.0
             rows.append({
                 "run_name": run_name,
                 "dataset": meta["dataset"], "model": meta["model"],
@@ -345,10 +322,6 @@ def degeneracy_summary(detail: pd.DataFrame) -> pd.DataFrame:
         .sort_values("median_ratio")
     )
 
-
-# ---------------------------------------------------------------------------
-# Diagnostic 3: direction, does the trajectory drift as the spec predicts?
-# ---------------------------------------------------------------------------
 
 def trend_report(
     traj: pd.DataFrame, deadband: float = 0.1, progress_max: float | None = None
@@ -407,10 +380,6 @@ def trend_summary(detail: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-# ---------------------------------------------------------------------------
-# Diagnostic 4: redundancy, which metrics move together.
-# ---------------------------------------------------------------------------
-
 def redundancy_matrix(
     traj: pd.DataFrame,
     keys: list[str] | None = None,
@@ -439,11 +408,6 @@ def top_redundant_pairs(corr: pd.DataFrame, n: int = 12) -> pd.DataFrame:
     pairs["abs_rho"] = pairs["rho"].abs()
     return pairs.sort_values("abs_rho", ascending=False).head(n).reset_index(drop=True)
 
-
-# ---------------------------------------------------------------------------
-# Diagnostic 5: dynamic range, does a metric move with the learning rate or
-# only with the seed?
-# ---------------------------------------------------------------------------
 
 def _between_ss(rank: pd.Series, by: pd.Series) -> tuple[float, int]:
     """Between-group sum of squares of ``rank`` under one grouping, and k."""
@@ -515,10 +479,6 @@ def dynamic_range_summary(detail: pd.DataFrame) -> pd.DataFrame:
         .sort_values("median_lr_share")
     )
 
-
-# ---------------------------------------------------------------------------
-# Console smoke report: `uv run python src/analysis.py [report_dir]`.
-# ---------------------------------------------------------------------------
 
 def _main(report_dir: str | Path = REPORTS_DIR) -> None:
     pd.set_option("display.width", 140)

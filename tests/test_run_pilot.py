@@ -119,7 +119,7 @@ def test_print_report_marks_the_invalid_test_fields(tmp_path, monkeypatch, capsy
 
     assert corrupto.endswith(" *")
     assert not sano.endswith(" *")
-    assert "val-as-test" in out
+    assert "are invalid" in out
 
 
 def test_testfix_table_reads_its_own_run_not_the_pilots(tmp_path, monkeypatch):
@@ -176,7 +176,7 @@ def test_print_report_keeps_the_testfix_reference_apart(tmp_path, monkeypatch, c
     out = capsys.readouterr().out
     fila = next(l for l in out.splitlines() if "0.8123" in l)
     assert fila.startswith("  (11 ep)")
-    assert "NOT a swap-in" in out
+    assert "not comparable" in out
 
 
 def test_plateau_epoch_finds_the_knee():

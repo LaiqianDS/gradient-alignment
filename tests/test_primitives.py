@@ -125,6 +125,6 @@ def test_synthetic_fixtures_geometry():
 
 
 def test_named_last_linear():
-    name, mod = named_last_linear(tiny_mlp())
+    _, mod = named_last_linear(tiny_mlp())
     assert isinstance(mod, nn.Linear)
     assert mod.out_features == 3

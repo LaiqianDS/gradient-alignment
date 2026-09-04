@@ -11,8 +11,7 @@ Two global scalars over ``K = 10`` disjoint sub-batches of the probe:
     the "above 1" reading only holds for the form computed here.
 
 The plug-in denominator ``||mean of K grads||²`` is biased upward by
-``tr(Cov)/K``, so the estimate saturates at ≈K. Invert post-hoc via
-``NGV ≈ NGV̂/(1 - NGV̂/K)`` when the regime matters.
+``tr(Cov)/K``, so the estimate saturates at ≈K.
 """
 
 from __future__ import annotations

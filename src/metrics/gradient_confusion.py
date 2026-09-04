@@ -42,11 +42,7 @@ def _confusion_from_gram(gram: torch.Tensor, norms: torch.Tensor) -> dict[str, f
 
 
 def _confusion_core(G: torch.Tensor) -> dict[str, float]:
-    """Gradient-confusion stats over all ordered pairs ``i != j`` of rows of ``G``.
-
-    Forms the Gram and row norms, then delegates to
-    :func:`_confusion_from_gram`, the one math path both routes share.
-    """
+    """:func:`_confusion_from_gram` on the dense ``[M, P]`` matrix ``G``."""
     return _confusion_from_gram(G @ G.T, G.norm(dim=1))
 
 
@@ -65,7 +61,6 @@ class GradientConfusionMetric:
         return _confusion_from_gram(gram, norms)
 
     def reduce(self, sweep) -> dict[str, float]:
-        """Same result as :meth:`compute`, off the shared sweep."""
         return _confusion_from_gram(sweep.gram, sweep.norms)
 
 

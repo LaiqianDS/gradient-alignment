@@ -5,6 +5,7 @@ PDFs/
 pending/
 
 __pycache__/
+.pytest_cache/
 
 .vscode/
 .claude/

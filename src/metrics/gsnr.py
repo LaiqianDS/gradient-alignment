@@ -2,9 +2,8 @@
 
 Per-parameter GSNR is ``r_j = gbar_j² / Var_i[g_{i,j}]``, over the unbiased
 variance (``÷ M-1``) and after dropping "dead" parameters by a threshold on
-``‖g_j‖``. Aggregated by mean, never by sum, which is incomparable across
-architectures with different ``P``; the median and p95 are also logged because
-the tail of ``r_j`` is heavy.
+``‖g_j‖``. Aggregated by mean, not by sum (incomparable across ``P``); the
+median and p95 are also logged because the tail of ``r_j`` is heavy.
 """
 
 from __future__ import annotations
@@ -14,8 +13,6 @@ import torch.nn as nn
 
 from .primitives import EPS, stream_grad_moments
 
-# Per-column gradient norm at or below which a parameter counts as dead and is
-# excluded from the aggregation.
 _DEAD_TOL = 1e-8
 
 
@@ -79,7 +76,6 @@ class GsnrMetric:
         return _gsnr_from_moments(S, Q, M)
 
     def reduce(self, sweep) -> dict[str, float]:
-        """Same result as :meth:`compute`, off the shared sweep."""
         return _gsnr_from_moments(sweep.S, sweep.Q, sweep.M)
 
 

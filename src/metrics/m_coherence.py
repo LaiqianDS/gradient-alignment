@@ -20,10 +20,7 @@ from .primitives import EPS, stream_grad_moments
 
 
 def _mcoh_core(G: torch.Tensor) -> dict[str, float]:
-    """m-coherence from a ``[M, P]`` per-sample gradient matrix.
-
-    ``alpha = ‖Σ_i g_i‖² / Σ_i ‖g_i‖²`` lives in ``[0, M]`` (1 = orthogonal limit).
-    """
+    """m-coherence from a ``[M, P]`` per-sample gradient matrix."""
     S = G.sum(0)
     num = S @ S
     den = (G * G).sum()
@@ -54,7 +51,6 @@ class MCoherenceMetric:
         return _mcoh_from_moments(S, Q)
 
     def reduce(self, sweep) -> dict[str, float]:
-        """Same result as :meth:`compute`, off the shared sweep."""
         return _mcoh_from_moments(sweep.S, sweep.Q)
 
 

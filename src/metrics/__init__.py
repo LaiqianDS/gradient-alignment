@@ -1,14 +1,9 @@
 """Metric registry.
 
-Each metric module exposes a module-level ``METRIC`` instance with a ``name``
-and a ``compute(...)`` method (see :class:`metrics.base.Metric`). They are
-collected into two groups because their call signatures differ:
-
 * ``REGISTRY``: the gradient metrics,
   ``metric.compute(model, X, y, loss_fn) -> dict[str, float]``.
 * ``BASELINE``: the TSE baseline, ``BASELINE.compute(losses) -> dict``, which
-  takes a sequence of **per-epoch mean** training losses instead of a model
-  (aggregate per-step losses first, see ``train.epoch_mean_losses``).
+  takes a loss sequence instead of a model.
 """
 
 from . import base, primitives  # noqa: F401
@@ -22,7 +17,6 @@ from .normalized_variance import METRIC as normalized_variance
 from .stiffness import METRIC as stiffness
 from .tse import METRIC as tse
 
-# Uniform compute(model, X, y, loss_fn) interface, grouped by family.
 REGISTRY = {
     m.name: m
     for m in (
@@ -39,7 +33,6 @@ REGISTRY = {
     )
 }
 
-# Kept out of REGISTRY: its compute() takes a loss sequence, not a model.
 BASELINE = tse
 
 __all__ = ["REGISTRY", "BASELINE", "base", "primitives"]

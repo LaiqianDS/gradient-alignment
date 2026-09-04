@@ -64,31 +64,6 @@ def test_the_cell_overlap_builds_and_writes_a_pdf(tmp_path):
     assert path.exists() and path.suffix == ".pdf"
 
 
-def test_the_crossing_count_builds_and_writes_a_pdf(tmp_path):
-    reports, img = tmp_path / "reports", tmp_path / "img"
-    reports.mkdir()
-    _speed_cell(reports)
-    path = figures.crossings_consumed(reports, img)
-    assert path.exists() and path.suffix == ".pdf"
-
-
-def test_the_crossing_bands_build_and_write_a_pdf(tmp_path):
-    reports, img = tmp_path / "reports", tmp_path / "img"
-    reports.mkdir()
-    _speed_cell(reports)
-    path = figures.crossing_bands(reports, img)
-    assert path.exists() and path.suffix == ".pdf"
-
-
-def test_the_val_test_figure_builds_and_writes_a_pdf(tmp_path):
-    reports, img = tmp_path / "reports", tmp_path / "img"
-    reports.mkdir()
-    _write_run(reports, "a", val_acc=(0.3, 0.5, 0.6, 0.7), final_test_acc=0.69)
-    _write_run(reports, "b", dataset="mnist", val_acc=(0.9,) * 4, final_test_acc=0.91)
-    path = figures.val_test(reports, img)
-    assert path.exists() and path.suffix == ".pdf"
-
-
 def test_the_selection_bars_build_and_write_a_pdf(tmp_path):
     import pandas as pd
 
@@ -124,7 +99,7 @@ def test_every_axis_value_has_a_label():
     assert set(figures.OPTIMIZER_LABELS) == set(OPTIMIZERS)
 
 
-def test_every_headline_column_prints_the_name_the_memoria_uses():
+def test_every_headline_column_has_a_label():
     """A figure may not fall back to the code identifier of a column."""
     from analysis import headline_columns
 

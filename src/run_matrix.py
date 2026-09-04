@@ -43,11 +43,11 @@ from config import (
     LR_GRID,
     MODELS,
     OPTIMIZERS,
+    ROOT,
     SEEDS,
     THRESHOLD_ACC,
 )
 
-ROOT = Path(__file__).parent.parent
 EXPERIMENTS_DIR = ROOT / "experiments"
 REPORTS_DIR = ROOT / "reports"
 TRAIN_SCRIPT = Path(__file__).parent / "train.py"
@@ -59,9 +59,7 @@ def cell_path(dataset: str, model: str, optimizer: str) -> Path:
 
 
 def run_name_for(dataset: str, model: str, optimizer: str, lr: float, seed: int) -> str:
-    """Deterministic run name. Must stay identical to
-    ``train.default_run_name``, or the predicted output directory stops matching
-    what train.py writes."""
+    """Must match ``train.default_run_name``."""
     return f"{model}_{dataset}_{optimizer}_lr{lr}_seed{seed}"
 
 
@@ -102,7 +100,7 @@ def enumerate_runs(
     ]
 
 
-def init_cells(overwrite: bool = False) -> list[Path]:
+def init_cells() -> list[Path]:
     """Write any missing cell YAMLs; return the paths actually written."""
     EXPERIMENTS_DIR.mkdir(exist_ok=True)
     written: list[Path] = []
@@ -110,7 +108,7 @@ def init_cells(overwrite: bool = False) -> list[Path]:
         for m in MODELS:
             for o in OPTIMIZERS:
                 path = cell_path(d, m, o)
-                if path.exists() and not overwrite:
+                if path.exists():
                     continue
                 knobs = {"dataset": d, "model": m, "optimizer": o,
                          **DATASET_BUDGET[d], "threshold_acc": THRESHOLD_ACC[(d, m)],
@@ -139,11 +137,7 @@ def build_command(run: Run) -> list[str]:
 
 
 def child_env() -> dict[str, str]:
-    """A copy of this process's environment plus ``PYTORCH_CUDA_ALLOC_CONF``.
-
-    Allocator strategy only: it changes how GPU memory is requested, never what
-    is computed. A value already set in the shell wins.
-    """
+    """Environment copy; ``PYTORCH_CUDA_ALLOC_CONF`` is defaulted, a set value wins."""
     env = dict(os.environ)
     env.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
     return env

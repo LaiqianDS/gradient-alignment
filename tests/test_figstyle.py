@@ -1,4 +1,4 @@
-"""The figure style's three promises: exact printed size, zero baseline, shared scale."""
+"""The figure style's two promises: exact printed size and zero baseline."""
 
 import figstyle as fs
 
@@ -32,14 +32,6 @@ def test_include_zero_leaves_an_axis_that_already_spans_zero():
     ax.set_ylim(-1.0, 1.0)
     fs.include_zero(ax)
     assert ax.get_ylim() == (-1.0, 1.0)
-
-
-def test_match_limits_gives_every_axis_the_union():
-    _, axes = fs.figure(ncols=2)
-    axes[0].set_ylim(0.0, 0.5)
-    axes[1].set_ylim(0.2, 0.9)
-    fs.match_limits(axes)
-    assert axes[0].get_ylim() == axes[1].get_ylim() == (0.0, 0.9)
 
 
 def test_the_cycle_assigns_the_palette_in_its_declared_order():

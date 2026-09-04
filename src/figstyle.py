@@ -1,11 +1,5 @@
-"""Shared matplotlib style.
-
-Figures are built at the width they will occupy in the PDF, so nothing scales
-them afterwards and figure text keeps the size set here. The palette is
-Okabe-Ito, the colour-universal set, so hues stay apart under the common forms
-of colour blindness; :func:`include_zero` and :func:`match_limits` keep an axis
-from lying about a difference.
-"""
+"""Figures are built at their final printed width, so figure text keeps the
+size set here. The palette is Okabe-Ito."""
 
 from __future__ import annotations
 
@@ -18,30 +12,24 @@ from matplotlib import font_manager
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
-# Text block width and body size of the target document class.
+# Text block width and body size of the printed page.
 FULL_CM = 15.0
 NARROW_CM = 10.0
 BODY_PT = 10.0
 _CM = 1 / 2.54
 
-IMG_DIR = Path(__file__).parent.parent / "thesis" / "img"
+FIGURE_DIR = Path(__file__).parent.parent / "thesis" / "img"
 
-# Okabe & Ito (2008), in the order the cycle assigns them. Yellow is left out:
-# it has too little contrast against a white page.
+# Okabe-Ito in cycle order; yellow is left out for its low contrast on white.
 PALETTE = ("#0072B2", "#D55E00", "#009E73", "#E69F00", "#CC79A7", "#56B4E9")
 CYCLE = cycler(color=PALETTE)
 
-# Ink for axes, ticks and secondary rules; a warm-neutral grey, not pure black.
 INK = "#333333"
 RULE = "#8a8a8a"
 
 
 def _sans_name() -> str:
-    """Register the TeX Gyre Heros faces and return the family name.
-
-    Heros is the free Helvetica, the sans most journals set their figures in.
-    All four faces, so an italic label is a real italic and not a slanted fake.
-    """
+    """Register the TeX Gyre Heros faces and return the family name."""
     pattern = "*/texmf-dist/fonts/opentype/public/tex-gyre/texgyreheros-*.otf"
     for root in ("/usr/local/texlive", "/usr/share/texlive", "/opt/texlive"):
         faces = sorted(Path(root).glob(pattern))
@@ -87,10 +75,9 @@ def apply() -> None:
 
 
 def figure(width: str = "full", ratio: float = 0.62, nrows: int = 1, ncols: int = 1):
-    """A figure at its final printed width. ``width`` is ``full`` or ``narrow``.
+    """A figure at its final printed width, ``full`` or ``narrow``.
 
-    ``constrained_layout`` fits the content inside that width. Do not save with
-    ``bbox_inches="tight"``: trimming changes the saved size.
+    Do not save with ``bbox_inches="tight"``: trimming changes the saved size.
     """
     w = FULL_CM if width == "full" else NARROW_CM
     return plt.subplots(
@@ -99,26 +86,15 @@ def figure(width: str = "full", ratio: float = 0.62, nrows: int = 1, ncols: int 
 
 
 def include_zero(*axes, axis: str = "y") -> None:
-    """Extend limits so the axis reaches zero.
-
-    Skip it where zero is meaningless (a log scale, an epoch count).
-    """
+    """Extend limits so the axis reaches zero."""
     for ax in axes:
         get, set_ = (ax.get_ylim, ax.set_ylim) if axis == "y" else (ax.get_xlim, ax.set_xlim)
         lo, hi = get()
         set_(min(lo, 0.0), max(hi, 0.0))
 
 
-def match_limits(axes, axis: str = "y") -> None:
-    """Give every axis the union of their limits, so panels share one scale."""
-    lims = [ax.get_ylim() if axis == "y" else ax.get_xlim() for ax in axes]
-    lo, hi = min(lo for lo, _ in lims), max(hi for _, hi in lims)
-    for ax in axes:
-        (ax.set_ylim if axis == "y" else ax.set_xlim)(lo, hi)
-
-
-def save(fig, name: str, out_dir: Path = IMG_DIR) -> Path:
-    """Write ``name.pdf`` at its built size and return the path. PDF only."""
+def save(fig, name: str, out_dir: Path = FIGURE_DIR) -> Path:
+    """Write ``name.pdf`` at its built size and return the path."""
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{name}.pdf"
     fig.savefig(path)

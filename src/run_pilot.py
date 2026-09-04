@@ -34,9 +34,10 @@ from config import (
     LR_GRID,
     MODELS,
     OPTIMIZERS,
+    ROOT,
     THRESHOLD_ACC,
 )
-from run_matrix import ROOT, TRAIN_SCRIPT, cell_path, child_env, run_name_for
+from run_matrix import TRAIN_SCRIPT, cell_path, child_env, run_name_for
 
 PILOT_DIR = ROOT / "reports_pilot"
 PILOT_SEED = 0
@@ -169,17 +170,9 @@ def fmt_params(n: int) -> str:
 
 
 def calibration_table(runs: list[PilotRun]) -> pd.DataFrame:
-    """One row per finished run; :func:`print_report` only formats this frame.
-
-    ``ran_epochs`` comes from the trajectory, not from ``DATASET_BUDGET``, and
-    ``threshold_epoch`` recomputes the crossing of the current threshold on the
-    smoothed val curve (same 3-epoch centred median as ``train.median3``), not
-    from the stored ``epochs_to_threshold``.
-
-    ``test_fields_valid`` is False when the summary carries a ``_tiny_test_note``
-    key, which marks its test/gap fields as invalid; its val-side and timing
-    fields stay sound.
-    """
+    """One row per finished run. ``threshold_epoch`` recomputes the crossing on the
+    3-epoch median of the val curve; ``test_fields_valid`` is False when the
+    summary carries a ``_tiny_test_note`` key."""
     rows = []
     for r in runs:
         if not r.is_done():
@@ -225,12 +218,8 @@ TESTFIX_DIR = "testfix_40ep"
 
 
 def testfix_table(runs: list[PilotRun]) -> pd.DataFrame:
-    """The test/gap reference stored in each run's ``testfix_40ep/`` subdirectory.
-
-    A separate run of the same cell at a different epoch budget, so it gets its
-    own frame and must not be joined onto :func:`calibration_table`. Only the
-    test-side fields are carried.
-    """
+    """Test and gap fields of the run stored under each pilot's ``testfix_40ep/``;
+    a different epoch budget, so it is kept apart from :func:`calibration_table`."""
     rows = []
     for r in runs:
         d = r.dir / TESTFIX_DIR
@@ -250,13 +239,8 @@ def testfix_table(runs: list[PilotRun]) -> pd.DataFrame:
 
 
 def print_report(runs: list[PilotRun]) -> None:
-    """Per-dataset ``results`` and ``calib`` tables, then a one-line roll-up.
-
-    Both tables are formatted from :func:`calibration_table`. A ``*`` on a
-    ``results`` row marks ``test_fields_valid`` False. The ``testfix`` block
-    prints :func:`testfix_table` when a reference exists, each row labelled with
-    the budget it ran.
-    """
+    """Per-dataset ``results`` and ``calib`` tables from :func:`calibration_table`,
+    the ``testfix`` block when a reference exists, then a one-line roll-up."""
     table = calibration_table(runs)
     by_dataset: dict[str, list[PilotRun]] = {}
     for r in runs:
@@ -287,7 +271,6 @@ def print_report(runs: list[PilotRun]) -> None:
             print("  (no finished runs yet)")
             continue
 
-        # results: model quality
         print(f"  {'results':<9}{'model':<9}{'opt':<4}{'test_acc':>9}{'test_f1':>9}"
               f"{'test_loss':>10}{'val_acc':>9}{'gap_acc':>9}")
         for row in sub.itertuples():
@@ -297,26 +280,22 @@ def print_report(runs: list[PilotRun]) -> None:
                   f"{row.final_gap_acc:>9.4f}"
                   f"{'' if row.test_fields_valid else ' *'}")
         if not sub["test_fields_valid"].all():
-            print("  * test_acc/test_f1/test_loss/gap_acc are NOT valid: that "
-                  "summary predates the val-as-test labelling fix. Its val_acc "
-                  "and its calib row below are sound.")
+            print("  * test and gap fields of this summary are invalid; its val "
+                  "and timing fields are valid.")
 
-        # testfix: the separate test/gap reference
-        fix = testfix_table(cell_runs)
-        if len(fix):
-            print("  testfix: the same cells re-run after the fix, each at its "
-                  "own budget. Sound test/gap, but a different horizon, so NOT "
-                  "a swap-in for the rows above.")
+        ref = testfix_table(cell_runs)
+        if len(ref):
+            print("  testfix: the same cells at another epoch budget; not "
+                  "comparable with the rows above.")
             print(f"  {'testfix':<9}{'model':<9}{'opt':<4}{'test_acc':>9}"
                   f"{'test_f1':>9}{'test_loss':>10}{'val_acc':>9}{'gap_acc':>9}")
-            for row in fix.itertuples():
+            for row in ref.itertuples():
                 print(f"  {f'({row.ran_epochs} ep)':<9}"
                       f"{row.model:<9}{row.optimizer:<4}"
                       f"{row.final_test_acc:>9.4f}{row.final_test_f1_macro:>9.4f}"
                       f"{row.final_test_loss:>10.3f}{'':>9}"
                       f"{row.final_gap_acc:>9.4f}")
 
-        # calib: budget / threshold / cost
         print(f"  {'calib':<9}{'model':<9}{'opt':<4}{'plateau@':>11}{'thr@':>11}"
               f"{'metric%':>9}{'time':>8}{'params':>8}")
         for row in sub.itertuples():
@@ -335,7 +314,6 @@ def print_report(runs: list[PilotRun]) -> None:
         if pending:
             print("  pending: " + ", ".join(f"{p.model}/{p.optimizer}" for p in pending))
 
-        # one-line roll-up: budget proposal | threshold window
         thr_pcts = [100 * f for f, c in zip(sub["threshold_frac"], sub["censored"])
                     if not c]
         censored = int(sub["censored"].sum())
