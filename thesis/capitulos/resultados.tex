@@ -389,5 +389,45 @@ Contra ese coste, la Tabla~\ref{tab:h2} no da nada que la clase gratuita no dé.
 
 \section{Concordancia con la literatura}
 \label{sec:res-concordancia}
-% Signo observado de cada relación frente al que predice su trabajo de origen (H6, obj. \ref{obj:concordancia}).
-% La interpretación de este contraste vive en Conclusiones (\ref{sec:concl-objetivos}); aquí solo el dato.
+% Fase G, escrita el 2026-09-04 (H6, obj. \ref{obj:concordancia}). Números de results/signos.parquet
+% (2026-09-04), regenerable con `uv run python src/contrast.py`; las predicciones son contrast.PREDICTED,
+% la tabla de signos del vault por variable. Sin figura: son recuentos. La interpretación vive en Conclusiones.
+
+Esta sección responde a la hipótesis H6 con la regla de la Sección~\ref{sec:protocolo-objetivos}. Para cada predicción que el artículo de una métrica enuncia, tal como las fija la Sección~\ref{sec:hipotesis}, se cuentan sobre las 24 celdas de la familia primaria las que muestran asociación con el signo predicho y las que la muestran con el contrario. La cuenta es a una cola porque el sentido está fijado de antemano, y el criterio de celda es el mismo intervalo de las secciones anteriores, así que una celda significa lo mismo en todo el capítulo. No se calcula nada nuevo: las cifras son las de la Tabla~\ref{tab:signos-h1} partidas por el signo que cada artículo afirma. Entran seis predicciones de cinco métricas: la \emph{stiffness} intra-clase y la \emph{gradient confusion} con la velocidad; la escala de ruido con la velocidad, donde coinciden la predicción de McCandlish et al. y la de la m-coherencia leída con el signo cambiado por la Ecuación~\ref{eq:gns-mcoh}, y con el \emph{gap}, donde solo habla la m-coherencia; GSNR con el \emph{gap}; y GWA con el \emph{accuracy} de test, con el signo convertido de la Sección~\ref{sec:def-alineacion}. Las cinco predicciones que esta memoria extrapola de un artículo a otra variable ocupan la segunda mitad de la Tabla~\ref{tab:h6}, fuera del veredicto. La tabla repite la cuenta dentro de cada arquitectura, porque la Sección~\ref{sec:res-familia} mostró que el signo cambia con ella.
+
+\begin{table}[ht]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3.5pt}
+\caption{H6 al 5\,\%: signo que predice cada artículo y celdas con asociación a favor y en contra de ese signo, sobre las 24 y dentro de cada arquitectura. Velocidad es \emph{epochs} hasta el umbral por hitos y \emph{gap} es el \emph{gap} de \emph{loss}; las dos filas de GNS recogen también la predicción de la m-coherencia con el signo cambiado. En negrita, las cuentas en contra que superan a las de a favor.}
+\label{tab:h6}
+\begin{tabular}{llllcccc}
+\toprule
+\textbf{Predictor} & \textbf{Variable} & \textbf{Base} & \textbf{Signo} & \textbf{Celdas} & \textbf{FC} & \textbf{CNN} & \textbf{ResNet-18} \\
+\midrule
+\multicolumn{8}{l}{\textbf{Predicciones que el artículo enuncia}} \\
+\emph{Stiffness} & Velocidad & Fort et al.~\cite{fort2019stiffness} & $-$ & 5/\textbf{9} & 1/2 & 0/4 & 4/3 \\
+\emph{Gradient confusion} & Velocidad & Sankararaman et al.~\cite{sankararaman2020impact} & $+$ & 5/4 & 4/0 & 0/3 & 1/1 \\
+GNS & Velocidad & McCandlish et al.~\cite{mccandlish2018empirical} & $+$ & 7/3 & 0/1 & 2/0 & 5/2 \\
+ & & y Chatterjee~\cite{chatterjee2020coherent} & & & & & \\
+GNS & \emph{Gap} & Chatterjee y Zielinski~\cite{chatterjee2020making} & $+$ & 5/\textbf{6} & 0/2 & 1/3 & 4/1 \\
+GSNR & \emph{Gap} & Liu et al.~\cite{liu2020understanding} & $-$ & 11/2 & 4/2 & 3/0 & 4/0 \\
+GWA & \emph{Accuracy} & Hölzl et al.~\cite{hoelzl2025gradient} & $-$ & 15/1 & 7/0 & 3/0 & 5/1 \\
+\addlinespace
+\multicolumn{8}{l}{\textbf{Predicciones que esta memoria extrapola, sin contrastar}} \\
+\emph{Gradient disparity} & Velocidad & del error de test & $+$ & 4/\textbf{9} & 2/5 & 0/4 & 2/0 \\
+GSNR & Velocidad & del \emph{gap} & $-$ & 7/6 & 1/0 & 0/5 & 6/1 \\
+GSNR & \emph{Accuracy} & del \emph{gap} & $+$ & 7/4 & 3/0 & 0/4 & 4/0 \\
+GWA & Velocidad & del \emph{accuracy} de test & $+$ & 16/1 & 7/0 & 4/0 & 5/1 \\
+GWA & \emph{Gap} & del \emph{accuracy} de test & $+$ & 6/4 & 0/0 & 0/4 & 6/0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Las dos predicciones sobre el desenlace final se cumplen. GWA con el \emph{accuracy} de test va en el sentido de su artículo en 15 celdas y en contra en una, la ResNet-18 sobre Tiny-ImageNet con SGD, y lo hace en las tres arquitecturas, con siete de ocho en la red \emph{fully connected}; GSNR con el \emph{gap} va a favor en 11 celdas y en contra en dos, las dos de la red \emph{fully connected} sobre CIFAR-10, también en las tres arquitecturas. Las tres predicciones sobre la velocidad apenas reciben apoyo. La escala de ruido va a favor en siete celdas y en contra en tres, las tres en MNIST, y la sostiene la ResNet-18 con cinco de las siete. La \emph{gradient confusion} da cinco celdas a favor y cuatro en contra, y las dos cuentas no se mezclan, porque las cuatro de la red \emph{fully connected} van con su artículo y las tres de la convolucional en contra. La \emph{stiffness} va en contra, nueve celdas frente a cinco: la convolucional la contradice en sus cuatro celdas con asociación y la ResNet-18 le da la razón en cuatro y se la quita en tres. La predicción de la m-coherencia sobre el \emph{gap}, leída sobre la escala de ruido, da cinco celdas a favor y seis en contra.
+
+Donde el signo contradice al artículo, la lectura que la Sección~\ref{sec:protocolo-objetivos} pide en primer lugar es la composición de dos curvas sobre el \emph{learning rate}, y la \emph{stiffness} la ilustra. Su artículo fijó el signo a lo largo del tiempo de entrenamiento, con la \emph{stiffness} cayendo hacia cero al entrar en el sobreajuste; aquí, dentro de la celda, la \emph{stiffness} de la ventana del 5\,\% ordena los entrenamientos al revés que el \emph{accuracy} de validación leído en esa misma ventana, con una D de mediana $-0{,}44$ según la Sección~\ref{sec:res-por-condicion}. El entrenamiento que más ha avanzado en la ventana tiene los gradientes de una misma clase menos alineados, y es el que cruza el umbral antes. Una \emph{stiffness} alta marca a un entrenamiento retrasado por su \emph{learning rate}, y eso no pone a prueba el mecanismo del artículo, que dos gradientes alineados se ayudan. La \emph{gradient confusion}, cuyo artículo fijó el signo a lo largo de la anchura y la profundidad de la red, cambia de bando entre la red plana y la convolucional, con cuentas de cuatro y de tres celdas. Del lado de los acuerdos vale el aviso contrario. GWA coincide con su artículo casi sin excepción, pero la Sección~\ref{sec:def-alineacion} la describe como un margen normalizado que el paso hacia delante casi regala, y la Sección~\ref{sec:res-incremental} midió que no supera al \emph{accuracy} de validación; la concordancia es la de un sustituto del \emph{accuracy} de validación con el \emph{accuracy} de test, y confirma al artículo en lo que el artículo mide, sin añadir una prueba independiente sobre los gradientes.
+
+De las extrapoladas, GWA con la velocidad va en el sentido extrapolado en 16 celdas y en contra en una, la misma ResNet-18 sobre Tiny-ImageNet, y es la lectura en velocidad de esa misma relación con la validación. GWA con el \emph{gap} se parte por arquitectura, seis celdas a cero en la ResNet-18 en el sentido extrapolado y cero a cuatro en la convolucional, como recogió la Sección~\ref{sec:res-familia}. GSNR con la velocidad da siete celdas contra seis, con la convolucional en contra en cinco y la ResNet-18 a favor en seis, y con el \emph{accuracy} de test siete contra cuatro. La \emph{gradient disparity} con la velocidad va en contra de la extrapolación, cuatro celdas frente a nueve. Dos relaciones que los artículos sugieren y que no se registraron como predicción se reportan solo como observación. El artículo de la \emph{gradient disparity} afirma, sin coeficiente, una correlación positiva con el error de test, y aquí la disparidad muestra asociación positiva con el \emph{accuracy} de test en 12 celdas y negativa en cuatro, el sentido contrario; la \emph{stiffness}, cuyo artículo la presenta como una perspectiva sobre la generalización, muestra asociación negativa con el \emph{gap} en 15 celdas y positiva en una, el sentido que ese título sugiere. Ninguna de las dos entra en el veredicto, porque una predicción registrada después de ver el signo no contrasta nada.
+
+H6 no se refuta. Donde hay asociación, los sentidos observados no contradicen de forma sistemática a los predichos: las dos predicciones sobre el desenlace final, GWA con el \emph{accuracy} de test y GSNR con el \emph{gap}, se cumplen en las tres arquitecturas; las tres sobre la velocidad no reciben apoyo, con entre cinco y siete celdas a favor de 24; y la única que va en contra, la \emph{stiffness}, lo hace con la forma que la composición de curvas anticipa. El reparto tiene lógica. Una métrica leída al 5\,\% es una foto del estado del entrenamiento en ese momento, y ese estado anticipa dónde acaba el entrenamiento, como lo anticipa el \emph{accuracy} de validación; la velocidad es cuánto queda por recorrer, y ahí la foto se confunde con el \emph{learning rate}. Lo que H6 sostiene es por tanto más estrecho que su enunciado: los signos de los artículos se reproducen en las variables que hablan del desenlace, mientras que en las de velocidad quedan sin apoyo, y reproducirlos no convierte a ninguna métrica en una señal que la validación no dé, según decidió la Sección~\ref{sec:res-incremental}.
