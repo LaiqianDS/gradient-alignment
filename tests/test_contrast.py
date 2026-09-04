@@ -177,6 +177,26 @@ def test_the_optimizer_table_counts_agreements_inversions_and_differences():
     assert out["median_diff"] == pytest.approx(0.5)
 
 
+def test_the_concordance_table_splits_the_sure_cells_by_the_predicted_sign():
+    predicted = pd.DataFrame([("x", "y", -1, "paper")],
+                             columns=["predictor", "vd", "sign", "base"])
+    # four cells: two sure with the predicted sign, one sure against it, one over zero
+    given = [("a", "cnn", -0.5), ("b", "cnn", -0.4), ("c", "fc", 0.5), ("d", "fc", -0.1)]
+    rows = [{"dataset": ds, "model": m, "optimizer": "sgd", "window": 0.05, "vd": "y",
+             "predictor": "x", "D": d, "se": 0.1} for ds, m, d in given]
+    out = C.concordance_table(pd.DataFrame(rows), predicted).iloc[0]
+    assert (out["n_cells"], out["n_for"], out["n_against"]) == (4, 2, 1)
+    assert out["median_abs"] == pytest.approx(0.45)
+    by = C.concordance_table(pd.DataFrame(rows), predicted, by=("model",)).set_index("model")
+    assert by.loc["cnn", "n_for"] == 2 and by.loc["fc", "n_against"] == 1
+
+
+def test_the_predicted_signs_agree_with_the_good_ends():
+    less_is_better = {"epochs_to_threshold", "final_gap_loss"}
+    for p in C.PREDICTED.itertuples():
+        assert p.sign == (-1 if p.vd in less_is_better else 1) * C.GOOD_END[p.predictor]
+
+
 def test_the_incremental_table_counts_wins_intervals_and_redundancy():
     cells = [("d", m, "sgd") for m in ("a", "b", "c", "d")]
     rows = []

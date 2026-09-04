@@ -97,6 +97,25 @@ GOOD_END = {
     "gwa/value": -1,
 }
 
+# The sign each paper predicts for the D between its metric and a dependent
+# variable, from the same sign table: ``paper`` where the article states it
+# (GWA converted to raw gradients; the m-coherence read on the noise scale
+# with its sign turned) and ``extrapolated`` where this work carries the
+# claim to another variable and reports it without a contrast.
+PREDICTED = pd.DataFrame([
+    ("stiffness/cos_within", "epochs_to_threshold", -1, "paper"),
+    ("confusion/eta", "epochs_to_threshold", +1, "paper"),
+    ("noise_scale/simple", "epochs_to_threshold", +1, "paper"),
+    ("noise_scale/simple", "final_gap_loss", +1, "paper"),
+    ("gsnr/mean", "final_gap_loss", -1, "paper"),
+    ("gwa/value", "final_test_acc", -1, "paper"),
+    ("gd/scalar", "epochs_to_threshold", +1, "extrapolated"),
+    ("gsnr/mean", "epochs_to_threshold", -1, "extrapolated"),
+    ("gsnr/mean", "final_test_acc", +1, "extrapolated"),
+    ("gwa/value", "epochs_to_threshold", +1, "extrapolated"),
+    ("gwa/value", "final_gap_loss", +1, "extrapolated"),
+], columns=["predictor", "vd", "sign", "base"])
+
 _AHEAD = {
     "epochs_to_threshold": "vd1_pairs_ahead",
     "val_loss_auc": "vd2_area_ahead",
@@ -351,6 +370,27 @@ def optimizer_table(table: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows).set_index(["vd", "predictor"])
 
 
+def concordance_table(
+    table: pd.DataFrame,
+    predicted: pd.DataFrame = PREDICTED,
+    by: Iterable[str] = (),
+) -> pd.DataFrame:
+    """Per predicted sign, and per ``by`` on top, the H6 reading: the cells
+    whose interval leaves zero out with the predicted sign (``n_for``) and
+    with the opposite one (``n_against``), and the median |D|. One-sided
+    because the sign is given; the cell criterion is the one every other
+    table uses."""
+    t = predicted.merge(table, on=["predictor", "vd"])
+    hit = np.sign(t["D"]) * t["sign"]
+    sure = excludes_zero(t["D"], t["se"])
+    t = t.assign(for_=sure & (hit > 0), against=sure & (hit < 0), abs_=t["D"].abs())
+    return (t.groupby(["predictor", "vd", *by], sort=False)
+            .agg(sign=("sign", "first"), base=("base", "first"), n_cells=("D", "size"),
+                 n_for=("for_", "sum"), n_against=("against", "sum"),
+                 median_abs=("abs_", "median"))
+            .reset_index())
+
+
 def incremental_table(
     table: pd.DataFrame,
     regret: pd.DataFrame | None = None,
@@ -585,6 +625,13 @@ def _main(report_dir: str | Path = REPORTS_DIR, out_dir: Path = RESULTS_DIR) -> 
     print("\n== H5, primary family at the early window: the pairs of cells that differ "
           "only in the optimizer ==")
     print(pairs.round(3).to_string())
+
+    signs = pd.concat([concordance_table(primary).assign(model="all"),
+                       concordance_table(primary, by=("model",))], ignore_index=True)
+    signs.to_parquet(out_dir / "signos.parquet", index=False)
+    print("\n== H6, primary family at the early window: cells with the interval off zero "
+          "for and against the sign each paper predicts ==")
+    print(signs[signs["model"] == "all"].round(3).to_string(index=False))
 
     windows = window_table(report_dir, learned)
     windows.to_parquet(out_dir / "ventanas.parquet", index=False)
