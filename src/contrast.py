@@ -109,6 +109,7 @@ PREDICTED = pd.DataFrame([
     ("noise_scale/simple", "final_gap_loss", +1, "paper"),
     ("gsnr/mean", "final_gap_loss", -1, "paper"),
     ("gwa/value", "final_test_acc", -1, "paper"),
+    ("gd/scalar", "final_test_acc", -1, "paper"),
     ("gd/scalar", "epochs_to_threshold", +1, "extrapolated"),
     ("gsnr/mean", "epochs_to_threshold", -1, "extrapolated"),
     ("gsnr/mean", "final_test_acc", +1, "extrapolated"),
