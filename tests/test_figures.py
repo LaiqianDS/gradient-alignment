@@ -89,6 +89,33 @@ def test_the_val_test_figure_builds_and_writes_a_pdf(tmp_path):
     assert path.exists() and path.suffix == ".pdf"
 
 
+def test_the_selection_bars_build_and_write_a_pdf(tmp_path):
+    import pandas as pd
+
+    rows = [{"dataset": d, "model": "cnn", "optimizer": "sgd", "predictor": p,
+             "regret": r, "regret_random": 0.05}
+            for d in ("mnist", "cifar10")
+            for p, r in (("val_acc", 0.01), ("gwa/value", 0.02), ("gsnr/mean", 0.03))]
+    path = tmp_path / "seleccion.parquet"
+    pd.DataFrame(rows).to_parquet(path, index=False)
+    out = figures.selection_bars(path, tmp_path / "img")
+    assert out.exists() and out.suffix == ".pdf"
+
+
+def test_the_window_curves_build_and_write_a_pdf(tmp_path):
+    import pandas as pd
+
+    rows = [{"dataset": "mnist", "model": "cnn", "optimizer": "sgd", "window": w,
+             "predictor": p, "vd": vd, "D": 0.3, "D_land": 0.2}
+            for w in (0.05, 0.10, 0.25, 0.5, 1.0)
+            for p in ("val_acc", "gwa/value", "gsnr/mean", "log_lr")
+            for vd in ("epochs_to_threshold", "final_test_acc", "final_gap_loss")]
+    path = tmp_path / "tabla_larga.parquet"
+    pd.DataFrame(rows).to_parquet(path, index=False)
+    out = figures.window_curves(path, tmp_path / "img")
+    assert out.exists() and out.suffix == ".pdf"
+
+
 def test_every_axis_value_has_a_label():
     from config import DATASETS, MODELS, OPTIMIZERS
 

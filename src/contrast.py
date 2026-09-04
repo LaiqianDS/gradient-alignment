@@ -18,9 +18,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from analysis import REPORTS_DIR, ROOT, headline_columns, load_summaries, load_windows
+from analysis import REPORTS_DIR, ROOT, SPECS, headline_columns, load_summaries, load_windows
 from config import THRESHOLD_ACC
 from efficiency import (
+    PRUNE_D,
+    d_diff_stats,
     EARLY_WINDOW,
     SHAPE_MIN_RUNS,
     VD_FIELDS,
@@ -40,11 +42,27 @@ PRUNED = ("mcoh/global", "var/normalized")
 # bounds every monotone reading of the rate.
 LOG_LR = "log_lr"
 
+# The family each predictor is read under: the two gradient families, and
+# "free" for every column the training produces without a gradient.
+FREE_FAMILIES = ("baseline", "monitor")
+FAMILY = {spec.key: ("free" if spec.family in FREE_FAMILIES else spec.family)
+          for spec in SPECS}
+FAMILY[LOG_LR] = "free"
+
 PRIMARY_VDS = ("epochs_to_threshold", "final_test_acc", "final_gap_loss")
 
 GAP_VDS = ("final_gap_loss", "final_gap_acc")
 
 SPEED_VD = "epochs_to_threshold"
+
+# The window H4 compares the early one with, and the later of the two
+# windows that still predict speed.
+LATE_WINDOW = 0.5
+SPEED_LATE_WINDOW = 0.10
+
+# The variables measured at the end of a run: the ones a later window can
+# still predict.
+END_VDS = ("final_test_acc", "final_gap_loss", "final_gap_acc")
 
 # The free predictor each variable is compared with under H2, named before
 # any coefficient: the validation curve read at the window.
@@ -59,6 +77,10 @@ REFERENCE = {
 
 # |D| beyond this many standard errors excludes zero (normal, 95 %).
 Z = 1.96
+
+# |D_ref| from which a predictor is its reference under another name: the
+# pruning rule's threshold, nine pairs in ten ordered the same way.
+REDUNDANT_D = PRUNE_D
 
 # The end of each predictor its source calls good, for the selection reading:
 # +1 picks the largest value and -1 the smallest. From the sign table of the
@@ -151,7 +173,9 @@ def long_table(
     ``se_land`` read only the runs still to cross when the window closes, and
     for the three speed variables ``ahead`` is the share of the outcome still
     ahead then, from :func:`efficiency.window_overlap`; all of them are NaN
-    elsewhere. The predictors are the headline columns plus :data:`LOG_LR`.
+    elsewhere. ``D_diff`` is |D| of the predictor minus |D| of the reference
+    over the same runs, with its jackknife error ``se_diff``; ``D_diff_land``
+    and ``se_diff_land`` are the same among the runs at risk. The predictors are the headline columns plus :data:`LOG_LR`.
     ``epoch`` is 1-indexed. ``runs`` restricts the population; the default is
     every run under ``report_dir``.
     """
@@ -177,36 +201,46 @@ def long_table(
                 d, n_pairs, se = d_stats(h[pred], h[vd], _event(h, vd))
                 d_gran, n_pairs_gran, se_gran, n_lr = _granulated(h, pred, vd, min_runs)
                 ref = REFERENCE[vd]
+                against = ref in h.columns and pred != ref
+                d_diff, se_diff = (d_diff_stats(h[pred], h[ref], h[vd], _event(h, vd))
+                                   if against else (np.nan, np.nan))
                 row = {
                     "dataset": dset, "model": model, "optimizer": opt, "window": w,
                     "epoch": epoch, "predictor": pred, "vd": vd,
                     "n": len(h), "n_pairs": n_pairs, "D": d, "se": se,
-                    "D_ref": (d_stats(h[pred], h[ref])[0]
-                              if ref in h.columns and pred != ref else np.nan),
+                    "D_ref": d_stats(h[pred], h[ref])[0] if against else np.nan,
+                    "D_diff": d_diff, "se_diff": se_diff,
                     "D_gran": d_gran, "n_pairs_gran": n_pairs_gran, "se_gran": se_gran,
                     "n_lr": n_lr,
                     "ahead": (float(ahead.loc[key, _AHEAD[vd]])
                               if vd in _AHEAD and key in ahead.index else np.nan),
                     "D_land": np.nan, "n_land": np.nan, "n_pairs_land": np.nan,
-                    "se_land": np.nan,
+                    "se_land": np.nan, "D_diff_land": np.nan, "se_diff_land": np.nan,
                 }
                 if vd == SPEED_VD:
                     r = _at_risk(h, epoch)
                     d_land, n_pairs_land, se_land = d_stats(r[pred], r[vd], r["crossed"])
                     row.update(D_land=d_land, n_land=len(r), n_pairs_land=n_pairs_land,
                                se_land=se_land)
+                    if against:
+                        row["D_diff_land"], row["se_diff_land"] = d_diff_stats(
+                            r[pred], r[ref], r[vd], r["crossed"])
                 rows.append(row)
     return pd.DataFrame(rows)
 
 
-def primary_family(table: pd.DataFrame) -> pd.DataFrame:
+def primary_family(
+    table: pd.DataFrame,
+    window: float | None = EARLY_WINDOW,
+) -> pd.DataFrame:
     """The rows every objective tests first: the early window, one dependent
     variable per construct, and the predictors that survived the pruning. The
-    speed variable takes its landmark reading, so its ``D``, ``se``, ``n`` and
-    ``n_pairs`` are those among the runs still to cross when the window
-    closed; ``reading`` says which reading each row carries."""
+    speed variable takes its landmark reading, so its ``D``, ``se``, ``n``,
+    ``n_pairs``, ``D_diff`` and ``se_diff`` are those among the runs still to
+    cross when the window closed; ``reading`` says which reading each row
+    carries. ``window=None`` keeps every window."""
     keep = (
-        (table["window"] == EARLY_WINDOW)
+        ((table["window"] == window) if window is not None else table["window"].notna())
         & table["vd"].isin(PRIMARY_VDS)
         & ~table["predictor"].isin(PRUNED)
     )
@@ -214,7 +248,7 @@ def primary_family(table: pd.DataFrame) -> pd.DataFrame:
     fam[["n", "n_pairs"]] = fam[["n", "n_pairs"]].astype(float)
     speed = fam["vd"] == SPEED_VD
     fam["reading"] = np.where(speed, "landmark", "all")
-    for col in ("D", "se", "n", "n_pairs"):
+    for col in ("D", "se", "n", "n_pairs", "D_diff", "se_diff"):
         fam.loc[speed, col] = fam.loc[speed, f"{col}_land"]
     return fam
 
@@ -249,6 +283,202 @@ def sign_counts(
             "median": float(d.median()) if d.notna().any() else np.nan,
         })
     return pd.DataFrame(rows).set_index(keys)
+
+
+def ranking_table(
+    table: pd.DataFrame,
+    by: Iterable[str] = (),
+) -> pd.DataFrame:
+    """Per dependent variable, and per ``by`` on top, the H3 ranking. A
+    predictor's majority sign is the sign of more of its cells, the median D
+    deciding a tie; ``n_major`` counts the cells whose interval leaves zero
+    out with that sign and ``n_other`` those with the opposite one. Rows are
+    ordered by ``n_major`` and then by the median |D|, and ``rank`` numbers
+    the gradient metrics in that order; a free predictor keeps its row and
+    no rank.
+    """
+    keys = ["vd", *by]
+    rows = []
+    for k, s in table.groupby([*keys, "predictor"], sort=False):
+        d, sure = s["D"], excludes_zero(s["D"], s["se"])
+        n_pos, n_neg = int((d > 0).sum()), int((d < 0).sum())
+        sign = 1.0 if n_pos > n_neg else -1.0 if n_neg > n_pos else float(np.sign(d.median()))
+        rows.append({
+            **dict(zip(keys, k[:-1])), "predictor": k[-1],
+            "family": FAMILY.get(k[-1], "free"), "sign": sign,
+            "n_major": int(((np.sign(d) == sign) & sure).sum()),
+            "n_other": int(((np.sign(d) == -sign) & sure).sum()),
+            "median_abs": float(d.abs().median()),
+        })
+    parts = []
+    for _, g in pd.DataFrame(rows).groupby(keys, sort=False):
+        g = g.sort_values(["n_major", "median_abs"], ascending=False, kind="stable")
+        metric = g["family"] != "free"
+        g["rank"] = np.where(metric, metric.cumsum(), np.nan)
+        parts.append(g)
+    return pd.concat(parts, ignore_index=True)
+
+
+# The two arms of every pair of cells that differ only in the optimizer, in
+# the order the H5 difference subtracts them.
+ARMS = ("sgd", "adam")
+
+
+def optimizer_table(table: pd.DataFrame) -> pd.DataFrame:
+    """Per dependent variable and predictor, the H5 reading over the pairs of
+    cells that differ only in the optimizer: the pairs whose two D leave zero
+    out and share the sign (``n_agree``) or oppose it (``n_invert``), the
+    pairs whose difference D with SGD minus D with Adam leaves zero out by
+    the interval that adds the two variances (``n_diff_ci``), and the median
+    |D| of each arm. A pair with either D over zero counts for neither side.
+    """
+    rows = []
+    for (vd, pred), s in table.groupby(["vd", "predictor"], sort=False):
+        w = s.pivot(index=["dataset", "model"], columns="optimizer", values=["D", "se"])
+        d_s, d_a = w[("D", ARMS[0])], w[("D", ARMS[1])]
+        se_s, se_a = w[("se", ARMS[0])], w[("se", ARMS[1])]
+        sure = excludes_zero(d_s, se_s) & excludes_zero(d_a, se_a)
+        diff = d_s - d_a
+        rows.append({
+            "vd": vd, "predictor": pred, "n_pairs": int(diff.notna().sum()),
+            "n_agree": int((sure & (np.sign(d_s) == np.sign(d_a))).sum()),
+            "n_invert": int((sure & (np.sign(d_s) != np.sign(d_a))).sum()),
+            "n_diff_ci": int(excludes_zero(diff, np.sqrt(se_s ** 2 + se_a ** 2)).sum()),
+            "median_abs_sgd": float(d_s.abs().median()),
+            "median_abs_adam": float(d_a.abs().median()),
+            "median_diff": float(diff.median()),
+        })
+    return pd.DataFrame(rows).set_index(["vd", "predictor"])
+
+
+def incremental_table(
+    table: pd.DataFrame,
+    regret: pd.DataFrame | None = None,
+) -> pd.DataFrame:
+    """Per window, dependent variable and predictor: the H2 reading against
+    the variable's :data:`REFERENCE`. ``n_win`` and ``n_lose`` count the
+    cells where |D| of the predictor is above and below |D| of the reference;
+    ``n_win_ci`` and ``n_lose_ci`` those where the jackknife interval of the
+    difference leaves zero out; ``median_abs_dref`` and ``n_redundant`` read
+    ``D_ref`` against :data:`REDUNDANT_D`. With ``regret`` (the output of
+    :func:`selection_regret`), ``regret_median`` and ``n_beats_val`` join the
+    selection reading: the median loss over cells and how many cells lose
+    less with the predictor than with the validation accuracy. The reference
+    itself is left out of each variable.
+    """
+    keys = ["window", "vd", "predictor"]
+    rows = []
+    for (w, vd, pred), s in table.groupby(keys, sort=False):
+        if pred == REFERENCE[vd]:
+            continue
+        diff, sure = s["D_diff"], excludes_zero(s["D_diff"], s["se_diff"])
+        dref = s["D_ref"].abs()
+        row = {
+            "window": w, "vd": vd, "predictor": pred,
+            "n_cells": int(diff.notna().sum()),
+            "n_win": int((diff > 0).sum()), "n_lose": int((diff < 0).sum()),
+            "n_win_ci": int(((diff > 0) & sure).sum()),
+            "n_lose_ci": int(((diff < 0) & sure).sum()),
+            "median_abs_dref": float(dref.median()) if dref.notna().any() else np.nan,
+            "n_redundant": int((dref >= REDUNDANT_D).sum()),
+        }
+        if regret is not None and vd == "final_test_acc" and w == EARLY_WINDOW:
+            r = regret.set_index([*_CELL, "predictor"])["regret"]
+            own = r.xs(pred, level="predictor") if pred in r.index.get_level_values("predictor") else None
+            if own is not None:
+                val = r.xs(REFERENCE[vd], level="predictor").reindex(own.index)
+                row["regret_median"] = float(own.median())
+                row["n_beats_val"] = int((own < val).sum())
+        rows.append(row)
+    return pd.DataFrame(rows).set_index(keys)
+
+
+def window_table(
+    report_dir: str | Path = REPORTS_DIR,
+    runs: Iterable[str] | None = None,
+    early: float = EARLY_WINDOW,
+    late: float = LATE_WINDOW,
+    speed_late: float = SPEED_LATE_WINDOW,
+) -> pd.DataFrame:
+    """One row per cell, predictor and dependent variable: |D| at ``late``
+    minus |D| at ``early`` over the same runs, with the paired jackknife
+    error, for the variables measured at the end of a run. For the speed
+    variable the two readings are the landmark ones at ``early`` and
+    ``speed_late``, on different runs at risk, so the error sums the two
+    variances; ``n_early`` and ``n_late`` are those at risk. ``runs``
+    restricts the population.
+    """
+    out = outcomes(report_dir)
+    win = load_windows(report_dir)
+    if runs is not None:
+        runs = set(runs)
+        out = out[out.index.isin(runs)]
+        win = win[win["run_name"].isin(runs)]
+    preds = [k for k in headline_columns() if k in win.columns]
+
+    def at(w: float) -> pd.DataFrame:
+        s = win[win["window"] == w].set_index("run_name")
+        return s[["epoch", *preds]]
+
+    e, l, sl = at(early), at(late), at(speed_late)
+    rows = []
+    for (dset, model, opt), g in out.groupby(_CELL, sort=False):
+        ge, gl, gs = e.reindex(g.index), l.reindex(g.index), sl.reindex(g.index)
+        epoch_e, epoch_s = int(ge["epoch"].iloc[0]) + 1, int(gs["epoch"].iloc[0]) + 1
+        for pred in preds:
+            for vd in (*END_VDS, SPEED_VD):
+                h = g[g["gap_ok"]] if vd in GAP_VDS else g
+                base = {"dataset": dset, "model": model, "optimizer": opt,
+                        "predictor": pred, "vd": vd}
+                if vd == SPEED_VD:
+                    h = h[h[vd].notna() | ~h["crossed"]]
+                    he = _at_risk(h[ge.loc[h.index, pred].notna()], epoch_e)
+                    hl = _at_risk(h[gs.loc[h.index, pred].notna()], epoch_s)
+                    d_e, _, se_e = d_stats(ge.loc[he.index, pred], he[vd], he["crossed"])
+                    d_l, _, se_l = d_stats(gs.loc[hl.index, pred], hl[vd], hl["crossed"])
+                    rows.append({**base, "reading": "landmark", "window_late": speed_late,
+                                 "D_early": d_e, "D_late": d_l,
+                                 "D_diff_w": abs(d_l) - abs(d_e),
+                                 "se_diff_w": float(np.sqrt(se_e ** 2 + se_l ** 2)),
+                                 "n_early": len(he), "n_late": len(hl)})
+                    continue
+                h = h[h[vd].notna()]
+                x_e, x_l = ge.loc[h.index, pred], gl.loc[h.index, pred]
+                both = x_e.notna() & x_l.notna()
+                d_e = d_stats(x_e[both], h[vd][both])[0]
+                d_l = d_stats(x_l[both], h[vd][both])[0]
+                diff, se = d_diff_stats(x_l[both], x_e[both], h[vd][both])
+                rows.append({**base, "reading": "paired", "window_late": late,
+                             "D_early": d_e, "D_late": d_l, "D_diff_w": diff,
+                             "se_diff_w": se, "n_early": int(both.sum()),
+                             "n_late": int(both.sum())})
+    return pd.DataFrame(rows)
+
+
+def window_counts(table: pd.DataFrame) -> pd.DataFrame:
+    """Per dependent variable and predictor of a :func:`window_table`: how
+    many cells grow and shrink in |D| from the early window to the late one,
+    how many of each with the interval of the difference off zero, and the
+    median |D| at the two windows."""
+    rows = []
+    for (vd, pred), s in table.groupby(["vd", "predictor"], sort=False):
+        diff, sure = s["D_diff_w"], excludes_zero(s["D_diff_w"], s["se_diff_w"])
+        rows.append({
+            "vd": vd, "predictor": pred, "n_cells": int(diff.notna().sum()),
+            "n_grow": int((diff > 0).sum()), "n_shrink": int((diff < 0).sum()),
+            "n_grow_ci": int(((diff > 0) & sure).sum()),
+            "n_shrink_ci": int(((diff < 0) & sure).sum()),
+            "median_abs_early": float(s["D_early"].abs().median()),
+            "median_abs_late": float(s["D_late"].abs().median()),
+        })
+    return pd.DataFrame(rows).set_index(["vd", "predictor"])
+
+
+def flipped_ends(ends: dict[str, int] = GOOD_END) -> dict[str, int]:
+    """The good ends with every gradient metric reversed; the free predictors
+    keep theirs. An exploratory reading: the sign the papers give, turned."""
+    free = set(REFERENCE.values()) | {"tse/ema_0_999"}
+    return {k: (v if k in free else -v) for k, v in ends.items()}
 
 
 def selection_regret(
@@ -321,12 +551,48 @@ def _main(report_dir: str | Path = REPORTS_DIR, out_dir: Path = RESULTS_DIR) -> 
         print(sign_counts(primary, column).droplevel("window").round(3).to_string())
 
     regret = selection_regret(report_dir, learned)
+    flipped = selection_regret(report_dir, learned, ends=flipped_ends())
+    regret = regret.merge(
+        flipped[[*_CELL, "predictor", "regret"]].rename(columns={"regret": "regret_flipped"}),
+        on=[*_CELL, "predictor"], how="left")
     regret.to_parquet(out_dir / "seleccion.parquet", index=False)
     print("\n== selection at the early window: test accuracy lost per cell, "
-          "median over cells ==")
+          "median over cells; flipped = the papers' sign reversed ==")
     print(regret.groupby("predictor", sort=False)
-          .agg(regret=("regret", "median"), random=("regret_random", "median"),
-               n_cells=("regret", "size")).round(4).to_string())
+          .agg(regret=("regret", "median"), flipped=("regret_flipped", "median"),
+               random=("regret_random", "median"), n_cells=("regret", "size"))
+          .round(4).to_string())
+
+    inc = incremental_table(primary_family(tables["tabla_larga"], window=None), regret)
+    inc.reset_index().to_parquet(out_dir / "incremental.parquet", index=False)
+    print("\n== H2, primary family at the early window: the predictor against its reference ==")
+    print(inc.xs(EARLY_WINDOW, level="window").round(3).to_string())
+
+    ranking = ranking_table(primary)
+    ranking.to_parquet(out_dir / "ranking.parquet", index=False)
+    print("\n== H3, primary family at the early window: cells with the majority sign "
+          "and the interval off zero, then the median |D| ==")
+    print(ranking.round(3).to_string(index=False))
+    groups = pd.concat(
+        [ranking_table(primary, by=(level,)).rename(columns={level: "group"}).assign(level=level)
+         for level in ("dataset", "model")], ignore_index=True)
+    groups.to_parquet(out_dir / "ranking_grupos.parquet", index=False)
+    print("\n== H3 by dataset and by architecture: the first gradient metric of each group ==")
+    print(groups[groups["rank"] == 1].round(3).to_string(index=False))
+
+    pairs = optimizer_table(primary)
+    pairs.reset_index().to_parquet(out_dir / "optimizadores.parquet", index=False)
+    print("\n== H5, primary family at the early window: the pairs of cells that differ "
+          "only in the optimizer ==")
+    print(pairs.round(3).to_string())
+
+    windows = window_table(report_dir, learned)
+    windows.to_parquet(out_dir / "ventanas.parquet", index=False)
+    counts = window_counts(windows[~windows["predictor"].isin(PRUNED)])
+    counts.reset_index().to_parquet(out_dir / "ventanas_recuento.parquet", index=False)
+    print("\n== H4: |D| at the late window minus |D| at the early one, cells that grow "
+          "and shrink ==")
+    print(counts.round(3).to_string())
 
 
 if __name__ == "__main__":

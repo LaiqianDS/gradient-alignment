@@ -632,6 +632,19 @@ def test_d_stats_gives_the_jackknife_error_of_the_coefficient():
     assert pd.isna(d) and n == 0
 
 
+def test_d_diff_stats_jackknifes_the_paired_difference_of_two_absolute_ds():
+    # a perfect predictor against a reference that swaps the middle pair
+    diff, se = E.d_diff_stats((1, 2, 3, 4), (1, 3, 2, 4), (1, 2, 3, 4))
+    assert diff == pytest.approx(1 - 4 / 6)
+    assert se == pytest.approx((1 / 3) ** 0.5)  # replicates 2/3, 0, 0, 2/3
+    # sign does not matter, only how much of the order each one gets right
+    assert E.d_diff_stats((1, 2, 3, 4), (4, 3, 2, 1), (1, 2, 3, 4)) == (0.0, 0.0)
+    # a run missing on the reference side leaves both sides
+    diff, _ = E.d_diff_stats((1, 2, 3, 4), (1, 3, 2, NAN), (1, 2, 3, 4))
+    assert diff == pytest.approx(1 - 1 / 3)
+    assert all(pd.isna(v) for v in E.d_diff_stats((1, 2), (1, 2), (1, 1)))
+
+
 def test_d_stats_with_strata_reads_only_the_pairs_within_one_stratum():
     # within each stratum the order agrees; across them it reverses
     x, y, z = (1, 2, 10, 11), (1, 2, -1, 0), ("a", "a", "b", "b")

@@ -38,7 +38,17 @@ from config import (
     SEEDS,
     THRESHOLD_ACC,
 )
-from contrast import LOG_LR, PRIMARY_VDS, RESULTS_DIR, excludes_zero, primary_family
+from contrast import (
+    FAMILY,
+    FREE_FAMILIES,
+    LOG_LR,
+    PRIMARY_VDS,
+    PRUNED,
+    RESULTS_DIR,
+    SPEED_LATE_WINDOW,
+    excludes_zero,
+    primary_family,
+)
 from efficiency import (
     crossing_by_lr,
     crossing_epochs,
@@ -190,9 +200,6 @@ def lr_window(
 EXAMPLE_CELL = ("mnist", "cnn", "sgd")
 EXAMPLE_KEY = "gd/scalar"
 EXAMPLE_WINDOW = 0.05
-
-# Columns that cost nothing to compute: no gradient is differentiated for them.
-FREE_FAMILIES = ("baseline", "monitor")
 
 # The name each logged column carries in the body text.
 COLUMN_LABELS = {
@@ -680,6 +687,111 @@ def sign_strip(
     return figstyle.save(fig, "signos-h1", out_dir)
 
 
+def selection_bars(
+    table_path: Path = RESULTS_DIR / "seleccion.parquet",
+    out_dir: Path = figstyle.IMG_DIR,
+) -> Path:
+    """Per predictor, the median over cells of the test accuracy lost by
+    picking the learning rate with it at the early window, the cells on top
+    and a random pick as the rule."""
+    table = pd.read_parquet(table_path)
+    order = (table.groupby("predictor", sort=False)["regret"].median()
+             .sort_values(ascending=False))
+    rng = np.random.default_rng(0)
+    fig, ax = figstyle.figure(width="full", ratio=0.46)
+    ax.barh(range(len(order)), order, height=0.66,
+            color=[FAMILY_COLOURS[FAMILY[k]][0] for k in order.index], zorder=2)
+    for i, key in enumerate(order.index):
+        cells = table.loc[table["predictor"] == key, "regret"]
+        ax.plot(cells, i + rng.uniform(-0.2, 0.2, len(cells)), "o", ms=2.6,
+                ls="none", color=figstyle.INK, mec="white", mew=0.4, zorder=3)
+        ax.text(max(order[key], cells.max()) + 0.005, i, _dec(order[key], 3),
+                va="center", fontsize=7.5, color=figstyle.INK)
+    random = float(table["regret_random"].median())
+    ax.axvline(random, ls="--", lw=1.0, color=figstyle.RULE, zorder=1)
+    ax.text(random + 0.004, len(order) - 0.45, f"al azar {_dec(random, 3)}",
+            fontsize=7.5, color=figstyle.RULE, va="center")
+    seen = dict.fromkeys(FAMILY[k] for k in order.index)
+    fig.legend(
+        handles=[Patch(facecolor=FAMILY_COLOURS[f][0], label=FAMILY_COLOURS[f][1])
+                 for f in seen]
+        + [Line2D([], [], marker="o", ls="none", ms=3, color=figstyle.INK,
+                  label=f"celda, {int(table.groupby('predictor').size().max())} por barra")],
+        loc="outside lower center", ncol=4, fontsize=7.5, handlelength=1.1,
+        handletextpad=0.5, columnspacing=1.4, frameon=False,
+    )
+    ax.set_yticks(range(len(order)))
+    ax.set_yticklabels([COLUMN_LABELS[k] for k in order.index], fontsize=7.5)
+    ax.set_ylim(-0.6, len(order) - 0.2)
+    figstyle.include_zero(ax, axis="x")
+    ticks = ax.get_xticks()
+    ax.set_xticks(ticks)
+    ax.set_xticklabels([_dec(t, 2) for t in ticks], fontsize=7)
+    ax.set_xlabel("accuracy de test perdido al elegir el learning rate, ventana 5 %",
+                  fontsize=figstyle.BODY_PT - 1)
+    ax.tick_params(axis="y", length=0)
+    ax.tick_params(axis="x", length=2, width=0.6, color="#666666")
+    return figstyle.save(fig, "seleccion", out_dir)
+
+
+_MARKERS = ("o", "s", "^", "D")
+
+
+def window_curves(
+    table_path: Path = RESULTS_DIR / "tabla_larga.parquet",
+    out_dir: Path = figstyle.IMG_DIR,
+) -> Path:
+    """Per predictor, the median over cells of |D| at each early window: the
+    three primary variables, the speed one by its landmark reading over the
+    two windows that still predict it."""
+    table = pd.read_parquet(table_path)
+    table = table[(table["window"] < 1.0) & ~table["predictor"].isin(PRUNED)
+                  & table["vd"].isin(PRIMARY_VDS)].copy()
+    speed = table["vd"] == "epochs_to_threshold"
+    table.loc[speed, "D"] = table.loc[speed, "D_land"]
+    table = table[~speed | (table["window"] <= SPEED_LATE_WINDOW)]
+    table["abs"] = table["D"].abs()
+    med = table.groupby(["vd", "predictor", "window"])["abs"].median()
+
+    fig, axes = figstyle.figure(width="full", ratio=0.42, ncols=3)
+    for ax, vd in zip(axes, PRIMARY_VDS):
+        by_family: dict[str, int] = {}
+        m = med.loc[vd].unstack("window")
+        for key in PRIMARY_ORDER:
+            if key not in m.index:
+                continue
+            family = FAMILY.get(key, "free")
+            marker = _MARKERS[by_family.get(family, 0) % len(_MARKERS)]
+            by_family[family] = by_family.get(family, 0) + 1
+            colour = figstyle.INK if key == LOG_LR else FAMILY_COLOURS[family][0]
+            x = np.arange(len(m.columns))
+            ax.plot(x, m.loc[key], marker=marker, ms=3.5, lw=1.2, color=colour,
+                    ls="--" if key == LOG_LR else "-", mec="white", mew=0.4)
+        ax.set_xticks(range(len(m.columns)))
+        ax.set_xticklabels([_window_label(w) for w in m.columns], fontsize=7)
+        ax.set_ylim(0, 1)
+        ax.set_yticks([0, 0.25, 0.5, 0.75, 1.0])
+        ax.set_yticklabels([_dec(t) for t in (0, 0.25, 0.5, 0.75, 1.0)] if ax is axes[0] else [],
+                           fontsize=7)
+        ax.set_title(VD_LABELS[vd], fontsize=figstyle.BODY_PT - 1)
+        ax.set_xlabel("ventana", fontsize=figstyle.BODY_PT - 1)
+        ax.tick_params(axis="x", length=2, width=0.6, color="#666666")
+    axes[0].set_ylabel("|D| mediana, 24 celdas", fontsize=figstyle.BODY_PT - 1)
+    handles = []
+    by_family = {}
+    for key in PRIMARY_ORDER:
+        family = FAMILY.get(key, "free")
+        marker = _MARKERS[by_family.get(family, 0) % len(_MARKERS)]
+        by_family[family] = by_family.get(family, 0) + 1
+        colour = figstyle.INK if key == LOG_LR else FAMILY_COLOURS[family][0]
+        handles.append(Line2D([], [], marker=marker, ms=3.5, lw=1.2, color=colour,
+                              ls="--" if key == LOG_LR else "-", mec="white", mew=0.4,
+                              label=COLUMN_LABELS[key]))
+    fig.legend(handles=handles, loc="outside lower center", ncol=5, fontsize=7,
+               handletextpad=0.4, columnspacing=1.0, frameon=False)
+    return figstyle.save(fig, "ventanas", out_dir)
+
+
 if __name__ == "__main__":
     print(lr_window())
     print(cell_range())
@@ -689,3 +801,5 @@ if __name__ == "__main__":
     print(crossing_bands())
     print(val_test())
     print(sign_strip())
+    print(selection_bars())
+    print(window_curves())

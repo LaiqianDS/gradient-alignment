@@ -633,6 +633,38 @@ def d_stats(
     return float(total / pairs), pairs, se
 
 
+def d_diff_stats(
+    predictor: Iterable[float],
+    reference: Iterable[float],
+    outcome: Iterable[float],
+    event: Iterable[bool] | None = None,
+) -> tuple[float, float]:
+    """|D| of ``predictor`` minus |D| of ``reference`` against the same
+    ``outcome`` over the same runs, and the delete-one jackknife error of
+    that difference, both D recomputed on every replicate. A run missing on
+    either side leaves both. NaN with no comparable pair; the error is NaN
+    with fewer than three replicates.
+    """
+    x = np.asarray(list(predictor), dtype=float)
+    r = np.asarray(list(reference), dtype=float)
+    keep = ~(np.isnan(x) | np.isnan(r))
+    y = np.asarray(list(outcome), dtype=float)[keep]
+    ev = None if event is None else np.asarray(list(event), dtype=bool)[keep]
+    sx, comparable = _pair_terms(x[keep], y, ev, None)
+    sr, _ = _pair_terms(r[keep], y, ev, None)
+    pairs = int(comparable.sum() // 2)
+    if pairs == 0:
+        return np.nan, np.nan
+    tx, tr = sx.sum() / 2, sr.sum() / 2
+    left = pairs - comparable.sum(1)
+    ok = left > 0
+    reps = (np.abs((tx - sx.sum(1)[ok]) / left[ok])
+            - np.abs((tr - sr.sum(1)[ok]) / left[ok]))
+    n = len(reps)
+    se = float(np.sqrt((n - 1) / n * ((reps - reps.mean()) ** 2).sum())) if n >= 3 else np.nan
+    return float(abs(tx / pairs) - abs(tr / pairs)), se
+
+
 def pair_agreement(
     report_dir: str | Path = REPORTS_DIR,
     pair: tuple[str, str] = PRUNE_PAIR,
@@ -729,10 +761,14 @@ def _main(report_dir: str | Path = REPORTS_DIR) -> None:
           .unstack(fill_value=0).reindex(columns=list(VD_FIELDS), fill_value=0)
           .to_string())
 
-    print("\n== pruning: D between NGV and GSNR within each cell ==")
-    d = pair_agreement(report_dir)
-    print(d.round(3).to_string())
-    print(f"median |D| = {d.abs().median():.3f}; one stays if it reaches {PRUNE_D}")
+    print("\n== pruning: |D| between two columns within each cell, over the runs "
+          "that learned ==")
+    for pair in (PRUNE_PAIR, ("noise_scale/simple", "mcoh/global"),
+                 ("var/normalized", "noise_scale/simple"),
+                 ("gd/scalar", "noise_scale/tr_sigma")):
+        d = pair_agreement(report_dir, pair).abs()
+        print(f"{pair[0]} ~ {pair[1]}: median {d.median():.3f}, min {d.min():.3f}, "
+              f"cells at {PRUNE_D} or above: {int((d >= PRUNE_D).sum())} of {len(d)}")
 
 
 if __name__ == "__main__":

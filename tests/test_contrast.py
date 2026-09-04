@@ -121,6 +121,132 @@ def test_the_redundancy_column_reads_the_predictor_against_its_reference(tmp_pat
     assert pd.isna(_rows(t, "final_test_acc", predictor="val_acc")["D_ref"])
 
 
+def test_the_difference_column_reads_the_predictor_minus_its_reference(tmp_path):
+    # the predictor orders the test accuracy perfectly and the validation
+    # accuracy swaps the middle pair
+    for s, v in enumerate((0, 2, 1, 3)):
+        _write_run(tmp_path, f"r{s}", seed=s, window_epochs=_W, window_value=s,
+                   window_columns={"val_acc": v}, final_test_acc=0.6 + 0.01 * s)
+    t = C.long_table(tmp_path)
+    row = _rows(t, "final_test_acc")
+    assert row["D_diff"] == pytest.approx(1 - 4 / 6)
+    assert row["se_diff"] == pytest.approx(np.sqrt(1 / 3))
+    assert pd.isna(_rows(t, "final_test_acc", predictor="val_acc")["D_diff"])
+
+
+def test_the_ranking_orders_by_majority_sign_cells_and_then_by_median_abs():
+    cells = [("a", "m", "sgd"), ("b", "m", "sgd"), ("c", "m", "sgd")]
+    given = {
+        "gwa/value": ([0.5, 0.4, -0.3], [0.1, 0.1, 0.1]),
+        "gd/scalar": ([0.5, 0.5, 0.5], [0.1, 0.1, 0.5]),
+        "stiffness/cos_within": ([0.2, -0.2, 0.0], [0.05, 0.05, 0.1]),
+        "log_lr": ([0.9, 0.9, 0.9], [0.01, 0.01, 0.01]),
+    }
+    rows = [{"dataset": ds, "model": m, "optimizer": o, "window": 0.05, "vd": "y",
+             "predictor": p, "D": dv, "se": sv}
+            for p, (ds_, se_) in given.items()
+            for (ds, m, o), dv, sv in zip(cells, ds_, se_)]
+    out = C.ranking_table(pd.DataFrame(rows))
+    # the free predictor leads on cells but takes no rank; gd and gwa tie on
+    # cells and the median |D| orders them; the tied-sign stiffness scores 0
+    assert list(out["predictor"]) == ["log_lr", "gd/scalar", "gwa/value", "stiffness/cos_within"]
+    assert list(out["family"]) == ["free", "variability", "alignment", "alignment"]
+    assert np.isnan(out["rank"].iloc[0]) and out["rank"].tolist()[1:] == [1, 2, 3]
+    gwa = out.set_index("predictor").loc["gwa/value"]
+    assert (gwa["sign"], gwa["n_major"], gwa["n_other"]) == (1, 2, 1)
+    assert gwa["median_abs"] == pytest.approx(0.4)
+    assert out.set_index("predictor").loc["stiffness/cos_within", "n_major"] == 0
+    by = C.ranking_table(pd.DataFrame(rows), by=("dataset",))
+    first = by[(by["dataset"] == "c") & (by["rank"] == 1)].iloc[0]
+    assert first["predictor"] == "gwa/value" and first["sign"] == -1
+
+
+def test_the_optimizer_table_counts_agreements_inversions_and_differences():
+    # three pairs: one agrees with both D sure, one inverts, and one is mute
+    # because the Adam side covers zero, though its difference leaves zero out
+    arms = {"a": (0.5, 0.4), "b": (0.5, -0.5), "c": (0.6, 0.1)}
+    rows = [{"dataset": "d", "model": m, "optimizer": opt, "window": 0.05, "vd": "y",
+             "predictor": "x", "D": d, "se": 0.1}
+            for m, (ds, da) in arms.items() for opt, d in (("sgd", ds), ("adam", da))]
+    out = C.optimizer_table(pd.DataFrame(rows)).loc[("y", "x")]
+    assert out["n_pairs"] == 3
+    assert (out["n_agree"], out["n_invert"]) == (1, 1)
+    assert out["n_diff_ci"] == 2  # 0,1, 1,0 and 0,5 against 1,96 · 0,141
+    assert out["median_abs_sgd"] == pytest.approx(0.5)
+    assert out["median_abs_adam"] == pytest.approx(0.4)
+    assert out["median_diff"] == pytest.approx(0.5)
+
+
+def test_the_incremental_table_counts_wins_intervals_and_redundancy():
+    cells = [("d", m, "sgd") for m in ("a", "b", "c", "d")]
+    rows = []
+    for (dset, model, opt), diff, se, dref in zip(cells, (0.3, 0.3, -0.2, 0.05),
+                                                  (0.05, 0.4, 0.05, 0.1),
+                                                  (0.9, 0.5, -0.85, 0.1)):
+        rows.append({"dataset": dset, "model": model, "optimizer": opt, "window": 0.05,
+                     "vd": "final_test_acc", "predictor": "gwa/value",
+                     "D_diff": diff, "se_diff": se, "D_ref": dref})
+        rows.append({**rows[-1], "predictor": "val_acc", "D_diff": np.nan,
+                     "se_diff": np.nan, "D_ref": np.nan})
+    regret = pd.DataFrame([
+        {"dataset": d, "model": m, "optimizer": o, "predictor": p, "regret": r}
+        for (d, m, o), rg, rv in zip(cells, (0.01, 0.05, 0.02, 0.02), (0.02, 0.02, 0.02, 0.01))
+        for p, r in (("gwa/value", rg), ("val_acc", rv))
+    ])
+    out = C.incremental_table(pd.DataFrame(rows), regret)
+    assert list(out.index.get_level_values("predictor")) == ["gwa/value"]
+    r = out.iloc[0]
+    assert (r["n_win"], r["n_lose"]) == (3, 1)
+    assert (r["n_win_ci"], r["n_lose_ci"]) == (1, 1)  # 0,3 ± 1,96·0,4 covers zero
+    assert r["n_redundant"] == 2 and r["median_abs_dref"] == pytest.approx(0.675)
+    assert r["regret_median"] == pytest.approx(0.02) and r["n_beats_val"] == 1
+
+
+def test_the_window_table_pairs_the_same_runs_and_reads_speed_by_landmark(tmp_path):
+    # the synthetic predictor is the same at every window, so |D| cannot move
+    idx = lambda a, s: 5 * a + s
+    _ten_runs(tmp_path, idx, lambda a, s: 0.6 + 0.01 * idx(a, s))
+    w = C.window_table(tmp_path)
+    acc = w[(w["vd"] == "final_test_acc") & (w["predictor"] == "gd/scalar")].iloc[0]
+    assert acc["reading"] == "paired" and acc["window_late"] == 0.5
+    assert (acc["D_early"], acc["D_late"], acc["D_diff_w"], acc["se_diff_w"]) == (1.0, 1.0, 0.0, 0.0)
+    assert acc["n_early"] == 10
+    speed = w[(w["vd"] == "epochs_to_threshold") & (w["predictor"] == "gd/scalar")].iloc[0]
+    assert speed["reading"] == "landmark" and speed["window_late"] == 0.10
+    assert set(w["vd"]) == {*C.END_VDS, C.SPEED_VD}
+
+
+def test_the_window_counts_tell_the_cells_that_grow_and_shrink():
+    t = pd.DataFrame({
+        "vd": ["final_test_acc"] * 4, "predictor": ["gwa/value"] * 4,
+        "D_early": [0.2, -0.3, 0.5, 0.1], "D_late": [0.6, -0.1, 0.4, 0.1],
+        "D_diff_w": [0.4, -0.2, -0.1, 0.0], "se_diff_w": [0.1, 0.05, 0.2, 0.1],
+    })
+    r = C.window_counts(t).iloc[0]
+    assert (r["n_grow"], r["n_shrink"]) == (1, 2)
+    assert (r["n_grow_ci"], r["n_shrink_ci"]) == (1, 1)
+    assert r["median_abs_early"] == pytest.approx(0.25) and r["median_abs_late"] == pytest.approx(0.25)
+
+
+def test_the_primary_family_can_keep_every_window():
+    t = pd.DataFrame({
+        "window": [0.05, 0.5], "predictor": ["gd/scalar"] * 2, "vd": ["final_test_acc"] * 2,
+        "D": [0.5, 0.6], "se": [0.1] * 2, "n": [40] * 2, "n_pairs": [700] * 2,
+        "D_land": [np.nan] * 2, "se_land": [np.nan] * 2, "n_land": [np.nan] * 2,
+        "n_pairs_land": [np.nan] * 2, "D_diff": [0.1] * 2, "se_diff": [0.05] * 2,
+        "D_diff_land": [np.nan] * 2, "se_diff_land": [np.nan] * 2,
+    })
+    assert len(C.primary_family(t)) == 1
+    assert len(C.primary_family(t, window=None)) == 2
+
+
+def test_the_flipped_ends_turn_only_the_gradient_metrics():
+    ends = C.flipped_ends()
+    assert ends["gwa/value"] == -C.GOOD_END["gwa/value"]
+    assert ends["val_acc"] == C.GOOD_END["val_acc"]
+    assert ends["tse/ema_0_999"] == C.GOOD_END["tse/ema_0_999"]
+
+
 def test_speed_pairs_follow_the_censoring_rule_and_carry_the_landmark_reading(tmp_path):
     # crossings in epochs 1, 2 and 3 plus two censored runs, with the predictor
     # in the same order: 3 + 3 * 2 = 9 comparable pairs, all concordant
@@ -192,13 +318,17 @@ def test_the_primary_family_takes_the_landmark_reading_for_speed():
         "n": [40] * 5, "n_pairs": [700] * 5,
         "D_land": [nan] * 4 + [0.2], "se_land": [nan] * 4 + [0.3],
         "n_land": [nan] * 4 + [12], "n_pairs_land": [nan] * 4 + [50],
+        "D_diff": [0.1] * 5, "se_diff": [0.05] * 5,
+        "D_diff_land": [nan] * 4 + [-0.4], "se_diff_land": [nan] * 4 + [0.2],
     })
     fam = C.primary_family(t)
     assert list(fam.index) == [0, 4]
     assert fam.loc[0, "reading"] == "all" and fam.loc[0, "D"] == 0.5
+    assert fam.loc[0, "D_diff"] == 0.1
     speed = fam.loc[4]
     assert speed["reading"] == "landmark"
     assert (speed["D"], speed["se"], speed["n"], speed["n_pairs"]) == (0.2, 0.3, 12, 50)
+    assert (speed["D_diff"], speed["se_diff"]) == (-0.4, 0.2)
 
 
 def test_the_selection_reading_charges_the_accuracy_a_predictor_gives_up(tmp_path):
