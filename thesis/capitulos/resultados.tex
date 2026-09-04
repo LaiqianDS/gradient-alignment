@@ -178,24 +178,214 @@ H1 se sostiene como puerta. Dos de las seis métricas, GWA con la velocidad y co
 
 \section{Análisis agregado y barrido temporal}
 \label{sec:res-temporal}
-% rho al 5/10/25/50 %: ¿satura pronto? (H4).
+% Fase E, escrita el 2026-09-04. Números de results/ventanas_recuento.parquet, ventanas.parquet e
+% incremental.parquet (2026-09-04), regenerables con `uv run python src/contrast.py`; figura
+% `ventanas` en src/figures.py.
+
+Esta sección responde a la hipótesis H4: si medir en la ventana del 5\,\% predice tan bien como medir más tarde. Para las variables que se miden al terminar el entrenamiento la comparación es entre la ventana del 5\,\% y la del 50\,\%, y las dos D salen de los mismos entrenamientos de cada celda, así que la diferencia entre sus valores absolutos lleva el mismo intervalo \emph{jackknife} pareado que la Sección~\ref{sec:res-incremental}, quitando un entrenamiento y recalculando las dos. Se cuentan las celdas en las que $|D|$ crece y en las que decrece al esperar, y cuántas de cada lado dejan fuera el cero. Para la velocidad solo sirven las dos primeras ventanas, y su lectura por hitos compara poblaciones distintas, los que aún no habían cruzado en la \emph{epoch} 1 y en la 2 en MNIST y en la 2 y la 4 en los demás conjuntos, así que ahí el intervalo suma las dos varianzas y se declara como tal; al cerrar la segunda ventana quedan en riesgo entre 8 y 40 entrenamientos por celda. La Tabla~\ref{tab:h4} da los recuentos sobre la familia primaria y la Figura~\ref{fig:ventanas} la mediana de $|D|$ en cada ventana.
+
+\begin{table}[ht]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\caption{H4: celdas en las que $|D|$ crece y decrece de la ventana temprana a la tardía, las que lo hacen con intervalo fuera del cero, y la mediana de $|D|$ en las dos ventanas. Del 5 al 50\,\% en las variables del final; de la primera ventana a la segunda, por hitos, en la velocidad.}
+\label{tab:h4}
+\scriptsize
+\setlength{\tabcolsep}{2.5pt}
+\begin{tabular}{lccccccccc}
+\toprule
+& \multicolumn{3}{c}{\textbf{\emph{Accuracy} de test}} & \multicolumn{3}{c}{\textbf{\emph{Gap} de \emph{loss}}} & \multicolumn{3}{c}{\textbf{\emph{Epochs} hasta el umbral}} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}\cmidrule(lr){8-10}
+\textbf{Predictor} & sube/baja & interv. & $|D|$ & sube/baja & interv. & $|D|$ & sube/baja & interv. & $|D|$ \\
+\midrule
+\emph{Loss} de validación & 14/10 & 8/6 & 0,39$\to$0,52 & 6/18 & 4/4 & 0,54$\to$0,42 & 14/9 & 1/0 & 0,71$\to$0,74 \\
+\emph{Accuracy} de validación & 22/2 & 16/0 & 0,40$\to$0,70 & 4/20 & 1/8 & 0,53$\to$0,33 & 11/12 & 1/0 & 0,71$\to$0,69 \\
+TSE & 18/5 & 13/1 & 0,33$\to$0,50 & 10/14 & 6/6 & 0,51$\to$0,61 & 9/14 & 0/0 & 0,64$\to$0,59 \\
+\addlinespace
+GNS & 7/16 & 0/0 & 0,22$\to$0,21 & 10/13 & 0/1 & 0,25$\to$0,13 & 6/17 & 0/1 & 0,29$\to$0,19 \\
+GSNR & 13/11 & 2/1 & 0,24$\to$0,30 & 9/15 & 4/1 & 0,33$\to$0,25 & 9/14 & 0/1 & 0,33$\to$0,27 \\
+\emph{Gradient disparity} & 11/13 & 6/4 & 0,34$\to$0,35 & 10/13 & 4/4 & 0,36$\to$0,30 & 19/4 & 1/0 & 0,28$\to$0,44 \\
+\addlinespace
+\emph{Stiffness} & 15/9 & 4/2 & 0,24$\to$0,27 & 14/9 & 5/3 & 0,39$\to$0,51 & 10/13 & 0/0 & 0,35$\to$0,28 \\
+\emph{Gradient confusion} & 16/8 & 5/3 & 0,18$\to$0,29 & 12/12 & 4/1 & 0,31$\to$0,41 & 17/6 & 2/0 & 0,24$\to$0,30 \\
+GWA & 12/12 & 2/1 & 0,29$\to$0,33 & 11/12 & 1/3 & 0,21$\to$0,16 & 11/12 & 1/0 & 0,40$\to$0,41 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[ht]
+\centering
+\includegraphics{ventanas}
+\caption{Mediana sobre las 24 celdas de $|D|$ en cada ventana, por predictor; la velocidad, por hitos, en las dos ventanas que la predicen.}
+\label{fig:ventanas}
+\end{figure}
+
+Sobre el \emph{accuracy} de test las seis métricas de gradiente no ganan nada esperando. Con el intervalo, ninguna crece en más de seis celdas, la \emph{gradient disparity}, y ninguna decrece en más de cuatro; los recuentos crudos se reparten cerca de la mitad, entre 7 y 16 celdas que crecen de 24, y las medianas de $|D|$ se mueven entre 0,18 y 0,34 al 5\,\% y entre 0,21 y 0,35 al 50\,\%. Lo que sí crece es la referencia. El \emph{accuracy} de validación pasa de 0,40 a 0,70, con 22 celdas que crecen y 16 con intervalo, y TSE de 0,33 a 0,50, con 18 y 13, porque a mitad del entrenamiento la curva de validación ya es casi el resultado que se quiere predecir. La Figura~\ref{fig:ventanas} lo enseña en un vistazo: las tres líneas de los predictores gratuitos suben hacia el 50\,\% y las seis de las métricas se quedan planas por debajo, con la posición en la rejilla en medio. La comparación de H2 repetida al 50\,\% lo confirma: allí ninguna métrica supera a la validación en más de dos celdas y GWA pierde en 23, frente a las 13 del 5\,\%.
+
+Sobre el \emph{gap} de \emph{loss} ocurre lo contrario con los predictores gratuitos. El \emph{accuracy} de validación pierde $|D|$ al esperar, de 0,53 a 0,33 con 20 celdas que decrecen y ocho con intervalo, y el \emph{loss} de validación de 0,54 a 0,42; a presupuesto fijo el \emph{gap} es en buena parte velocidad al revés, y la lectura temprana de la validación es la que mejor la recoge. Las métricas se reparten otra vez cerca de la mitad, y solo la \emph{stiffness} y la \emph{gradient confusion} crecen algo, de 0,39 a 0,51 y de 0,31 a 0,41, con cinco y cuatro celdas con intervalo; TSE es el único predictor que supera al \emph{loss} de validación al 50\,\% con claridad, 16 celdas frente a ocho y nueve con intervalo, y sigue siendo gratuito. El \emph{gap} de \emph{accuracy}, la lectura de apoyo, no cambia el cuadro: ninguna métrica crece con intervalo en más de cinco celdas.
+
+Sobre la velocidad, entre la primera y la segunda ventana, casi nada se mueve con intervalo: entre cero y dos celdas por predictor, con poblaciones en riesgo que bajan hasta ocho entrenamientos en la segunda. Los dos recuentos crudos que destacan son la disparidad, que crece en 19 celdas y pasa de 0,28 a 0,44, y la confusión, que crece en 17; el resto se queda donde estaba, y la referencia también, 0,71 en las dos ventanas.
+
+H4 se sostiene para las métricas de gradiente, y por la razón menos favorable. Medir al 5\,\% predice tan bien como medir al 50\,\% porque su $|D|$ no crece con la ventana; se queda plana, entre 0,2 y 0,35, mientras la validación gratuita sube hasta 0,70 con el \emph{accuracy} de test. La ventana mínima defendible es, por tanto, la primera, la \emph{epoch} 1 en MNIST y la 2 en los demás conjuntos, y no porque las métricas maduren pronto sino porque no maduran. Si bastaría medir antes no lo puede decir esta matriz, que no tiene ninguna lectura anterior.
 
 \section{Valor incremental sobre el \emph{baseline}}
 \label{sec:res-incremental}
-% DeltaR^2 / rho parcial frente a TSE + val-loss@f (H2, la decisiva).
+% Fase C, escrita el 2026-09-04. Números de results/incremental.parquet y results/seleccion.parquet
+% (2026-09-04), regenerables con `uv run python src/contrast.py`; figura `seleccion` en src/figures.py.
+
+Esta sección responde a la hipótesis H2 con las tres lecturas de la Sección~\ref{sec:protocolo-objetivos}, sobre la familia primaria: la ventana del 5\,\%, los entrenamientos que aprendieron, y cada métrica frente a la referencia nombrada de antemano para su variable, el \emph{accuracy} de validación para el \emph{accuracy} de test y el \emph{loss} de validación para el \emph{gap} de \emph{loss}. La primera lectura compara, celda a celda, el valor absoluto de la D de la métrica con el de su referencia, y cuenta en cuántas celdas la diferencia deja fuera el cero por su intervalo \emph{jackknife}, calculado quitando un entrenamiento y recalculando las dos D sobre los mismos que quedan. La segunda lee la D entre la métrica y su referencia dentro de la celda, y llama redundante a una métrica cuando ese valor absoluto llega a 0,8, el umbral de la poda. La tercera es la lectura de selección de la Sección~\ref{sec:protocolo-seleccion}: el \emph{accuracy} de test que se pierde al elegir el \emph{learning rate} de cada celda y \emph{seed} con el predictor al 5\,\%, frente al mejor de esa \emph{seed}. La Tabla~\ref{tab:h2} recoge las tres para las dos variables que deciden, y la Figura~\ref{fig:seleccion} la tercera.
+
+\begin{table}[ht]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3.5pt}
+\caption{H2 en la familia primaria: celdas que gana y pierde cada predictor frente a su referencia en $|D|$, las que lo hacen con intervalo fuera del cero, la mediana de $|D_{\mathrm{ref}}|$, y la pérdida por selección con las celdas donde pierde menos que el \emph{accuracy} de validación. En negrita, la mejor métrica de gradiente en los recuentos crudos y en la selección.}
+\label{tab:h2}
+\begin{tabular}{lcccccccc}
+\toprule
+& \multicolumn{3}{c}{\textbf{\emph{Accuracy} de test}} & \multicolumn{3}{c}{\textbf{\emph{Gap} de \emph{loss}}} & \multicolumn{2}{c}{\textbf{Selección}} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}\cmidrule(lr){8-9}
+\textbf{Predictor} & gana/pierde & interv. & $|D_{\mathrm{ref}}|$ & gana/pierde & interv. & $|D_{\mathrm{ref}}|$ & pérdida & $<$ valid. \\
+\midrule
+Posición en la rejilla & 11/13 & 3/6 & 0,40 & 7/16 & 1/5 & 0,46 & -- & -- \\
+\emph{Loss} de validación & 15/7 & 0/0 & 0,93 & ref. & ref. & ref. & 0,015 & 5 \\
+\emph{Accuracy} de validación & ref. & ref. & ref. & 14/9 & 2/0 & 0,92 & 0,013 & ref. \\
+TSE & 4/19 & 0/3 & 0,83 & 14/9 & 3/1 & 0,81 & 0,015 & 6 \\
+\addlinespace
+GNS & 6/18 & 0/8 & 0,26 & 3/21 & 0/12 & 0,25 & 0,073 & 0 \\
+GSNR & 6/18 & 1/9 & 0,32 & 5/19 & 0/10 & 0,34 & 0,035 & 3 \\
+\emph{Gradient disparity} & 10/14 & 3/8 & 0,36 & 5/18 & 0/7 & 0,37 & 0,097 & 1 \\
+\addlinespace
+\emph{Stiffness} & 5/19 & 0/8 & 0,44 & \textbf{7/17} & 2/6 & 0,44 & 0,110 & 1 \\
+\emph{Gradient confusion} & 6/17 & 2/12 & 0,23 & 6/18 & 0/7 & 0,46 & 0,059 & 2 \\
+GWA & \textbf{11/13} & 0/8 & 0,45 & 5/19 & 0/14 & 0,41 & \textbf{0,023} & \textbf{9} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Sobre el \emph{accuracy} de test ninguna métrica gana a la validación. Con el recuento crudo la mejor es GWA, que gana en 11 celdas y pierde en 13, seguida de la \emph{gradient disparity} con 10 y 14; las otras cuatro ganan en cinco o seis. Con el intervalo el empate desaparece: GWA no gana con intervalo en ninguna celda y pierde en ocho, y la disparidad, la única con tres celdas ganadas con intervalo, pierde en ocho. Ninguna métrica es la validación con otro nombre, porque la mediana de $|D_{\mathrm{ref}}|$ va de 0,23 a 0,45 y ninguna celda llega a 0,8; ordenan los entrenamientos de otra manera, y peor. Sin las seis celdas de MNIST, donde la variable no tiene recorrido, GWA queda en nueve celdas ganadas y nueve perdidas, ninguna con intervalo a favor y cinco en contra. La posición en la rejilla, que no hay que medir, hace lo mismo que la mejor métrica, 11 frente a 13. Entre los predictores gratuitos, las dos lecturas de la validación son intercambiables, con $|D_{\mathrm{ref}}|$ de 0,93 y las 24 celdas por encima de 0,8, y TSE es redundante con el \emph{accuracy} de validación en 17 celdas y pierde contra él en 19; los tres son una sola lectura.
+
+Sobre el \emph{gap} de \emph{loss} la distancia es mayor. La referencia, el \emph{loss} de validación en la ventana, tiene una $|D|$ mediana de 0,54, y las seis métricas quedan entre 0,21 y 0,39: la \emph{stiffness} gana en siete celdas y pierde en 17, con dos ganadas y seis perdidas con intervalo, y GWA gana en cinco y pierde en 19, con 14 perdidas con intervalo. El único predictor que supera a la referencia en el \emph{gap} es TSE, el \emph{loss} de entrenamiento acumulado, con 14 celdas frente a nueve y tres con intervalo frente a una; los dos son gratuitos y los dos son lecturas de la velocidad, que a presupuesto fijo es lo que el \emph{gap} mide en buena parte, según la Sección~\ref{sec:variables}.
+
+\begin{figure}[ht]
+\centering
+\includegraphics{seleccion}
+\caption{\emph{Accuracy} de test perdido al elegir el \emph{learning rate} con cada predictor al 5\,\%, mediana sobre las 24 celdas.}
+\label{fig:seleccion}
+\end{figure}
+
+La lectura de selección, en la Figura~\ref{fig:seleccion}, pone la misma respuesta en puntos de \emph{accuracy}. Elegir el \emph{learning rate} con el \emph{accuracy} de validación al 5\,\% pierde 0,013 de mediana frente al mejor de la celda, con el \emph{loss} de validación 0,015 y con TSE 0,015; elegir al azar pierde 0,070. La mejor métrica es GWA, con 0,023, que pierde menos que la validación en nueve celdas repartidas entre los cuatro conjuntos; GSNR pierde 0,035 y la \emph{gradient confusion} 0,059, y las otras tres, con el signo que su artículo llama bueno, pierden más que elegir al azar: la escala de ruido 0,073, la disparidad 0,097 y la \emph{stiffness} 0,110. Con el signo invertido, que no es una regla previa sino una lectura a posteriori, la disparidad baja a 0,023, la escala de ruido a 0,066 y la \emph{stiffness} a 0,075, y GWA, GSNR y la confusión suben a 0,084 o más: para tres métricas el signo del artículo es el correcto en este régimen y para las otras tres es el contrario, lo mismo que H1 dejó ver en la disparidad, cuya D con el \emph{accuracy} de test es positiva.
+
+Sobre la velocidad, donde H2 no decide, la referencia gana en todas partes. Ninguna métrica supera al \emph{accuracy} de validación al 5\,\% en más de cuatro celdas, y con intervalo pierden entre 13 y 19; el \emph{loss} de validación empata con él, 10 frente a 11, y TSE pierde en 21. Es lo que anuncia la Sección~\ref{sec:protocolo-eval}: la referencia es un prefijo de la curva cuyo cruce se predice.
+
+H2 cae. En la ventana del 5\,\% ninguna métrica de gradiente supera a la lectura gratuita de la validación sobre el \emph{accuracy} de test ni sobre el \emph{gap}, ni con el intervalo de la diferencia ni eligiendo el \emph{learning rate} con ella; la que más se acerca, GWA, empata en el recuento crudo, pierde con intervalo y cuesta 0,023 de \emph{accuracy} frente a 0,013. Las métricas no son la validación con otro nombre, y aun así no añaden nada, porque lo que ordenan es el \emph{learning rate}, igual que la posición en la rejilla, que empata con la mejor de ellas. Es el resultado negativo que la Sección~\ref{sec:hipotesis} daba por válido: en este régimen, calcular el gradiente por ejemplo en la segunda \emph{epoch} no compensa frente a una curva que el entrenamiento ya produce. Vale para esta ventana y esta rejilla; qué pasa con ventanas posteriores lo mide la Sección~\ref{sec:res-temporal}, y lo que cuesta la instrumentación que no compensa, la Sección~\ref{sec:res-coste}.
 
 \section{Qué familia predice mejor}
 \label{sec:res-familia}
-% Alineación vs variabilidad (H3 + riesgo título-contenido).
+% Fase D, escrita el 2026-09-04. Números de results/ranking.parquet y ranking_grupos.parquet
+% (2026-09-04), regenerables con `uv run python src/contrast.py`; las tres parejas de la poda las
+% imprime `uv run python src/efficiency.py`. Sin figura: una comparación de niveles va a tabla.
 
-\section{Robustez cross-optimizador}
+Esta sección responde a la hipótesis H3 con la regla de la Sección~\ref{sec:protocolo-objetivos}. Para cada variable de la familia primaria, las seis métricas de gradiente se ordenan por el número de celdas en las que muestran asociación con su signo mayoritario, el signo que su D tiene en más celdas, y a igualdad por la mediana del valor absoluto de D. No se calcula nada nuevo, porque las tres cifras salen de la Tabla~\ref{tab:signos-h1}, y la familia de cada métrica solo etiqueta el orden. La Tabla~\ref{tab:h3} da los tres órdenes, con la posición en la rejilla intercalada en el puesto que le tocaría y sin número. Contar solo las celdas del signo mayoritario penaliza a la métrica que cambia de sentido de una celda a otra, y debe hacerlo, porque un predictor que ordena en un sentido en unas celdas y en el contrario en otras no sirve sin saber antes en qué celda se está. La escala de ruido, por ejemplo, muestra asociación negativa con el \emph{accuracy} de test en seis celdas y positiva en tres, pero su D es positiva en 14 celdas de 24, así que su signo mayoritario es el positivo y puntúa tres.
+
+\begin{table}[ht]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\caption{Orden de las métricas de gradiente por variable al 5\,\%: signo mayoritario, celdas con asociación de ese signo y del contrario, y mediana de $|D|$. En negrita, la primera de cada variable.}
+\label{tab:h3}
+\begin{tabular}{clcccc}
+\toprule
+\textbf{Puesto} & \textbf{Predictor} & \textbf{Familia} & \textbf{Signo} & \textbf{Celdas} & \textbf{Mediana de $|D|$} \\
+\midrule
+\multicolumn{6}{l}{\textbf{\emph{Epochs} hasta el umbral}} \\
+1 & \textbf{GWA} & alineación & $+$ & 16/1 & 0,40 \\
+2 & \emph{Stiffness} & alineación & $+$ & 9/5 & 0,35 \\
+3 & \emph{Gradient disparity} & variabilidad & $-$ & 9/4 & 0,28 \\
+  & Posición en la rejilla & & $-$ & 7/5 & 0,33 \\
+4 & GSNR & variabilidad & $-$ & 7/6 & 0,33 \\
+5 & GNS & variabilidad & $+$ & 7/3 & 0,29 \\
+6 & \emph{Gradient confusion} & alineación & $+$ & 5/4 & 0,24 \\
+\addlinespace
+\multicolumn{6}{l}{\textbf{\emph{Accuracy} de test}} \\
+1 & \textbf{GWA} & alineación & $-$ & 15/1 & 0,29 \\
+2 & \emph{Gradient disparity} & variabilidad & $+$ & 12/4 & 0,34 \\
+  & Posición en la rejilla & & $-$ & 7/6 & 0,30 \\
+3 & GSNR & variabilidad & $+$ & 7/4 & 0,24 \\
+4 & \emph{Stiffness} & alineación & $+$ & 5/6 & 0,24 \\
+5 & \emph{Gradient confusion} & alineación & $-$ & 5/5 & 0,18 \\
+6 & GNS & variabilidad & $+$ & 3/6 & 0,22 \\
+\addlinespace
+\multicolumn{6}{l}{\textbf{\emph{Gap} de \emph{loss}}} \\
+  & Posición en la rejilla & & $+$ & 15/0 & 0,46 \\
+1 & \textbf{\emph{Stiffness}} & alineación & $-$ & 15/1 & 0,39 \\
+2 & \emph{Gradient disparity} & variabilidad & $-$ & 11/4 & 0,36 \\
+3 & GSNR & variabilidad & $-$ & 11/2 & 0,32 \\
+4 & \emph{Gradient confusion} & alineación & $+$ & 9/5 & 0,31 \\
+5 & GNS & variabilidad & $-$ & 6/5 & 0,25 \\
+6 & GWA & alineación & $-$ & 4/6 & 0,21 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+El primer puesto es de la familia de alineación en las tres variables y el segundo es de la de variabilidad en las tres. GWA encabeza la velocidad y el \emph{accuracy} de test, con 16 y 15 celdas, y la \emph{stiffness} el \emph{gap}, con 15; detrás va la \emph{gradient disparity}, con 9, 12 y 11, empatada a nueve con la \emph{stiffness} en velocidad y por detrás de ella por la mediana. Las otras dos métricas de alineación no acompañan a las dos primeras. La \emph{gradient confusion} es la última en velocidad y la penúltima en el \emph{accuracy} de test, y GWA, la mejor en dos variables, es la última en el \emph{gap}, con cuatro celdas a favor y seis en contra. La posición en la rejilla queda por debajo de tres métricas en velocidad y de dos en el \emph{accuracy} de test, y en el \emph{gap} por encima de las seis, con 15 celdas y una mediana de 0,46 frente a 0,39 de la \emph{stiffness}. Ninguna métrica se acerca a los predictores gratuitos, que con la misma regla puntúan entre 16 y 24 celdas.
+
+El orden cambia de bando con la arquitectura y con el conjunto de datos. Repetida la cuenta dentro de cada arquitectura, sobre ocho celdas, en la red \emph{fully connected} gana la alineación en las tres variables, GWA en velocidad y en \emph{accuracy} de test y la \emph{stiffness} en el \emph{gap}, con siete de las ocho celdas y ninguna en contra en los tres casos; en la convolucional gana la variabilidad en velocidad y en \emph{accuracy} de test, GSNR y la disparidad, y la \emph{stiffness} en el \emph{gap}; y en la ResNet-18 ganan GSNR y la escala de ruido en las dos primeras y GWA en el \emph{gap}. Esa GWA es además una inversión de signo, porque con el \emph{gap} muestra asociación negativa en cuatro celdas de la convolucional, positiva en seis de la ResNet-18 y ninguna en la red plana. Por conjunto de datos, sobre seis celdas, en MNIST y en CIFAR-10 gana la alineación en las tres variables, GWA y la \emph{stiffness}; en CIFAR-100 gana la variabilidad en las tres, la escala de ruido, la disparidad y GSNR; y Tiny-ImageNet se parte entre la \emph{stiffness}, la disparidad y la \emph{gradient confusion}. Lo que la Tabla~\ref{tab:h3} ordena sobre las 24 celdas es en buena parte lo que pasa en la red \emph{fully connected} y en los dos conjuntos más fáciles, donde la alineación separa los \emph{learning rates} con más claridad que en el resto.
+
+La poda es un resultado y no una limpieza. De las ocho métricas medidas, la m-coherencia y la varianza normalizada son la escala de ruido con otro nombre o con otro estimador, y la \emph{gradient disparity} es una medida de variabilidad; las tres identidades se miden con el estadístico del contraste, la D entre las dos columnas dentro de cada celda al 5\,\% sobre los entrenamientos que aprendieron. La escala de ruido y la m-coherencia, de familias distintas en sus artículos, dan $|D| = 1$ en las 24 celdas, la identidad exacta de la Ecuación~\ref{eq:gns-mcoh}. La varianza normalizada ordena los entrenamientos como la escala de ruido con una mediana de 0,84 y 18 celdas en 0,8 o más, el umbral con el que la Sección~\ref{sec:protocolo-objetivos} declara redundante una métrica, mientras que contra GSNR, con la que el primer criterio la comparó, se queda en 0,59 y en ninguna celda llega a 0,8. La \emph{gradient disparity}, que su artículo define como el desacuerdo entre los gradientes de dos submuestras, ordena como la raíz de la traza de la covarianza del ruido con una mediana de 0,93 y 23 celdas en 0,8 o más, y por eso el contraste la lee como variabilidad. Dos de las ocho métricas que la literatura presenta por separado no aportan sobre esta matriz una ordenación propia, una tercera cambia de familia, y la comparación entre familias queda en tres contra tres.
+
+H3 cae en la forma en que se enunció. Ninguna familia ocupa las primeras posiciones, porque la alineación pone la mejor métrica de cada variable y también la peor en dos de las tres, y la variabilidad ocupa el segundo puesto en las tres; y el orden no se mantiene entre arquitecturas ni entre conjuntos, porque la alineación gana las tres variables en la red \emph{fully connected} y en MNIST y CIFAR-10, y la variabilidad dos en la convolucional y las tres en CIFAR-100. Lo que la palabra clave de la portada puede sostener es más estrecho. La métrica que más celdas ordena en cada variable es una de alineación, GWA o la \emph{stiffness}, y las dos siguen por debajo de la validación gratuita según decide la Sección~\ref{sec:res-incremental}. Con eso se sostiene una afirmación sobre dos métricas; la familia entera queda sin respaldo.
+
+\section{Robustez entre optimizadores}
 \label{sec:res-robustez}
-% Signo preservado entre SGD y Adam (H5).
+% Fase F, escrita el 2026-09-04. Números de results/optimizadores.parquet (2026-09-04),
+% regenerable con `uv run python src/contrast.py`. Sin figura: las inversiones van de 0 a 2.
+
+Esta sección responde a la hipótesis H5 con la regla de la Sección~\ref{sec:protocolo-objetivos}. Las 24 celdas forman 12 pares que comparten conjunto de datos y arquitectura y solo difieren en el optimizador, y el diseño los hizo comparables a propósito, con las mismas cinco \emph{seeds}, una rejilla de la misma forma desplazada una década y un umbral compartido. Para cada predictor y variable de la familia primaria se cuentan, sobre los 12 pares, los que conservan el signo de la D y los que lo invierten, en los dos casos con las dos D fuera del cero por su intervalo, porque dos signos que coinciden sin intervalo coinciden por azar la mitad de las veces; un par en el que alguna de las dos D incluye el cero no cuenta a ningún lado. Se cuenta además en cuántos pares la diferencia entre la D con SGD y la D con Adam deja fuera el cero, con el intervalo que suma las dos varianzas, porque las dos D salen de entrenamientos distintos; ese recuento recoge los cambios de tamaño que no llegan a cambiar el signo. La Tabla~\ref{tab:h5} da los tres recuentos y la mediana del valor absoluto de D en cada brazo.
+
+\begin{table}[ht]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3.5pt}
+\caption{H5 sobre los 12 pares de celdas que solo difieren en el optimizador: pares que acuerdan e invierten el signo con las dos D fuera del cero, pares cuya diferencia deja fuera el cero, y mediana de $|D|$ con SGD y con Adam. En negrita, las inversiones.}
+\label{tab:h5}
+\begin{tabular}{lccccccccc}
+\toprule
+& \multicolumn{3}{c}{\textbf{\emph{Epochs} hasta el umbral}} & \multicolumn{3}{c}{\textbf{\emph{Accuracy} de test}} & \multicolumn{3}{c}{\textbf{\emph{Gap} de \emph{loss}}} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}\cmidrule(lr){8-10}
+\textbf{Predictor} & ac./inv. & dif. & $|D|$ & ac./inv. & dif. & $|D|$ & ac./inv. & dif. & $|D|$ \\
+\midrule
+Posición en la rejilla & 1/\textbf{1} & 6 & 0,30/0,36 & 2/\textbf{2} & 6 & 0,42/0,18 & 4/0 & 3 & 0,51/0,40 \\
+\addlinespace
+\emph{Loss} de validación & 12/0 & 3 & 0,69/0,78 & 7/0 & 5 & 0,38/0,39 & 10/0 & 5 & 0,61/0,45 \\
+\emph{Accuracy} de validación & 12/0 & 3 & 0,63/0,77 & 6/0 & 4 & 0,42/0,38 & 10/0 & 7 & 0,62/0,46 \\
+TSE & 11/0 & 3 & 0,58/0,73 & 6/0 & 5 & 0,28/0,36 & 11/0 & 6 & 0,56/0,51 \\
+\addlinespace
+GNS & 4/0 & 0 & 0,27/0,30 & 3/0 & 0 & 0,23/0,22 & 1/\textbf{1} & 3 & 0,26/0,16 \\
+GSNR & 5/0 & 1 & 0,27/0,35 & 4/0 & 0 & 0,20/0,28 & 4/0 & 5 & 0,25/0,33 \\
+\emph{Gradient disparity} & 3/\textbf{1} & 4 & 0,48/0,23 & 5/\textbf{2} & 4 & 0,34/0,30 & 4/\textbf{2} & 5 & 0,37/0,31 \\
+\addlinespace
+\emph{Stiffness} & 3/\textbf{1} & 3 & 0,43/0,29 & 2/\textbf{1} & 4 & 0,25/0,15 & 5/0 & 2 & 0,21/0,43 \\
+\emph{Gradient confusion} & 1/0 & 1 & 0,21/0,27 & 2/0 & 2 & 0,18/0,18 & 4/0 & 2 & 0,35/0,29 \\
+GWA & 6/0 & 2 & 0,37/0,45 & 6/0 & 4 & 0,27/0,29 & 3/0 & 3 & 0,19/0,30 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Ninguna métrica invierte el signo en más de dos pares de doce. La \emph{gradient disparity} invierte uno con la velocidad y dos con el \emph{accuracy} de test y con el \emph{gap}, la \emph{stiffness} uno con la velocidad y uno con el \emph{accuracy} de test, la escala de ruido uno con el \emph{gap}, y GSNR, la \emph{gradient confusion} y GWA ninguno. Las inversiones de una misma métrica se concentran. Las de la disparidad con la velocidad y con el \emph{accuracy} de test caen en el mismo par, la red \emph{fully connected} sobre CIFAR-10, la segunda del \emph{accuracy} de test es la ResNet-18 sobre MNIST y las dos del \emph{gap} son las redes convolucionales sobre CIFAR-100 y sobre Tiny-ImageNet; las dos de la \emph{stiffness} caen en un solo par, la ResNet-18 sobre CIFAR-100. En esos pares la métrica cambia de sentido con las dos variables a la vez, que es lo que hace una métrica que lee el \emph{learning rate} cuando el óptimo de la rejilla queda a un lado en SGD y al otro en Adam; la posición en la rejilla lo muestra sola, con sus tres inversiones en MNIST. Los pares que acuerdan con intervalo son pocos para las métricas, entre uno y seis de doce, con GWA a la cabeza en velocidad y en \emph{accuracy} de test, seis en las dos, y la \emph{stiffness} en el \emph{gap}, cinco; en el resto de pares una de las dos D incluye el cero y el par no tiene voz. Los predictores gratuitos acuerdan en 11 o 12 pares con la velocidad, en seis o siete con el \emph{accuracy} de test y en 10 u 11 con el \emph{gap}, sin ninguna inversión.
+
+Lo que sí cambia entre optimizadores es el tamaño de la asociación. La disparidad pasa de una mediana de $|D|$ de 0,48 con SGD a 0,23 con Adam en velocidad, con cuatro pares en los que la diferencia deja fuera el cero, y la \emph{stiffness} sube de 0,21 a 0,43 en el \emph{gap}; la posición en la rejilla baja de 0,42 a 0,18 con el \emph{accuracy} de test, con seis diferencias fuera del cero; y los predictores gratuitos son más fuertes con Adam en velocidad, entre 0,73 y 0,78 frente a entre 0,58 y 0,69, y más fuertes con SGD en el \emph{gap}, entre 0,56 y 0,62 frente a entre 0,45 y 0,51. Esas diferencias se leen primero como población y solo después como optimizador. Los 41 entrenamientos divergidos son todos de SGD y Adam no divergió en ninguno de sus 480, y la norma del umbral de la Sección~\ref{sec:calibracion} se calculó sobre los dos optimizadores juntos, así que la censura de la velocidad no es la misma en los dos brazos de un par.
+
+H5 no se refuta y no queda demostrada. Con 12 pares y entre uno y seis con derecho a hablar por métrica, lo que se ha visto es que ninguna asociación segura cambia de signo en más de dos pares, y que las inversiones que hay llegan de dos en dos, con las dos variables de un mismo par, con la forma de una métrica que lee el \emph{learning rate}. Invariancia es una palabra que este diseño no puede pronunciar, porque 12 pares solo detectan inversiones groseras y no encontrarlas es no haber visto lo contrario. Lo que sí se puede decir es que, allí donde una métrica ordena con seguridad bajo los dos optimizadores, ordena en el mismo sentido, y que el tamaño de esa ordenación cambia con el optimizador más de lo que cambia su signo.
 
 \section{Coste y capacidad predictiva}
 \label{sec:res-coste}
-% Cuál es la mejor dentro de cada clase de coste, y si alguna clase se justifica
-% frente al baseline. Las clases están en \ref{tab:coste-metricas}.
+% Fase C, escrita el 2026-09-04. Clases de coste de tab:coste-metricas; sobrecoste medido de
+% desarrollo.tex §Cálculo de las métricas; capacidad predictiva de tab:h2.
+
+La Tabla~\ref{tab:coste-metricas} separa los predictores en tres clases. La gratuita, el \emph{loss} y el \emph{accuracy} de validación, TSE y la posición en la rejilla, que el entrenamiento produce sin calcular ningún gradiente. La del barrido compartido, las seis métricas de gradiente que quedan tras la poda, que derivan cada ejemplo del \emph{batch} de medición una vez y se separan después por su aritmética, del orden del número de parámetros en la escala de ruido, GSNR y GWA y del cuadrado del tamaño del \emph{batch} en la \emph{stiffness} y la \emph{gradient confusion}. La tercera es la de las submuestras, la \emph{gradient disparity}, que sigue pagando sus cinco pasadas. Medido en reloj, la instrumentación entera costó 24,1 horas sobre 97,6 de entrenamiento, con un sobrecoste por celda que va del 0,7\,\% en la red convolucional sobre Tiny-ImageNet al 105\,\% en la red \emph{fully connected} sobre CIFAR-100 con SGD, según la Sección~\ref{sec:des-metricas}; ese reloj no separa una métrica de otra, porque el barrido es común.
+
+Contra ese coste, la Tabla~\ref{tab:h2} no da nada que la clase gratuita no dé. Dentro de la clase del barrido, la mejor sobre el \emph{accuracy} de test es GWA, la de aritmética más ligera, que empata con la posición en la rejilla y pierde con intervalo contra la validación; sobre el \emph{gap} la mejor es la \emph{stiffness}, de coste cuadrático, con siete celdas ganadas frente a 17 perdidas; y la disparidad, la única que paga pasadas propias, casi iguala a GWA en el recuento crudo del \emph{accuracy} de test y pierde en todo lo demás. Pagar más aritmética no compra orden. La pregunta de OE2 sobre el coste tiene por tanto una respuesta corta: en la ventana del 5\,\% ninguna clase de coste compra capacidad predictiva que la clase gratuita no tenga, y el sobrecoste, hasta el doble del tiempo de entrenamiento en la red plana, no está justificado como predicción. Lo que sí justifica es lo que este trabajo hace con él, medir; la serie completa por \emph{epoch} es la que permite responder a las hipótesis restantes.
 
 \section{Concordancia con la literatura}
 \label{sec:res-concordancia}
