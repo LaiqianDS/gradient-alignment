@@ -118,6 +118,9 @@ def lr_window(
 
     fig, _ = figstyle.figure(width="full", ratio=0.66, ncols=len(optimizers) + 1)
     panels, ax_tau = list(fig.axes)[:-1], fig.axes[-1]
+    # Set after construction, not via gridspec_kw: constrained layout converges
+    # from a different geometry that way and shifts the panels by a fraction of
+    # a point, which would rewrite the committed PDF for nothing.
     panels[0].get_subplotspec().get_gridspec().set_width_ratios(
         [1.0] * len(optimizers) + [0.12]
     )
@@ -356,8 +359,10 @@ def cell_overlap(
     budget = int(traj["epoch"].max()) + 1
 
     crossed_colour, censored_colour = figstyle.PALETTE[0], figstyle.PALETTE[1]
-    fig, (ax, ax_n) = figstyle.figure(width="full", ratio=0.66, nrows=2)
-    ax.get_subplotspec().get_gridspec().set_height_ratios([3.0, 1.0])
+    fig, (ax, ax_n) = figstyle.figure(
+        width="full", ratio=0.66, nrows=2,
+        gridspec_kw={"height_ratios": [3.0, 1.0]},
+    )
     for name, g in traj.groupby("run_name"):
         smooth = median3(g["val_acc"].reset_index(drop=True))
         crossed = not math.isnan(cross[name])

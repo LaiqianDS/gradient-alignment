@@ -21,7 +21,6 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -37,7 +36,8 @@ from config import (
     ROOT,
     THRESHOLD_ACC,
 )
-from run_matrix import TRAIN_SCRIPT, cell_path, child_env, run_name_for
+from run_matrix import TRAIN_SCRIPT, cell_path, run_name_for
+from run_matrix import execute as run_execute
 
 PILOT_DIR = ROOT / "reports_pilot"
 PILOT_SEED = 0
@@ -118,34 +118,7 @@ def print_status(runs: list[PilotRun]) -> None:
 
 def execute(runs: list[PilotRun], dry_run: bool = False) -> list[PilotRun]:
     """Run every pending pilot sequentially; return the ones that failed."""
-    done = [r for r in runs if r.is_done()]
-    pending = [r for r in runs if not r.is_done()]
-
-    missing = sorted({r.config for r in pending if not r.config.exists()})
-    if missing:
-        print("[pilot] missing cell configs -- run `run_matrix.py --init` first:")
-        for c in missing:
-            print(f"    {c.relative_to(ROOT)}")
-        return pending
-
-    print(f"[pilot] {len(done)} done, {len(pending)} to run (of {len(runs)} selected)")
-    failures: list[PilotRun] = []
-    for i, run in enumerate(pending, 1):
-        cmd = build_command(run)
-        if dry_run:
-            print("  DRY  " + " ".join(cmd))
-            continue
-        print(f"\n[pilot] ({i}/{len(pending)}) {run.name}")
-        if subprocess.run(cmd, env=child_env()).returncode != 0:
-            print(f"[pilot] FAILED: {run.name} (left pending)")
-            failures.append(run)
-
-    if not dry_run:
-        ok = len(pending) - len(failures)
-        print(f"\n[pilot] finished: {ok} ok, {len(failures)} failed")
-        for r in failures:
-            print(f"    still pending: {r.name}")
-    return failures
+    return run_execute(runs, dry_run=dry_run, build=build_command, label="pilot")
 
 
 def plateau_epoch(epoch_df: pd.DataFrame, tol: float = 0.02) -> int:

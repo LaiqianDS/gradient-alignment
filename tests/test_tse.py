@@ -1,13 +1,14 @@
 """Tests for the TSE baseline predictor.
 
-Analytic checks on ``compute_tse`` plus a smoke test on ``METRIC``. The
-per-step to per-epoch aggregation lives in ``train.epoch_mean_losses`` and is
-tested in ``test_train_helpers``.
+Analytic checks on ``compute_tse`` plus a smoke test on ``BASELINE``. The
+per-step to per-epoch aggregation lives in ``train.train`` and is pinned by
+``test_pipeline``.
 """
 
 import torch
 
-from metrics.tse import METRIC, compute_tse
+from metrics import BASELINE
+from metrics.tse import compute_tse
 
 
 def test_hand_computed_sequence_all_variants():
@@ -112,8 +113,9 @@ def test_single_epoch_all_variants_equal_first_loss():
     assert all(abs(v - 2.5) < 1e-9 for v in out.values())
 
 
-def test_metric_compute_smoke_returns_four_finite_keys():
-    out = METRIC.compute([3.0, 2.0, 1.5, 1.2, 1.0])
+def test_baseline_smoke_returns_four_finite_keys():
+    # BASELINE is the name train.py calls; it must stay callable on losses.
+    out = BASELINE([3.0, 2.0, 1.5, 1.2, 1.0])
     assert set(out) == {
         "tse/cumulative",
         "tse/e_window",

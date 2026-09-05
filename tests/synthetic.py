@@ -1,14 +1,22 @@
 """Synthetic models and crafted gradient matrices for the metric tests.
 
 Crafted matrices (parallel rows, orthogonal rows) have analytically known metric
-values and drive the pure ``_core`` functions; the tiny MLP plus random probe
-drives the full ``compute()`` path.
+values and drive the pure reducers; the tiny MLP plus random probe drives the
+full ``compute()`` path.
 """
 
 from __future__ import annotations
 
 import torch
 import torch.nn as nn
+
+
+def moments(G: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, int]:
+    """``(S, Q, M)`` of a crafted ``[M, P]`` matrix, in the float64 form
+    ``primitives.stream_grad_moments`` streams: ``sum g_i``, ``sum g_i^2`` and
+    the row count. Lets a crafted matrix drive the production reducers."""
+    Gd = G.double()
+    return Gd.sum(0), (Gd * Gd).sum(0), G.shape[0]
 
 
 def tiny_mlp(in_dim: int = 8, hidden: int = 16, classes: int = 3, seed: int = 0) -> nn.Module:

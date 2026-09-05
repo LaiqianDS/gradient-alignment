@@ -102,8 +102,7 @@ def _build_dataset(
     ``class_to_idx`` is the train ImageFolder mapping, needed only to label the
     tiny_imagenet test (val) split consistently with train.
     """
-    spec = _check_dataset(dataset)
-    transform = _build_transform(spec)
+    transform = _build_transform(DATASET_SPECS[dataset])
 
     if dataset == "tiny_imagenet":
         base = data_root / "tiny-imagenet-200"

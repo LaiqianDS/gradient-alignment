@@ -33,9 +33,9 @@ import torch.nn as nn
 from config import Config, config_to_dict, parse_config
 from data import build_dataloaders, build_probe, build_train_eval_loader
 from logger import RunLogger
-from metrics import REGISTRY
+from metrics import BASELINE, REGISTRY
 from metrics.primitives import set_chunk_size
-from metrics_runner import baseline_row, measure
+from metrics_runner import measure
 from models import build_model
 from seed import set_seed
 
@@ -77,8 +77,8 @@ def default_run_name(cfg: Config) -> str:
     return f"{cfg.model}_{cfg.dataset}_{cfg.optimizer}_lr{cfg.lr}_seed{cfg.seed}"
 
 
-def warn_probe_memory(num_params: int, probe_size: int, chunk_size: int) -> float:
-    """Print the per-sample-grad memory profile; return the device peak in GB."""
+def warn_probe_memory(num_params: int, probe_size: int, chunk_size: int) -> None:
+    """Print the per-sample-grad memory profile."""
     device_gb = chunk_size * num_params * 4 / 1e9
     host_gb = probe_size * num_params * 4 / 1e9
     msg = (f"[train] per-sample grad: device peak ~{device_gb:.2f} GB "
@@ -87,20 +87,6 @@ def warn_probe_memory(num_params: int, probe_size: int, chunk_size: int) -> floa
     if device_gb > 4.0:
         msg += "  -- WARNING: device peak large. Lower --chunk-size."
     print(msg)
-    return device_gb
-
-
-def epoch_mean_losses(step_losses: list[float], steps_per_epoch: int) -> list[float]:
-    """Per-epoch mean losses; a trailing partial epoch contributes its own mean."""
-    full = len(step_losses) // steps_per_epoch
-    means = [
-        sum(step_losses[i * steps_per_epoch : (i + 1) * steps_per_epoch]) / steps_per_epoch
-        for i in range(full)
-    ]
-    tail = step_losses[full * steps_per_epoch :]
-    if tail:
-        means.append(sum(tail) / len(tail))
-    return means
 
 
 @torch.no_grad()
@@ -147,13 +133,12 @@ def evaluate_test(model, loader, loss_fn, device, num_classes: int) -> dict:
 
 def snap_windows(df: pd.DataFrame, windows) -> pd.DataFrame:
     """Pick, per window fraction, the epoch row whose progress is closest to it."""
-    epoch_df = df
-    if epoch_df.empty:
+    if df.empty:
         return pd.DataFrame()
     rows = []
     for w in windows:
-        idx = (epoch_df["progress_frac"] - w).abs().idxmin()
-        row = epoch_df.loc[idx].to_dict()
+        idx = (df["progress_frac"] - w).abs().idxmin()
+        row = df.loc[idx].to_dict()
         row["window"] = w
         rows.append(row)
     return pd.DataFrame(rows)
@@ -237,7 +222,7 @@ def train(cfg: Config) -> dict:
         "optimizer": cfg.optimizer, "lr": cfg.lr, "seed": cfg.seed,
     }
 
-    loss_history: list[float] = []
+    epoch_losses: list[float] = []  # one mean training loss per finished epoch
     metric_seconds = 0.0
 
     def probe_metrics() -> dict:
@@ -251,7 +236,7 @@ def train(cfg: Config) -> dict:
         device_sync(device)
         t0 = time.perf_counter()
         row = measure(model, probe_X, probe_y, loss_fn, metrics)
-        row.update(baseline_row(epoch_mean_losses(loss_history, len(train_loader))))
+        row.update(BASELINE(epoch_losses))
         device_sync(device)
         metric_seconds += time.perf_counter() - t0
         return row
@@ -265,21 +250,23 @@ def train(cfg: Config) -> dict:
     global_step = 0
     model.train()
     for epoch in range(cfg.epochs):
+        step_losses: list[float] = []
         for X, y in train_loader:
             X, y = X.to(device), y.to(device)
             optimizer.zero_grad()
             loss = loss_fn(model(X), y)
             loss.backward()
             optimizer.step()
-            loss_history.append(loss.item())
+            step_losses.append(loss.item())
             global_step += 1
+        epoch_losses.append(sum(step_losses) / len(step_losses))
 
         val_loss, val_acc = evaluate(model, val_loader, loss_fn, device)
         row = {
             **meta, "epoch": epoch,
             "global_step": global_step,
             "progress_frac": (epoch + 1) / cfg.epochs,
-            "train_loss": loss_history[-1],
+            "train_loss": step_losses[-1],
             "val_loss": val_loss, "val_acc": val_acc,
         }
         row.update(probe_metrics())

@@ -170,43 +170,53 @@ def fmt_duration(seconds: float) -> str:
     return f"{seconds // 3600:.0f}h{(seconds % 3600) / 60:02.0f}m"
 
 
-def execute(runs: list[Run], dry_run: bool = False, limit: int | None = None) -> list[Run]:
-    """Run every pending grid point sequentially; return the ones that failed."""
+def execute(
+    runs: list,
+    dry_run: bool = False,
+    limit: int | None = None,
+    build=build_command,
+    label: str = "run_matrix",
+) -> list:
+    """Run every pending job sequentially; return the ones that failed.
+
+    Drives anything with ``is_done()``, ``name`` and ``config``, so the pilot
+    launcher reuses it by passing its own ``build`` and ``label``.
+    """
     done = [r for r in runs if r.is_done()]
     pending = [r for r in runs if not r.is_done()]
     selected = pending if limit is None else pending[:limit]
 
     missing = sorted({r.config for r in selected if not r.config.exists()})
     if missing:
-        print("[run_matrix] missing cell configs -- run `--init` first:")
+        print(f"[{label}] missing cell configs -- run `run_matrix.py --init` first:")
         for c in missing:
             print(f"    {c.relative_to(ROOT)}")
         return selected
 
     note = "" if limit is None else f" (capped from {len(pending)} pending)"
-    print(f"[run_matrix] {len(done)} done, {len(selected)} to run{note} "
+    print(f"[{label}] {len(done)} done, {len(selected)} to run{note} "
           f"(of {len(runs)} selected)")
-    failures: list[Run] = []
+    failures: list = []
     batch_started = time.monotonic()
     for i, run in enumerate(selected, 1):
-        cmd = build_command(run)
+        cmd = build(run)
         if dry_run:
             print("  DRY  " + " ".join(cmd))
             continue
-        print(f"\n[run_matrix] ({i}/{len(pending)}) {run.name}")
+        print(f"\n[{label}] ({i}/{len(selected)}) {run.name}")
         run_started = time.monotonic()
         failed = subprocess.run(cmd, env=child_env()).returncode != 0
         run_elapsed = time.monotonic() - run_started
         if failed:
-            print(f"[run_matrix] FAILED: {run.name} (left pending)")
+            print(f"[{label}] FAILED: {run.name} (left pending)")
             failures.append(run)
-        print(f"[run_matrix] {fmt_duration(run_elapsed)} this run | "
+        print(f"[{label}] {fmt_duration(run_elapsed)} this run | "
               f"{fmt_duration(time.monotonic() - batch_started)} elapsed, "
               f"{i}/{len(selected)} of this batch")
 
     if not dry_run:
         ok = len(selected) - len(failures)
-        print(f"\n[run_matrix] finished: {ok} ok, {len(failures)} failed "
+        print(f"\n[{label}] finished: {ok} ok, {len(failures)} failed "
               f"in {fmt_duration(time.monotonic() - batch_started)}")
         for r in failures:
             print(f"    still pending: {r.name}")

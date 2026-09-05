@@ -47,6 +47,7 @@ _SCALAR_FLAGS = [
     ("lr", float), ("batch_size", int), ("epochs", int),
     ("momentum", float), ("weight_decay", float), ("seed", int),
     ("probe_size", int), ("chunk_size", int), ("out_dir", str), ("device", str),
+    ("run_name", str), ("threshold_acc", float),
 ]
 
 
@@ -68,9 +69,6 @@ def parse_config(argv: list[str] | None = None) -> Config:
     for name, typ in _SCALAR_FLAGS:
         p.add_argument(f"--{name.replace('_', '-')}", dest=name, type=typ,
                        default=getattr(base, name))
-    p.add_argument("--run-name", dest="run_name", type=str, default=base.run_name)
-    p.add_argument("--threshold-acc", dest="threshold_acc", type=float,
-                   default=base.threshold_acc)
     args = p.parse_args(argv)
 
     # Merge: start from base (keeps YAML-only knobs), apply CLI scalars.

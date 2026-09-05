@@ -24,6 +24,10 @@ def test_pipeline_smoke(tmp_path):
     assert len(traj) > 0
     assert "mcoh/global" in traj.columns        # a gradient metric ran
     assert "tse/cumulative" in traj.columns      # the baseline ran
+    # TSE counts epochs, not steps: after one epoch its history holds a single
+    # term, the epoch mean, so the cumulative sum equals the e=1 window. Feeding
+    # it per-step losses would make the sum ~390x larger than the window.
+    assert traj["tse/cumulative"].iloc[-1] == traj["tse/e_window"].iloc[-1]
 
     epoch_rows = traj
     assert len(epoch_rows) == 1

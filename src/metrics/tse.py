@@ -47,17 +47,4 @@ def compute_tse(
     return out
 
 
-class TseMetric:
-    name = "tse"
-
-    def compute(
-        self,
-        losses: Sequence[float] | torch.Tensor,
-        *,
-        e: int = 1,
-        gammas: Sequence[float] = (0.9, 0.999),
-    ) -> dict[str, float]:
-        return compute_tse(losses, e=e, gammas=gammas)
-
-
-METRIC = TseMetric()
+METRIC = compute_tse

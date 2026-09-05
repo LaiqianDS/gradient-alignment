@@ -5,13 +5,11 @@ import pytest
 import torch
 
 from config import Config
-from metrics.tse import compute_tse
 from models import build_model
 from train import (
     build_optimizer,
     default_run_name,
     efficiency_summary,
-    epoch_mean_losses,
     median3,
     resolve_device,
     snap_windows,
@@ -40,30 +38,6 @@ def test_default_run_name():
     assert default_run_name(Config(run_name="custom")) == "custom"
     auto = default_run_name(Config(model="fc", dataset="mnist", optimizer="adam"))
     assert "fc" in auto and "mnist" in auto and "adam" in auto
-
-
-def test_epoch_mean_losses_full_epochs():
-    # 2 epochs x 3 steps: per-epoch means [2.0, 5.0].
-    assert epoch_mean_losses([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 3) == [2.0, 5.0]
-
-
-def test_epoch_mean_losses_partial_epoch_running_mean():
-    # 1 full epoch + 2 of 3 steps: the in-progress epoch contributes its
-    # running mean, so the helper is defined for any loss-history length.
-    assert epoch_mean_losses([1.0, 2.0, 3.0, 4.0, 5.0], 3) == [2.0, 4.5]
-
-
-def test_epoch_mean_losses_feeds_tse_epoch_semantics():
-    # Per-step losses would make TSE-E(e=1) the last *step* loss and decay the
-    # EMA per step. Constant loss 1.0 over 5 epochs x 100 steps must give the
-    # closed forms over T=5, not T=500.
-    means = epoch_mean_losses([1.0] * 500, 100)
-    assert means == [1.0] * 5
-    out = compute_tse(means)
-    assert abs(out["tse/e_window"] - 1.0) < 1e-9          # mean of last epoch
-    assert abs(out["tse/cumulative"] - 5.0) < 1e-9        # T=5, not 500
-    expected_ema = (1 - 0.9**5) / (1 - 0.9)               # ≈ 4.095, not 10.0
-    assert abs(out["tse/ema_0_9"] - expected_ema) < 1e-9
 
 
 def _epoch_df():

@@ -252,7 +252,7 @@ def test_the_best_loss_comes_from_the_curve_with_raw_edges(tmp_path):
 def test_vd1_comes_from_the_curve_and_not_from_the_summary(tmp_path):
     # the stored epochs_to_threshold is stale; the val curve is the only source
     _write_run(tmp_path, "climber", val_acc=(0.30, 0.55, 0.62, 0.70), stale_vd1=99)
-    assert E.vd1_epochs(tmp_path)["climber"] == 3
+    assert E.crossing_epochs(E.load_trajectories(tmp_path))["climber"] == 3
     status = E.vd_status(tmp_path).set_index(["run_name", "vd"])
     assert status.loc[("climber", "epochs_to_threshold"), "value"] == 3
 
@@ -262,7 +262,7 @@ def test_the_same_curve_crosses_for_one_architecture_and_not_another(tmp_path):
     curve = (0.40, 0.60, 0.64, 0.66)
     _write_run(tmp_path, "as_cnn", model="cnn", val_acc=curve)
     _write_run(tmp_path, "as_resnet", model="resnet18", val_acc=curve)
-    vd1 = E.vd1_epochs(tmp_path)
+    vd1 = E.crossing_epochs(E.load_trajectories(tmp_path))
     assert vd1["as_cnn"] == 2
     assert pd.isna(vd1["as_resnet"])
 

@@ -6,9 +6,14 @@ import pytest
 import torch
 import torch.nn as nn
 
-from metrics.gns_simple import METRIC, _gns_core
+from metrics.gns_simple import METRIC, _gns_from_moments
 from metrics.primitives import per_sample_grad_matrix
-from synthetic import parallel_grads, synthetic_probe, tiny_mlp
+from synthetic import moments, parallel_grads, synthetic_probe, tiny_mlp
+
+
+def _gns_core(G):
+    """The production reducer driven by a crafted ``[M, P]`` matrix."""
+    return _gns_from_moments(*moments(G))
 
 
 def test_parallel_grads_zero_noise():
@@ -87,9 +92,9 @@ def test_noise_matches_appendix_a1_estimator_up_to_bessel():
 
 
 def test_single_batch_noise_nonnegative():
-    # The implementation computes mean_i ‖g_i − ḡ‖² directly (not the
-    # difference-of-squares form, which can go slightly negative under fp32
-    # cancellation), so non-negativity holds by construction.
+    # tr(Sigma) comes from the difference of squares Q.sum()/M - ‖S‖²/M², which
+    # fp32 cancellation can push slightly negative. The moments are accumulated
+    # in float64, which keeps the residual far below the value.
     g = torch.Generator().manual_seed(3)
     for _ in range(50):
         G = torch.randn(torch.randint(2, 8, (1,), generator=g).item(),

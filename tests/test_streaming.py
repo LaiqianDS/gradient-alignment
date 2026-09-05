@@ -3,7 +3,7 @@
 Pins two things:
 
   * the streamed primitives reproduce the full-matrix moments / Gram, and
-  * each metric's ``compute()`` equals its ``_core`` over the full matrix AND
+  * each metric's ``compute()`` equals its reducer over the full matrix AND
     is invariant to the chunk size, so that knob never moves a logged value.
 """
 
@@ -12,11 +12,11 @@ import torch
 import torch.nn as nn
 
 from metrics import primitives
-from metrics.gns_simple import METRIC as GNS, _gns_core
+from metrics.gns_simple import METRIC as GNS, _gns_from_moments
 from metrics.gradient_confusion import METRIC as CONF, _confusion_core
-from metrics.gsnr import METRIC as GSNR, _gsnr_core
+from metrics.gsnr import METRIC as GSNR, _gsnr_from_moments
 from metrics.gwa import METRIC as GWA
-from metrics.m_coherence import METRIC as MCOH, _mcoh_core
+from metrics.m_coherence import METRIC as MCOH, _mcoh_from_moments
 from metrics.primitives import (
     per_sample_grad_matrix,
     stream_grad_moments,
@@ -24,7 +24,7 @@ from metrics.primitives import (
     stream_shared,
 )
 from metrics.stiffness import METRIC as STIFF, _stiffness_core
-from synthetic import synthetic_probe, tiny_mlp
+from synthetic import moments, synthetic_probe, tiny_mlp
 
 # Chunk sizes spanning < M, an awkward non-divisor, exactly M, and > M (one block).
 CHUNKS = [1, 7, 13, 40, 100]
@@ -73,16 +73,16 @@ def test_stream_gram_matches_full_matrix(probe, chunk):
 
 # (metric, full-matrix reference keyed off the oracle G)
 _COLUMN_METRICS = [
-    (GNS, lambda G, y: _gns_core(G)),
-    (GSNR, lambda G, y: _gsnr_core(G)),
-    (MCOH, lambda G, y: _mcoh_core(G)),
+    (GNS, lambda G, y: _gns_from_moments(*moments(G))),
+    (GSNR, lambda G, y: _gsnr_from_moments(*moments(G))),
+    (MCOH, lambda G, y: _mcoh_from_moments(*moments(G)[:2])),
     (STIFF, lambda G, y: _stiffness_core(G, y)),
     (CONF, lambda G, y: _confusion_core(G)),
 ]
 
 
 @pytest.mark.parametrize("metric, reference", _COLUMN_METRICS)
-def test_compute_matches_full_matrix_core(probe, metric, reference):
+def test_compute_matches_full_matrix_reducer(probe, metric, reference):
     model, X, y, lf, G = probe
     primitives.set_chunk_size(7)  # force genuine multi-chunk streaming
     out = metric.compute(model, X, y, lf)
@@ -105,8 +105,8 @@ def test_compute_is_chunk_invariant(probe, metric, _reference):
 
 
 def test_gwa_compute_is_chunk_invariant(probe):
-    # gwa has no full-matrix _core to diff against, so only chunk-invariance of
-    # the streamed cosines is pinned.
+    # gwa has no full-matrix reference to diff against, so only chunk-invariance
+    # of the streamed cosines is pinned.
     model, X, y, lf, _G = probe
     primitives.set_chunk_size(40)
     from metrics.gwa import METRIC as GWA

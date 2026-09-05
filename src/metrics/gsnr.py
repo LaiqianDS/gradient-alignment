@@ -16,34 +16,15 @@ from .primitives import EPS, stream_grad_moments
 _DEAD_TOL = 1e-8
 
 
-def _gsnr_core(G: torch.Tensor) -> dict[str, float]:
-    """Aggregate per-parameter GSNR over the non-dead columns of ``G`` ``[M, P]``.
-
-    ``r_j = gbar_j² / (var_j + EPS)`` with ``var`` unbiased. Columns whose norm
-    falls at or below :data:`_DEAD_TOL` are dropped, falling back to all columns
-    if none survive; ``r`` is then reduced to mean / median / p95.
-    """
-    gbar = G.mean(0)
-    var = G.var(0, unbiased=True)
-    r = gbar.pow(2) / (var + EPS)
-
-    col_norm = G.norm(dim=0)
-    alive = col_norm > _DEAD_TOL
-    if bool(alive.any()):
-        r = r[alive]
-
-    return {
-        "gsnr/mean": r.mean().item(),
-        "gsnr/median": r.median().item(),
-        "gsnr/p95": torch.quantile(r, 0.95).item(),
-    }
-
-
 def _gsnr_from_moments(S: torch.Tensor, Q: torch.Tensor, M: int) -> dict[str, float]:
-    """``_gsnr_core`` from the streamed moments ``S = Σg_i``, ``Q = Σg_i²``.
+    """Aggregate per-parameter GSNR from the streamed moments ``S = Σg_i``,
+    ``Q = Σg_i²``.
 
     ``gbar = S/M``, the unbiased per-column variance is ``(Q − S²/M)/(M−1)`` and
-    the per-column gradient norm is ``√Q_j``.
+    the per-column gradient norm is ``√Q_j``. ``r_j = gbar_j² / (var_j + EPS)``.
+    Columns whose norm falls at or below :data:`_DEAD_TOL` are dropped, falling
+    back to all columns if none survive; ``r`` is then reduced to mean / median
+    / p95.
     """
     gbar = S / M
     var = (Q - S * S / M) / (M - 1)

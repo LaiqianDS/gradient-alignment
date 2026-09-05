@@ -18,25 +18,14 @@ import torch.nn as nn
 from .primitives import EPS, stream_grad_moments
 
 
-def _gns_core(G: torch.Tensor) -> dict[str, float]:
-    """Simple gradient noise scale from a ``[M, P]`` per-sample gradient matrix."""
-    Gbar = G.mean(0)
-    gbar_sq = Gbar.dot(Gbar)
-    # mean_i ‖g_i - ḡ‖²: same algebra as mean_i ‖g_i‖² - ‖ḡ‖², but immune to the
-    # fp32 cancellation that can turn the difference-of-squares negative.
-    tr_sigma = (G - Gbar).pow(2).sum(1).mean()
-    return {
-        "noise_scale/tr_sigma": float(tr_sigma),
-        "noise_scale/simple": float(tr_sigma / (gbar_sq + EPS)),
-    }
-
-
 def _gns_from_moments(S: torch.Tensor, Q: torch.Tensor, M: int) -> dict[str, float]:
-    """``_gns_core`` from the streamed moments ``S = Σg_i``, ``Q = Σg_i²``.
+    """Simple gradient noise scale from the streamed moments ``S = Σg_i``,
+    ``Q = Σg_i²``.
 
     ``‖ḡ‖² = ‖S‖²/M²`` and ``tr Σ = Q.sum()/M − ‖ḡ‖²``. That difference of
     squares needs ``S``/``Q`` in float64, which is what
-    :func:`stream_grad_moments` returns.
+    :func:`stream_grad_moments` returns; in float32 the cancellation can turn
+    ``tr Σ`` negative.
     """
     gbar_sq = S.dot(S) / (M * M)
     tr_sigma = Q.sum() / M - gbar_sq

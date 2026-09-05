@@ -2,8 +2,8 @@
 
 * ``REGISTRY``: the gradient metrics,
   ``metric.compute(model, X, y, loss_fn) -> dict[str, float]``.
-* ``BASELINE``: the TSE baseline, ``BASELINE.compute(losses) -> dict``, which
-  takes a loss sequence instead of a model.
+* ``BASELINE``: the TSE baseline, ``BASELINE(losses) -> dict``, which takes a
+  loss sequence instead of a model.
 """
 
 from . import base, primitives  # noqa: F401

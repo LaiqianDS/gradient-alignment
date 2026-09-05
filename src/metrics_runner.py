@@ -10,7 +10,6 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 
-from metrics import BASELINE
 from metrics.primitives import stream_shared
 
 
@@ -49,8 +48,3 @@ def measure(
     if was_training:
         model.train()
     return row
-
-
-def baseline_row(losses) -> dict[str, float]:
-    """TSE baseline scalars from per-epoch mean training losses."""
-    return BASELINE.compute(losses)

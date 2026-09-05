@@ -146,11 +146,6 @@ def crossing_epochs(traj: pd.DataFrame) -> pd.Series:
     return pd.Series(epochs, name="epochs_to_threshold").rename_axis("run_name")
 
 
-def vd1_epochs(report_dir: str | Path = REPORTS_DIR) -> pd.Series:
-    """:func:`crossing_epochs` over the trajectories under ``report_dir``."""
-    return crossing_epochs(load_trajectories(report_dir))
-
-
 def _best_loss_epochs(traj: pd.DataFrame) -> pd.Series:
     """1-indexed epoch where the smoothed val loss first reaches its minimum."""
     epochs = {}
@@ -417,25 +412,12 @@ def health_by_cell(health: pd.DataFrame) -> pd.DataFrame:
 
 
 # Shape along the learning rate, and the pruning of the variability family.
-
 EARLY_WINDOW = 0.05
-
-
 SHAPE_TOL = 0.05
-
-
 SHAPE_MIN_RUNS = 3
-
-
 MONOTONE = ("up", "down")
-
-
 NOT_MONOTONE = ("peak", "valley", "wiggly")
-
-
 PRUNE_PAIR = ("var/normalized", "gsnr/mean")
-
-
 PRUNE_D = 0.8
 
 
@@ -549,6 +531,15 @@ def _pair_terms(
     return signed, comparable
 
 
+def _jackknife_se(reps: np.ndarray) -> float:
+    """Delete-one jackknife error of a statistic from its replicates; NaN with
+    fewer than three."""
+    n = len(reps)
+    if n < 3:
+        return np.nan
+    return float(np.sqrt((n - 1) / n * ((reps - reps.mean()) ** 2).sum()))
+
+
 def concordance(
     predictor: Iterable[float],
     outcome: Iterable[float],
@@ -595,10 +586,7 @@ def d_stats(
     total = signed.sum() / 2
     left = pairs - comparable.sum(1)
     ok = left > 0
-    reps = (total - signed.sum(1)[ok]) / left[ok]
-    n = len(reps)
-    se = float(np.sqrt((n - 1) / n * ((reps - reps.mean()) ** 2).sum())) if n >= 3 else np.nan
-    return float(total / pairs), pairs, se
+    return float(total / pairs), pairs, _jackknife_se((total - signed.sum(1)[ok]) / left[ok])
 
 
 def d_diff_stats(
@@ -628,9 +616,7 @@ def d_diff_stats(
     ok = left > 0
     reps = (np.abs((tx - sx.sum(1)[ok]) / left[ok])
             - np.abs((tr - sr.sum(1)[ok]) / left[ok]))
-    n = len(reps)
-    se = float(np.sqrt((n - 1) / n * ((reps - reps.mean()) ** 2).sum())) if n >= 3 else np.nan
-    return float(abs(tx / pairs) - abs(tr / pairs)), se
+    return float(abs(tx / pairs) - abs(tr / pairs)), _jackknife_se(reps)
 
 
 def pair_agreement(

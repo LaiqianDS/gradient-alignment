@@ -185,10 +185,11 @@ def validity_report(traj: pd.DataFrame, tol: float = 1e-6) -> pd.DataFrame:
     n_runs = traj["run_name"].nunique()
     out = []
     for s in SPECS:
+        ident = {"key": s.key, "metric": s.metric, "family": s.family,
+                 "lo": s.lo, "hi": s.hi}
         if s.key not in traj.columns:
             out.append({
-                "key": s.key, "metric": s.metric, "family": s.family,
-                "lo": s.lo, "hi": s.hi, "obs_min": np.nan, "obs_max": np.nan,
+                **ident, "obs_min": np.nan, "obs_max": np.nan,
                 "n_nan": np.nan, "n_inf": np.nan, "n_below": np.nan,
                 "n_above": np.nan, "runs_all_nan": n_runs, "status": "missing",
             })
@@ -214,8 +215,7 @@ def validity_report(traj: pd.DataFrame, tol: float = 1e-6) -> pd.DataFrame:
         if n_above:
             issues.append("above")
         out.append({
-            "key": s.key, "metric": s.metric, "family": s.family,
-            "lo": s.lo, "hi": s.hi,
+            **ident,
             "obs_min": float(finite.min()) if finite.size else np.nan,
             "obs_max": float(finite.max()) if finite.size else np.nan,
             "n_nan": n_nan, "n_inf": n_inf, "n_below": n_below,

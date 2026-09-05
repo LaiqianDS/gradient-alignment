@@ -1,5 +1,5 @@
-"""Tests for the GSNR metric: analytic checks on ``_gsnr_core`` over crafted
-gradient matrices with known per-parameter GSNR, plus one smoke test of
+"""Tests for the GSNR metric: analytic checks on ``_gsnr_from_moments`` over
+crafted gradient matrices with known per-parameter GSNR, plus one smoke test of
 ``compute()``."""
 
 import math
@@ -7,8 +7,13 @@ import math
 import torch
 import torch.nn as nn
 
-from metrics.gsnr import METRIC, _gsnr_core
-from synthetic import synthetic_probe, tiny_mlp
+from metrics.gsnr import METRIC, _gsnr_from_moments
+from synthetic import moments, synthetic_probe, tiny_mlp
+
+
+def _gsnr_core(G):
+    """The production reducer driven by a crafted ``[M, P]`` matrix."""
+    return _gsnr_from_moments(*moments(G))
 
 
 def test_low_noise_high_signal_is_huge():

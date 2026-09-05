@@ -74,14 +74,15 @@ def apply() -> None:
     })
 
 
-def figure(width: str = "full", ratio: float = 0.62, nrows: int = 1, ncols: int = 1):
+def figure(width: str = "full", ratio: float = 0.62, nrows: int = 1, ncols: int = 1, **kw):
     """A figure at its final printed width, ``full`` or ``narrow``.
 
     Do not save with ``bbox_inches="tight"``: trimming changes the saved size.
+    Extra keywords reach ``plt.subplots``, ``gridspec_kw`` among them.
     """
     w = FULL_CM if width == "full" else NARROW_CM
     return plt.subplots(
-        nrows, ncols, figsize=(w * _CM, w * ratio * _CM), layout="constrained"
+        nrows, ncols, figsize=(w * _CM, w * ratio * _CM), layout="constrained", **kw
     )
 
 

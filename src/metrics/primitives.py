@@ -77,10 +77,8 @@ def _resolve_chunk(chunk_size: int | None) -> int:
 
 def iter_grad_chunks(model, X, y, loss_fn, chunk_size: int | None = None):
     """Yield ``(G_chunk [c, P], y_chunk [c])`` per-sample gradient row-chunks."""
-    cs = _resolve_chunk(chunk_size)
-    for s in range(0, X.shape[0], cs):
-        Xc, yc = X[s : s + cs], y[s : s + cs]
-        yield per_sample_grad_matrix(model, Xc, yc, loss_fn), yc
+    for grads, yc in iter_per_sample_grad_dicts(model, X, y, loss_fn, chunk_size):
+        yield flatten_grads(grads, batched=True), yc
 
 
 def iter_per_sample_grad_dicts(model, X, y, loss_fn, chunk_size: int | None = None):
@@ -93,6 +91,26 @@ def iter_per_sample_grad_dicts(model, X, y, loss_fn, chunk_size: int | None = No
     for s in range(0, X.shape[0], cs):
         Xc, yc = X[s : s + cs], y[s : s + cs]
         yield per_sample_grads(model, Xc, yc, loss_fn), yc
+
+
+def _add_moments(S, Q, Gd: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    """Fold a float64 ``[c, P]`` chunk into the running column moments."""
+    chunk_S, chunk_Q = Gd.sum(0), (Gd * Gd).sum(0)
+    return (chunk_S if S is None else S + chunk_S,
+            chunk_Q if Q is None else Q + chunk_Q)
+
+
+def _gram_from_host(
+    G: torch.Tensor, device: torch.device
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """``[M, M]`` Gram of a host-resident ``[M, P]`` matrix and its ``[M]`` row
+    norms. Accumulated on ``device`` in column blocks, so device memory stays
+    bounded whatever ``P`` is."""
+    gram = torch.zeros(G.shape[0], G.shape[0], device=device)
+    for s in range(0, G.shape[1], _COL_BLOCK):
+        Gb = G[:, s : s + _COL_BLOCK].to(device)
+        gram = gram + Gb @ Gb.T
+    return gram, gram.diagonal().clamp_min(0).sqrt()
 
 
 def stream_grad_moments(
@@ -111,11 +129,9 @@ def stream_grad_moments(
     for Gc, _ in iter_grad_chunks(model, X, y, loss_fn, chunk_size):
         # Move device→acc *then* cast: ``.to(cpu, float64)`` from an MPS tensor
         # would cast to float64 on MPS first, which Metal rejects.
-        Gc = Gc.to(acc).double()
-        chunk_S, chunk_Q = Gc.sum(0), (Gc * Gc).sum(0)
-        S = chunk_S if S is None else S + chunk_S
-        Q = chunk_Q if Q is None else Q + chunk_Q
-        M += Gc.shape[0]
+        Gd = Gc.to(acc).double()
+        S, Q = _add_moments(S, Q, Gd)
+        M += Gd.shape[0]
     return S, Q, M
 
 
@@ -128,17 +144,10 @@ def stream_gram(
     ``[chunk_size, P]`` block); the Gram is then accumulated in column blocks
     back on the model device. Costs ~M·P·4 bytes of host RAM for ``G``.
     """
-    device = X.device
     G = torch.cat(
         [Gc.to("cpu") for Gc, _ in iter_grad_chunks(model, X, y, loss_fn, chunk_size)]
     )
-    _, P = G.shape
-    gram = torch.zeros(G.shape[0], G.shape[0], device=device)
-    for s in range(0, P, _COL_BLOCK):
-        Gb = G[:, s : s + _COL_BLOCK].to(device)
-        gram = gram + Gb @ Gb.T
-    norms = gram.diagonal().clamp_min(0).sqrt()
-    return gram, norms
+    return _gram_from_host(G, X.device)
 
 
 def batch_grad(model, X, y, loss_fn) -> dict[str, torch.Tensor]:
@@ -205,9 +214,9 @@ class SharedSweep:
 def stream_shared(model, X, y, loss_fn, chunk_size: int | None = None) -> SharedSweep:
     """One per-sample ∇L sweep yielding every product in :class:`SharedSweep`.
 
-    Device peak ``[chunk_size, P]``, host peak the full ``[M, P]`` f32. Its
-    products must equal :func:`stream_grad_moments` and :func:`stream_gram` at
-    the same chunk size, or a metric's ``reduce`` stops equalling its ``compute``.
+    Device peak ``[chunk_size, P]``, host peak the full ``[M, P]`` f32. Shares
+    its arithmetic with :func:`stream_grad_moments` and :func:`stream_gram`, so
+    a metric's ``reduce`` equals its ``compute``.
     """
     device = X.device
     acc = _moment_device(device)
@@ -231,20 +240,12 @@ def stream_shared(model, X, y, loss_fn, chunk_size: int | None = None) -> Shared
         # When the moments accumulate on the host, reuse Gc_cpu instead of a
         # second device->host copy.
         Gd = (Gc_cpu if acc.type == "cpu" else Gc).to(acc).double()
-        chunk_S, chunk_Q = Gd.sum(0), (Gd * Gd).sum(0)
-        S = chunk_S if S is None else S + chunk_S
-        Q = chunk_Q if Q is None else Q + chunk_Q
+        S, Q = _add_moments(S, Q, Gd)
         M += Gc.shape[0]
 
         hg = grads[lname + ".weight"].flatten(start_dim=1)  # [c, W], bias excluded
         hgn = hg / hg.norm(dim=1).clamp_min(EPS).unsqueeze(1)
         cos_chunks.append((hgn @ wn).to("cpu"))  # [c]
 
-    G = torch.cat(g_host)
-    _, P = G.shape
-    gram = torch.zeros(M, M, device=device)
-    for s in range(0, P, _COL_BLOCK):
-        Gb = G[:, s : s + _COL_BLOCK].to(device)
-        gram = gram + Gb @ Gb.T
-    norms = gram.diagonal().clamp_min(0).sqrt()
+    gram, norms = _gram_from_host(torch.cat(g_host), device)
     return SharedSweep(S=S, Q=Q, M=M, gram=gram, norms=norms, gwa_cos=torch.cat(cos_chunks), y=y)

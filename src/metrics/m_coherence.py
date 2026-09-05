@@ -19,17 +19,8 @@ import torch.nn as nn
 from .primitives import EPS, stream_grad_moments
 
 
-def _mcoh_core(G: torch.Tensor) -> dict[str, float]:
-    """m-coherence from a ``[M, P]`` per-sample gradient matrix."""
-    S = G.sum(0)
-    num = S @ S
-    den = (G * G).sum()
-    alpha = num / (den + EPS)
-    return {"mcoh/global": float(alpha)}
-
-
 def _mcoh_from_moments(S: torch.Tensor, Q: torch.Tensor) -> dict[str, float]:
-    """``_mcoh_core`` from the streamed moments ``S = Σg_i``, ``Q = Σg_i²``.
+    """m-coherence from the streamed moments ``S = Σg_i``, ``Q = Σg_i²``.
 
     ``num = ‖S‖²`` and ``Σ_i‖g_i‖² = Q.sum()``.
     """

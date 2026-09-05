@@ -3,8 +3,20 @@
 import torch
 import torch.nn as nn
 
-from metrics.m_coherence import METRIC, _mcoh_core
-from synthetic import orthogonal_grads, parallel_grads, synthetic_probe, tiny_mlp
+from metrics.m_coherence import METRIC, _mcoh_from_moments
+from synthetic import (
+    moments,
+    orthogonal_grads,
+    parallel_grads,
+    synthetic_probe,
+    tiny_mlp,
+)
+
+
+def _mcoh_core(G):
+    """The production reducer driven by a crafted ``[M, P]`` matrix."""
+    S, Q, _ = moments(G)
+    return _mcoh_from_moments(S, Q)
 
 
 def test_parallel_grads_equal_m():
