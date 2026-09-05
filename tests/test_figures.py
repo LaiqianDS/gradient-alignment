@@ -77,17 +77,17 @@ def test_the_selection_bars_build_and_write_a_pdf(tmp_path):
     assert out.exists() and out.suffix == ".pdf"
 
 
-def test_the_window_curves_build_and_write_a_pdf(tmp_path):
+def test_the_window_change_builds_and_writes_a_pdf(tmp_path):
     import pandas as pd
 
-    rows = [{"dataset": "mnist", "model": "cnn", "optimizer": "sgd", "window": w,
-             "predictor": p, "vd": vd, "D": 0.3, "D_land": 0.2}
-            for w in (0.05, 0.10, 0.25, 0.5, 1.0)
-            for p in ("val_acc", "gwa/value", "gsnr/mean", "log_lr")
+    rows = [{"dataset": d, "model": "cnn", "optimizer": "sgd", "predictor": p,
+             "vd": vd, "D_diff_w": diff}
+            for d, diff in (("mnist", 0.3), ("cifar10", -0.1), ("cifar100", 0.05))
+            for p in ("val_acc", "gwa/value", "gsnr/mean", "mcoh/global")
             for vd in ("epochs_to_threshold", "final_test_acc", "final_gap_loss")]
-    path = tmp_path / "tabla_larga.parquet"
+    path = tmp_path / "ventanas.parquet"
     pd.DataFrame(rows).to_parquet(path, index=False)
-    out = figures.window_curves(path, tmp_path / "img")
+    out = figures.window_change(path, tmp_path / "img")
     assert out.exists() and out.suffix == ".pdf"
 
 

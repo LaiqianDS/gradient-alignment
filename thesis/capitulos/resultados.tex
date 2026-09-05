@@ -47,18 +47,18 @@ La Figura~\ref{fig:rango-celda} recorre una celda completa con la \emph{gradient
 \begin{figure}[ht]
 \centering
 \includegraphics{rango-celda}
-\caption{Una celda completa, MNIST con la red convolucional y SGD, al 5\,\% del presupuesto.}
+\caption{Una celda completa, MNIST con la red convolucional y SGD, al 5\,\%.}
 \label{fig:rango-celda}
 \end{figure}
 
 El panel izquierdo muestra además una forma que el cociente no recoge. La columna sube hasta $10^{-3}$ y a partir de ahí desciende, así que no crece ni decrece de un extremo al otro de la rejilla. El estadístico la puntúa alto igual, porque hay estructura, mientras que un coeficiente de rangos, que solo detecta relaciones que suben o bajan en un único sentido, leería como ausencia de señal la mitad de esa curva. Dentro de una celda la relación entre una métrica y una variable es la composición de dos curvas sobre el \emph{learning rate}, y ningún estadístico de rangos la deshace. La Sección~\ref{sec:protocolo-analisis} declara las celdas donde esa relación no puede ser monótona y añade una lectura, la de selección, que no depende de la forma.
 
-Cada métrica entra representada por una sola columna, la que la Tabla~\ref{tab:columnas-titulares} fija como su columna titular, ya que el registro por \emph{epoch} escribe varias columnas de cada una y contrastarlas todas multiplicaría el número de contrastes, y con él los hallazgos por azar, sin que ningún objetivo lo pida. La Figura~\ref{fig:rango-columnas} repite la cuenta en las 24 celdas al 5\,\% del presupuesto y resume cada columna por su mediana y el recorrido entre cuartiles. Las ocho métricas de gradiente superan su referencia con holgura, desde 0,45 la más floja hasta 0,92 la que más. La cuenta se extiende a las cuatro ventanas tempranas. De las 768 casillas de métrica de gradiente, que son 24 celdas por cuatro ventanas por ocho columnas, solo 29 quedan en la referencia o por debajo, un 3,8\,\%. Todas ellas corresponden a la familia de variabilidad o a la m-coherencia, que arroja exactamente el mismo número que la escala de ruido por la Ecuación~\ref{eq:gns-mcoh}. La última lectura de un coeficiente nulo queda por tanto descartada en casi toda la rejilla.
+Cada métrica entra representada por una sola columna, la que la Tabla~\ref{tab:columnas-titulares} fija como su columna titular, ya que el registro por \emph{epoch} escribe varias columnas de cada una y contrastarlas todas multiplicaría el número de contrastes, y con él los hallazgos por azar, sin que ningún objetivo lo pida. La Figura~\ref{fig:rango-columnas} repite la cuenta en las 24 celdas al 5\,\% del presupuesto y resume cada columna por su mediana. Las ocho métricas de gradiente superan su referencia con holgura, desde 0,45 la más floja hasta 0,92 la que más. La cuenta se extiende a las cuatro ventanas tempranas. De las 768 casillas de métrica de gradiente, que son 24 celdas por cuatro ventanas por ocho columnas, solo 29 quedan en la referencia o por debajo, un 3,8\,\%. Todas ellas corresponden a la familia de variabilidad o a la m-coherencia, que arroja exactamente el mismo número que la escala de ruido por la Ecuación~\ref{eq:gns-mcoh}. La última lectura de un coeficiente nulo queda por tanto descartada en casi toda la rejilla.
 
 \begin{figure}[ht]
 \centering
 \includegraphics{rango-columnas}
-\caption{Dispersión de cada columna explicada por el \emph{learning rate}, mediana y cuartiles sobre las 24 celdas.}
+\caption{Dispersión explicada por el \emph{learning rate} en las 24 celdas.}
 \label{fig:rango-columnas}
 \end{figure}
 
@@ -89,7 +89,7 @@ La Figura~\ref{fig:solape-celda} recorre CIFAR-10 con la red convolucional y SGD
 \begin{figure}[ht]
 \centering
 \includegraphics{solape-celda}
-\caption{Curvas de validación y cruces acumulados de CIFAR-10 con la red convolucional y SGD.}
+\caption{Cruces del umbral en CIFAR-10 con la red convolucional y SGD.}
 \label{fig:solape-celda}
 \end{figure}
 
@@ -123,7 +123,7 @@ La misma evaluación cierra la comprobación anunciada en la Sección~\ref{sec:p
 % figura signos-h1 en src/figures.py. H1 se lee como requisito previo, no como hallazgo. La lectura de
 % selección (results/seleccion.parquet) es de H2 y va en §Valor incremental.
 
-Esta sección responde a la hipótesis H1 con la familia primaria que fija la Sección~\ref{sec:protocolo-analisis}: la ventana del 5\,\%, las \emph{epochs} hasta el umbral leídas por hitos, el \emph{accuracy} de test y el \emph{gap} de \emph{loss}, y diez predictores, la posición en la rejilla, los tres componentes del predictor de referencia y las seis métricas de gradiente que quedan tras la poda. Cada D se calcula dentro de una celda sobre los entrenamientos que aprendieron, con su intervalo por \emph{jackknife}, y una celda muestra asociación cuando el intervalo deja fuera el cero. La Tabla~\ref{tab:signos-h1} da, para cada combinación, las celdas con D positiva y negativa, cuántas de cada signo muestran asociación, y el signo de la cuenta granulada; la Figura~\ref{fig:signos-h1} muestra las D por celda una a una, con el punto relleno cuando el intervalo deja fuera el cero. En la figura, las tres filas del predictor de referencia se agrupan lejos del cero con la velocidad y con el \emph{accuracy} de test, y se parten en dos con el \emph{gap}. Las seis filas de las métricas se reparten a los dos lados del cero, salvo GWA con la velocidad y con el \emph{accuracy} de test y la \emph{stiffness} con el \emph{gap}.
+Esta sección responde a la hipótesis H1 con la familia primaria que fija la Sección~\ref{sec:protocolo-analisis}: la ventana del 5\,\%, las \emph{epochs} hasta el umbral leídas por hitos, el \emph{accuracy} de test y el \emph{gap} de \emph{loss}, y diez predictores, la posición en la rejilla, los tres componentes del predictor de referencia y las seis métricas de gradiente que quedan tras la poda. Cada D se calcula dentro de una celda sobre los entrenamientos que aprendieron, con su intervalo por \emph{jackknife}, y una celda muestra asociación cuando el intervalo deja fuera el cero. La Tabla~\ref{tab:signos-h1} da, para cada combinación, las celdas con D positiva y negativa, cuántas de cada signo muestran asociación, y el signo de la cuenta granulada; la Figura~\ref{fig:signos-h1} resume las 24 D de cada combinación en una caja. La raya es la mediana, la caja abarca la mitad central de las celdas y los bigotes van de la celda más baja a la más alta. Las cajas de las tres lecturas del predictor de referencia quedan lejos del cero con la velocidad y con el \emph{accuracy} de test, y cruzan el cero, anchas, con el \emph{gap}. Las de las seis métricas cruzan el cero, salvo GWA con la velocidad y con el \emph{accuracy} de test y la \emph{stiffness} con el \emph{gap}.
 
 \begin{figure}[ht]
 \centering
@@ -136,7 +136,7 @@ Esta sección responde a la hipótesis H1 con la familia primaria que fija la Se
 \centering
 \footnotesize
 \setlength{\tabcolsep}{3.5pt}
-\caption{Recuento de celdas de la familia primaria: signo de la D, celdas con asociación por signo, y signo de la cuenta granulada. En negrita, las combinaciones con asociación del mismo signo en 15 celdas o más.}
+\caption{Recuento de celdas de la familia primaria. En negrita, las combinaciones con asociación del mismo signo en 15 celdas o más.}
 \label{tab:signos-h1}
 \begin{tabular}{lccccccccc}
 \toprule
@@ -177,13 +177,13 @@ H1 se sostiene como requisito previo. GWA muestra asociación con la velocidad y
 % Fase C, escrita el 2026-09-04. Números de results/incremental.parquet y results/seleccion.parquet
 % (2026-09-04), regenerables con `uv run python src/contrast.py`; figura `seleccion` en src/figures.py.
 
-Esta sección responde a la hipótesis H2 con las tres lecturas de la Sección~\ref{sec:protocolo-objetivos}, sobre la familia primaria: la ventana del 5\,\%, los entrenamientos que aprendieron, y cada métrica frente a la referencia nombrada de antemano para su variable, el \emph{accuracy} de validación para el \emph{accuracy} de test y el \emph{loss} de validación para el \emph{gap} de \emph{loss}. La primera lectura compara, celda a celda, el valor absoluto de la D de la métrica con el de su referencia, y cuenta en cuántas celdas la diferencia deja fuera el cero por su intervalo \emph{jackknife}, calculado quitando un entrenamiento y recalculando las dos D sobre los mismos que quedan. La segunda lee la D entre la métrica y su referencia dentro de la celda, y llama redundante a una métrica cuando ese valor absoluto llega a 0,8, el umbral de la poda. La tercera es la lectura de selección de la Sección~\ref{sec:protocolo-seleccion}: el \emph{accuracy} de test que se pierde al elegir el \emph{learning rate} de cada celda y \emph{seed} con el predictor al 5\,\%, frente al mejor de esa \emph{seed}. La Tabla~\ref{tab:h2} recoge las tres para las dos variables que deciden, y la Figura~\ref{fig:seleccion} la tercera.
+Esta sección responde a la hipótesis H2 con las tres lecturas de la Sección~\ref{sec:protocolo-objetivos}, sobre la familia primaria: la ventana del 5\,\%, los entrenamientos que aprendieron, y cada métrica frente a la referencia nombrada de antemano para su variable, el \emph{accuracy} de validación para el \emph{accuracy} de test y el \emph{loss} de validación para el \emph{gap} de \emph{loss}. La primera lectura compara, celda a celda, el valor absoluto de la D de la métrica con el de su referencia, y cuenta en cuántas celdas la diferencia deja fuera el cero por su intervalo \emph{jackknife}, calculado quitando un entrenamiento y recalculando las dos D sobre los mismos que quedan. La segunda lee la D entre la métrica y su referencia dentro de la celda, y llama redundante a una métrica cuando ese valor absoluto llega a 0,8, el umbral de la poda. La tercera es la lectura de selección de la Sección~\ref{sec:protocolo-seleccion}: el \emph{accuracy} de test que se pierde al elegir el \emph{learning rate} de cada celda y \emph{seed} con el predictor al 5\,\%, frente al mejor de esa \emph{seed}; la tabla da al lado, para cada predictor, en cuántas celdas esa pérdida es menor que la del \emph{accuracy} de validación. La Tabla~\ref{tab:h2} recoge las tres para las dos variables que deciden, y la Figura~\ref{fig:seleccion} la tercera.
 
 \begin{table}[ht]
 \centering
 \footnotesize
 \setlength{\tabcolsep}{3.5pt}
-\caption{H2 en la familia primaria: celdas que gana y pierde cada predictor frente a su referencia en $|D|$, las que lo hacen con intervalo fuera del cero, la mediana de $|D_{\mathrm{ref}}|$, y la pérdida por selección con las celdas donde pierde menos que el \emph{accuracy} de validación. En negrita, la mejor métrica de gradiente en los recuentos crudos y en la selección.}
+\caption{H2 en la familia primaria. En negrita, la mejor métrica de gradiente en los recuentos crudos y en la selección.}
 \label{tab:h2}
 \begin{tabular}{lcccccccc}
 \toprule
@@ -214,7 +214,7 @@ Sobre el \emph{gap} de \emph{loss} la distancia es mayor. La referencia, el \emp
 \begin{figure}[ht]
 \centering
 \includegraphics{seleccion}
-\caption{\emph{Accuracy} de test perdido al elegir el \emph{learning rate} con cada predictor al 5\,\%, mediana sobre las 24 celdas.}
+\caption{Pérdida de \emph{accuracy} de test por selección al 5\,\%.}
 \label{fig:seleccion}
 \end{figure}
 
@@ -245,14 +245,14 @@ Esta sección responde a la hipótesis H3 con la regla de la Sección~\ref{sec:p
 \centering
 \footnotesize
 \setlength{\tabcolsep}{4pt}
-\caption{Orden de las métricas de gradiente por variable al 5\,\%: signo mayoritario, celdas con asociación de ese signo y del contrario, y mediana de $|D|$. En negrita, la primera de cada variable.}
+\caption{Orden de las métricas de gradiente por variable al 5\,\%, con las celdas a favor y en contra del signo mayoritario.}
 \label{tab:h3}
 \begin{tabular}{clcccc}
 \toprule
 \textbf{Puesto} & \textbf{Predictor} & \textbf{Familia} & \textbf{Signo} & \textbf{Celdas} & \textbf{Mediana de $|D|$} \\
 \midrule
 \multicolumn{6}{l}{\textbf{\emph{Epochs} hasta el umbral}} \\
-1 & \textbf{GWA} & alineación & $+$ & 16/1 & 0,40 \\
+1 & GWA & alineación & $+$ & 16/1 & 0,40 \\
 2 & \emph{Stiffness} & alineación & $+$ & 9/5 & 0,35 \\
 3 & \emph{Gradient disparity} & variabilidad & $-$ & 9/4 & 0,28 \\
   & Posición en la rejilla & & $-$ & 7/5 & 0,33 \\
@@ -261,7 +261,7 @@ Esta sección responde a la hipótesis H3 con la regla de la Sección~\ref{sec:p
 6 & \emph{Gradient confusion} & alineación & $+$ & 5/4 & 0,24 \\
 \addlinespace
 \multicolumn{6}{l}{\textbf{\emph{Accuracy} de test}} \\
-1 & \textbf{GWA} & alineación & $-$ & 15/1 & 0,29 \\
+1 & GWA & alineación & $-$ & 15/1 & 0,29 \\
 2 & \emph{Gradient disparity} & variabilidad & $+$ & 12/4 & 0,34 \\
   & Posición en la rejilla & & $-$ & 7/6 & 0,30 \\
 3 & GSNR & variabilidad & $+$ & 7/4 & 0,24 \\
@@ -271,7 +271,7 @@ Esta sección responde a la hipótesis H3 con la regla de la Sección~\ref{sec:p
 \addlinespace
 \multicolumn{6}{l}{\textbf{\emph{Gap} de \emph{loss}}} \\
   & Posición en la rejilla & & $+$ & 15/0 & 0,46 \\
-1 & \textbf{\emph{Stiffness}} & alineación & $-$ & 15/1 & 0,39 \\
+1 & \emph{Stiffness} & alineación & $-$ & 15/1 & 0,39 \\
 2 & \emph{Gradient disparity} & variabilidad & $-$ & 11/4 & 0,36 \\
 3 & GSNR & variabilidad & $-$ & 11/2 & 0,32 \\
 4 & \emph{Gradient confusion} & alineación & $+$ & 9/5 & 0,31 \\
@@ -295,13 +295,13 @@ H3 cae en la forma en que se enunció. Ninguna familia ocupa las primeras posici
 % incremental.parquet (2026-09-04), regenerables con `uv run python src/contrast.py`; figura
 % `ventanas` en src/figures.py.
 
-Esta sección responde a la hipótesis H4: si medir en la ventana del 5\,\% predice tan bien como medir más tarde. Para las variables que se miden al terminar el entrenamiento la comparación es entre la ventana del 5\,\% y la del 50\,\%. Las dos D salen de los mismos entrenamientos de cada celda, así que la diferencia entre sus valores absolutos lleva el mismo intervalo \emph{jackknife} pareado que la Sección~\ref{sec:res-incremental}, quitando un entrenamiento y recalculando las dos. Se cuentan las celdas en las que $|D|$ crece y en las que decrece al esperar, y cuántas de cada lado dejan fuera el cero. Para la velocidad solo sirven las dos primeras ventanas. Su lectura por hitos compara poblaciones distintas, los que aún no habían cruzado en la \emph{epoch} 1 y los que no habían cruzado en la 2 en MNIST, y en la 2 y la 4 en los demás conjuntos. Por eso ahí el intervalo suma las dos varianzas y se declara como tal. Al cerrar la segunda ventana quedan en riesgo entre 8 y 40 entrenamientos por celda. La cuenta de velocidad es sobre 23 celdas, porque en Tiny-ImageNet con la red \emph{fully connected} bajo Adam ninguno de los diez en riesgo cruza después y no queda ningún par comparable. La Tabla~\ref{tab:h4} da los recuentos sobre la familia primaria y la Figura~\ref{fig:ventanas} la mediana de $|D|$ en cada ventana.
+Esta sección responde a la hipótesis H4: si medir en la ventana del 5\,\% predice tan bien como medir más tarde. Para las variables que se miden al terminar el entrenamiento la comparación es entre la ventana del 5\,\% y la del 50\,\%. Las dos D salen de los mismos entrenamientos de cada celda, así que la diferencia entre sus valores absolutos lleva el mismo intervalo \emph{jackknife} pareado que la Sección~\ref{sec:res-incremental}, quitando un entrenamiento y recalculando las dos. Se cuentan las celdas en las que $|D|$ crece y en las que decrece al esperar, y cuántas de cada lado dejan fuera el cero. Para la velocidad solo sirven las dos primeras ventanas. Su lectura por hitos compara poblaciones distintas, los que aún no habían cruzado en la \emph{epoch} 1 y los que no habían cruzado en la 2 en MNIST, y en la 2 y la 4 en los demás conjuntos. Por eso ahí el intervalo suma las dos varianzas y se declara como tal. Al cerrar la segunda ventana quedan en riesgo entre 8 y 40 entrenamientos por celda. La cuenta de velocidad es sobre 23 celdas, porque en Tiny-ImageNet con la red \emph{fully connected} bajo Adam ninguno de los diez en riesgo cruza después y no queda ningún par comparable. La Tabla~\ref{tab:h4} da los recuentos sobre la familia primaria y la Figura~\ref{fig:ventanas} el cambio de $|D|$ en cada celda, resumido en cajas como en la Figura~\ref{fig:signos-h1}.
 
 \begin{table}[ht]
 \centering
 \footnotesize
 \setlength{\tabcolsep}{3pt}
-\caption{H4: celdas en las que $|D|$ crece y decrece de la ventana temprana a la tardía, las que lo hacen con intervalo fuera del cero, y la mediana de $|D|$ en las dos ventanas. Del 5 al 50\,\% en las variables del final; de la primera ventana a la segunda, por hitos, en la velocidad.}
+\caption{H4 en la familia primaria, de la ventana temprana a la tardía.}
 \label{tab:h4}
 \scriptsize
 \setlength{\tabcolsep}{2.5pt}
@@ -329,11 +329,11 @@ GWA & 12/12 & 2/1 & 0,29$\to$0,33 & 11/12 & 1/3 & 0,21$\to$0,16 & 11/12 & 1/0 & 
 \begin{figure}[ht]
 \centering
 \includegraphics{ventanas}
-\caption{Mediana de $|D|$ sobre las celdas en cada ventana, una línea por predictor; la velocidad, por hitos, en las dos ventanas que la predicen.}
+\caption{Cambio de $|D|$ por celda al esperar.}
 \label{fig:ventanas}
 \end{figure}
 
-Sobre el \emph{accuracy} de test las seis métricas de gradiente no ganan nada esperando. Con el intervalo, ninguna crece en más de seis celdas, la \emph{gradient disparity}, y ninguna decrece en más de cuatro; los recuentos crudos se reparten cerca de la mitad, entre 7 y 16 celdas que crecen de 24, y las medianas de $|D|$ se mueven entre 0,18 y 0,34 al 5\,\% y entre 0,21 y 0,35 al 50\,\%; la que más sube es la \emph{gradient confusion}, de 0,18 a 0,29, con 16 celdas en crudo y cinco con intervalo, y la \emph{stiffness} crece en 15 celdas en crudo y en cuatro con intervalo. Lo que sí crece es la referencia. El \emph{accuracy} de validación pasa de 0,40 a 0,70, con 22 celdas que crecen y 16 con intervalo, y TSE de 0,33 a 0,50, con 18 y 13, porque a mitad del entrenamiento la curva de validación ya es casi el resultado que se quiere predecir. La Figura~\ref{fig:ventanas} lo enseña en un vistazo: las tres líneas del predictor de referencia suben hacia el 50\,\% y las seis de las métricas se quedan planas por debajo, con la posición en la rejilla en medio. La comparación de H2 repetida al 50\,\% lo confirma: allí ninguna métrica supera a la validación en más de dos celdas y GWA pierde en 23, frente a las 13 del 5\,\%.
+Sobre el \emph{accuracy} de test las seis métricas de gradiente no ganan nada esperando. Con el intervalo, ninguna crece en más de seis celdas, la \emph{gradient disparity}, y ninguna decrece en más de cuatro; los recuentos crudos se reparten cerca de la mitad, entre 7 y 16 celdas que crecen de 24, y las medianas de $|D|$ se mueven entre 0,18 y 0,34 al 5\,\% y entre 0,21 y 0,35 al 50\,\%; la que más sube es la \emph{gradient confusion}, de 0,18 a 0,29, con 16 celdas en crudo y cinco con intervalo, y la \emph{stiffness} crece en 15 celdas en crudo y en cuatro con intervalo. Lo que sí crece es la referencia. El \emph{accuracy} de validación pasa de 0,40 a 0,70, con 22 celdas que crecen y 16 con intervalo, y TSE de 0,33 a 0,50, con 18 y 13, porque a mitad del entrenamiento la curva de validación ya es casi el resultado que se quiere predecir. La Figura~\ref{fig:ventanas} lo enseña en un vistazo: las cajas del \emph{accuracy} de validación y de TSE quedan a la derecha del cero y las de las seis métricas se sientan sobre él. La comparación de H2 repetida al 50\,\% lo confirma: allí ninguna métrica supera a la validación en más de dos celdas y GWA pierde en 23, frente a las 13 del 5\,\%.
 
 Sobre el \emph{gap} de \emph{loss} ocurre lo contrario con el predictor de referencia. El \emph{accuracy} de validación pierde $|D|$ al esperar, de 0,53 a 0,33 con 20 celdas que decrecen y ocho con intervalo, y el \emph{loss} de validación de 0,54 a 0,42; a presupuesto fijo el \emph{gap} es en buena parte velocidad al revés, y la lectura temprana de la validación es la que mejor la recoge. Las métricas se reparten otra vez cerca de la mitad, y solo la \emph{stiffness} y la \emph{gradient confusion} crecen algo, de 0,39 a 0,51 y de 0,31 a 0,41, con cinco y cuatro celdas con intervalo; TSE es el único predictor que supera al \emph{loss} de validación al 50\,\% con claridad, 16 celdas frente a ocho y nueve con intervalo, y sigue siendo gratuito. El \emph{gap} de \emph{accuracy}, la lectura de apoyo, no cambia el cuadro: ninguna métrica crece con intervalo en más de cinco celdas.
 
@@ -352,13 +352,13 @@ Esta sección responde a la hipótesis H5 con la regla de la Sección~\ref{sec:p
 \centering
 \footnotesize
 \setlength{\tabcolsep}{3.5pt}
-\caption{H5 sobre los 12 pares de celdas que solo difieren en el optimizador: pares que acuerdan e invierten el signo con las dos D fuera del cero, pares cuya diferencia deja fuera el cero, y mediana de $|D|$ con SGD y con Adam. En negrita, las inversiones.}
+\caption{H5 sobre los 12 pares de celdas, $|D|$ con SGD y con Adam. En negrita, las inversiones.}
 \label{tab:h5}
 \begin{tabular}{lccccccccc}
 \toprule
 & \multicolumn{3}{c}{\textbf{\emph{Epochs} hasta el umbral}} & \multicolumn{3}{c}{\textbf{\emph{Accuracy} de test}} & \multicolumn{3}{c}{\textbf{\emph{Gap} de \emph{loss}}} \\
 \cmidrule(lr){2-4}\cmidrule(lr){5-7}\cmidrule(lr){8-10}
-\textbf{Predictor} & ac./inv. & dif. & $|D|$ & ac./inv. & dif. & $|D|$ & ac./inv. & dif. & $|D|$ \\
+\textbf{Predictor} & ac./inv. & dif. & SGD/Adam & ac./inv. & dif. & SGD/Adam & ac./inv. & dif. & SGD/Adam \\
 \midrule
 Posición en la rejilla & 1/\textbf{1} & 6 & 0,30/0,36 & 2/\textbf{2} & 6 & 0,42/0,18 & 4/0 & 3 & 0,51/0,40 \\
 \addlinespace
@@ -395,7 +395,7 @@ Esta sección responde a la hipótesis H6 con la regla de la Sección~\ref{sec:p
 \centering
 \footnotesize
 \setlength{\tabcolsep}{3.5pt}
-\caption{H6 al 5\,\%: signo que predice cada artículo y celdas con asociación a favor y en contra de ese signo, sobre las 24 y dentro de cada arquitectura. Velocidad es \emph{epochs} hasta el umbral por hitos y \emph{gap} es el \emph{gap} de \emph{loss}; las dos filas de GNS recogen también la predicción de la m-coherencia con el signo cambiado. En negrita, las cuentas en contra que superan a las de a favor.}
+\caption{H6 al 5\,\%, sobre las 24 celdas y dentro de cada arquitectura. En negrita, las cuentas en contra que superan a las de a favor.}
 \label{tab:h6}
 \begin{tabular}{llllcccc}
 \toprule

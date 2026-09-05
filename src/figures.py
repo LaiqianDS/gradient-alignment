@@ -45,8 +45,6 @@ from contrast import (
     PRIMARY_VDS,
     PRUNED,
     RESULTS_DIR,
-    SPEED_LATE_WINDOW,
-    excludes_zero,
     primary_family,
 )
 from efficiency import (
@@ -254,6 +252,7 @@ def cell_range(
         ax.set_xticklabels([_rate_label(lr) for lr in grid], fontsize=7.5,
                            rotation=45, ha="right", rotation_mode="anchor")
         ax.set_xlim(-0.7, len(grid) - 0.3)
+        ax.set_xlabel("learning rate", fontsize=figstyle.BODY_PT - 1)
 
     # Linear from zero, so the collapsed runs pile on the floor.
     ax_raw.set_ylim(0, value.max() * 1.08)
@@ -264,8 +263,8 @@ def cell_range(
     handles, labels = ax_raw.get_legend_handles_labels()
     handles.append(Line2D([], [], color=figstyle.INK, lw=2.2))
     labels.append("media por learning rate")
-    ax_raw.legend(handles, labels, loc="upper right", fontsize=7.5,
-                  handletextpad=0.3, borderpad=0.2, labelspacing=0.3)
+    fig.legend(handles, labels, loc="outside lower center", ncol=3, fontsize=7.5,
+               handletextpad=0.4, columnspacing=1.4, frameon=False)
 
     grand = rank.mean()
     ax_rank.axhline(grand, ls="--", lw=0.9, color=figstyle.RULE, zorder=1)
@@ -274,14 +273,12 @@ def cell_range(
     # The last rank is a tick of its own: it says how many runs the cell holds.
     ax_rank.set_ylim(0, len(rank) + 1)
     ax_rank.set_yticks([1, *range(10, len(rank) - 4, 10), len(rank)])
-    ax_rank.set_ylabel("posición en la celda, 1 = más bajo",
+    ax_rank.set_ylabel("posición en la celda",
                        fontsize=figstyle.BODY_PT - 1)
     ax_rank.text(len(grid) - 0.35, len(rank) + 0.6,
                  " ".join((DATASET_LABELS[dset], MODEL_LABELS[model],
                            OPTIMIZER_LABELS[opt])),
                  ha="right", va="top", fontsize=7.5)
-
-    fig.supxlabel("learning rate", fontsize=figstyle.BODY_PT - 1)
     return figstyle.save(fig, "rango-celda", out_dir)
 
 
@@ -301,22 +298,12 @@ def column_range(
              .reset_index().sort_values("lr_share"))
     ref = float(at["lr_ref"].median())
 
-    quartiles = at.groupby("key")["lr_share"].quantile([0.25, 0.75]).unstack()
-    q1 = quartiles.loc[order["key"], 0.25].to_numpy()
-    q3 = quartiles.loc[order["key"], 0.75].to_numpy()
-    n_cells = int(at.groupby("key").size().max())
-
     slots = ["free" if f in FREE_FAMILIES else f for f in order["family"]]
     fig, ax = figstyle.figure(width="full", ratio=0.48)
     ax.barh(range(len(order)), order["lr_share"], height=0.66,
             color=[FAMILY_COLOURS[s][0] for s in slots], zorder=2)
-    ax.hlines(range(len(order)), q1, q3, color=figstyle.INK, lw=1.0, zorder=4)
-    for i, (lo, hi) in enumerate(zip(q1, q3)):
-        ax.vlines([lo, hi], i - 0.16, i + 0.16, color=figstyle.INK, lw=1.0,
-                  zorder=4)
-    for i, (v, hi) in enumerate(zip(order["lr_share"], q3)):
-        ax.text(max(v, hi) + 0.012, i, _dec(v), va="center", fontsize=7.5,
-                color=figstyle.INK)
+    for i, v in enumerate(order["lr_share"]):
+        ax.text(v + 0.012, i, _dec(v), va="center", fontsize=7.5, color=figstyle.INK)
 
     ax.axvline(ref, ls="--", lw=1.0, color=figstyle.RULE, zorder=3)
     ax.text(ref + 0.01, len(order) - 0.4, f"esperado al azar {_dec(ref)}",
@@ -325,9 +312,7 @@ def column_range(
     seen = dict.fromkeys(slots)
     ax.legend(
         handles=[Patch(facecolor=FAMILY_COLOURS[s][0], label=FAMILY_COLOURS[s][1])
-                 for s in seen]
-        + [Line2D([], [], color=figstyle.INK, lw=1.0,
-                  label=f"cuartiles, {n_cells} celdas")],
+                 for s in seen],
         loc="lower right", fontsize=7.5, handlelength=1.1, handletextpad=0.5,
     )
 
@@ -444,57 +429,65 @@ VD_LABELS = {
 }
 
 
-def sign_strip(
-    table_path: Path = RESULTS_DIR / "tabla_larga.parquet",
-    out_dir: Path = figstyle.FIGURE_DIR,
-) -> Path:
-    """Every cell's D in the primary family, one row per predictor and one
-    panel per dependent variable. A filled dot is a cell whose 95 % jackknife
-    interval leaves zero out; a hollow one includes it."""
-    table = primary_family(pd.read_parquet(table_path))
-    dataset_colour = dict(zip(DATASETS, figstyle.PALETTE[:len(DATASETS)]))
-    rng = np.random.default_rng(0)
-    fig, axes = figstyle.figure(width="full", ratio=0.46, ncols=3)
-    for c, vd in enumerate(PRIMARY_VDS):
-        ax = axes[c]
+def _face(key: str) -> str:
+    """The family colour of a predictor; the grid position is drawn hollow."""
+    return "white" if key == LOG_LR else FAMILY_COLOURS[FAMILY.get(key, "free")][0]
+
+
+def _box(ax, values, y: float, face: str) -> None:
+    """One predictor's cells as a horizontal box: median, middle half, and
+    whiskers to the lowest and highest cell."""
+    ax.boxplot(
+        [values], positions=[y], orientation="horizontal", widths=0.62,
+        whis=(0, 100), showfliers=False, patch_artist=True, zorder=3,
+        boxprops=dict(facecolor=face, edgecolor=figstyle.INK, linewidth=0.6),
+        medianprops=dict(color=figstyle.INK if face == "white" else "white",
+                         linewidth=1.3),
+        whiskerprops=dict(color=figstyle.INK, linewidth=0.7),
+        capprops=dict(color=figstyle.INK, linewidth=0.7),
+    )
+
+
+def _family_handles(grid: bool = True) -> list:
+    handles = [Patch(facecolor="white", edgecolor=figstyle.INK, linewidth=0.6,
+                     label=COLUMN_LABELS[LOG_LR])] if grid else []
+    return handles + [Patch(facecolor=FAMILY_COLOURS[f][0], label=FAMILY_COLOURS[f][1])
+                      for f in ("free", "variability", "alignment")]
+
+
+def _box_panels(fig, axes, table, column: str, rows, xlabel: str) -> None:
+    """One panel per dependent variable, one box per predictor row."""
+    for c, (ax, vd) in enumerate(zip(axes, PRIMARY_VDS)):
         sub = table[table["vd"] == vd]
-        for i, pred in enumerate(PRIMARY_ORDER):
-            g = sub[sub["predictor"] == pred]
-            d = g["D"].to_numpy()
-            y = i + rng.uniform(-0.22, 0.22, len(g))
-            colours = np.array([dataset_colour[k] for k in g["dataset"]])
-            shown = excludes_zero(g["D"], g["se"]).to_numpy()
-            ax.scatter(d[shown], y[shown], s=13, c=colours[shown],
-                       edgecolors="white", linewidths=0.3, zorder=3)
-            ax.scatter(d[~shown], y[~shown], s=13, facecolors="none",
-                       edgecolors=colours[~shown], linewidths=0.6, zorder=2)
-            ax.vlines(np.nanmedian(d), i - 0.34, i + 0.34, color=figstyle.INK,
-                      lw=1.2, zorder=4)
+        for i, pred in enumerate(rows):
+            d = sub.loc[sub["predictor"] == pred, column].dropna().to_numpy()
+            if len(d):
+                _box(ax, d, i, _face(pred))
         ax.axvline(0, color=figstyle.RULE, lw=0.8, zorder=1)
-        for boundary in (3.5, 6.5):  # free predictors | variability | alignment
-            ax.axhline(boundary, color=figstyle.RULE, lw=0.5, zorder=1)
         ax.set_xlim(-1.05, 1.05)
-        ax.set_ylim(len(PRIMARY_ORDER) - 0.4, -0.6)
+        ax.set_ylim(len(rows) - 0.4, -0.6)
         ax.set_xticks((-1, -0.5, 0, 0.5, 1))
         ax.set_xticklabels(["−1", "−0,5", "0", "0,5", "1"], fontsize=7)
-        ax.set_yticks(range(len(PRIMARY_ORDER)))
-        ax.set_yticklabels([COLUMN_LABELS[p] for p in PRIMARY_ORDER] if c == 0 else [],
+        ax.set_yticks(range(len(rows)))
+        ax.set_yticklabels([COLUMN_LABELS[p] for p in rows] if c == 0 else [],
                            fontsize=7.5)
         ax.tick_params(axis="y", length=0)
         ax.tick_params(axis="x", length=2, width=0.6, color="#666666")
         ax.set_title(VD_LABELS[vd], fontsize=figstyle.BODY_PT - 1)
-        ax.set_xlabel("D por celda", fontsize=figstyle.BODY_PT - 1)
-    fig.legend(
-        handles=[Line2D([], [], marker="o", ls="none", ms=4, color=dataset_colour[d],
-                        label=DATASET_LABELS[d]) for d in DATASETS]
-        + [Line2D([], [], color=figstyle.INK, lw=1.2, label="mediana de las celdas"),
-           Line2D([], [], marker="o", ls="none", ms=4, color=figstyle.INK,
-                  label="intervalo del 95 % sin el cero"),
-           Line2D([], [], marker="o", ls="none", ms=4, mfc="none", mec=figstyle.INK,
-                  label="intervalo con el cero")],
-        loc="outside lower center", ncol=4, fontsize=7.5, handletextpad=0.4,
-        columnspacing=1.2, frameon=False,
-    )
+        ax.set_xlabel(xlabel, fontsize=figstyle.BODY_PT - 1)
+
+
+def sign_strip(
+    table_path: Path = RESULTS_DIR / "tabla_larga.parquet",
+    out_dir: Path = figstyle.FIGURE_DIR,
+) -> Path:
+    """The cells' D in the primary family, one box per predictor and dependent variable."""
+    table = primary_family(pd.read_parquet(table_path))
+    fig, axes = figstyle.figure(width="full", ratio=0.46, ncols=3)
+    _box_panels(fig, axes, table, "D", PRIMARY_ORDER, "D por celda")
+    fig.legend(handles=_family_handles(), loc="outside lower center", ncol=4,
+               fontsize=7.5, handlelength=1.1, handletextpad=0.5, columnspacing=1.4,
+               frameon=False)
     return figstyle.save(fig, "signos", out_dir)
 
 
@@ -516,8 +509,6 @@ def selection_bars(
         cells = table.loc[table["predictor"] == key, "regret"]
         ax.plot(cells, i + rng.uniform(-0.2, 0.2, len(cells)), "o", ms=2.6,
                 ls="none", color=figstyle.INK, mec="white", mew=0.4, zorder=3)
-        ax.text(max(order[key], cells.max()) + 0.005, i, _dec(order[key], 3),
-                va="center", fontsize=7.5, color=figstyle.INK)
     random = float(table["regret_random"].median())
     ax.axvline(random, ls="--", lw=1.0, color=figstyle.RULE, zorder=1)
     ax.text(random + 0.004, len(order) - 0.45, f"al azar {_dec(random, 3)}",
@@ -527,7 +518,7 @@ def selection_bars(
         handles=[Patch(facecolor=FAMILY_COLOURS[f][0], label=FAMILY_COLOURS[f][1])
                  for f in seen]
         + [Line2D([], [], marker="o", ls="none", ms=3, color=figstyle.INK,
-                  label=f"celda, {int(table.groupby('predictor').size().max())} por barra")],
+                  label="una celda")],
         loc="outside lower center", ncol=4, fontsize=7.5, handlelength=1.1,
         handletextpad=0.5, columnspacing=1.4, frameon=False,
     )
@@ -538,63 +529,26 @@ def selection_bars(
     ticks = ax.get_xticks()
     ax.set_xticks(ticks)
     ax.set_xticklabels([_dec(t, 2) for t in ticks], fontsize=7)
-    ax.set_xlabel("accuracy de test perdido al elegir el learning rate, ventana 5 %",
-                  fontsize=figstyle.BODY_PT - 1)
+    ax.set_xlabel("pérdida de accuracy de test", fontsize=figstyle.BODY_PT - 1)
     ax.tick_params(axis="y", length=0)
     ax.tick_params(axis="x", length=2, width=0.6, color="#666666")
     return figstyle.save(fig, "seleccion", out_dir)
 
 
-_MARKERS = ("o", "s", "^", "D")
-
-
-def window_curves(
-    table_path: Path = RESULTS_DIR / "tabla_larga.parquet",
+def window_change(
+    table_path: Path = RESULTS_DIR / "ventanas.parquet",
     out_dir: Path = figstyle.FIGURE_DIR,
 ) -> Path:
-    """Per predictor, the median over cells of |D| at each early window: the
-    three primary variables, the speed one by its landmark reading over the
-    two windows that still predict it."""
+    """Per predictor and dependent variable, the cells' change of |D| from the
+    early window to the late one, as a box; the speed by its landmark reading."""
     table = pd.read_parquet(table_path)
-    table = table[(table["window"] < 1.0) & ~table["predictor"].isin(PRUNED)
-                  & table["vd"].isin(PRIMARY_VDS)].copy()
-    speed = table["vd"] == "epochs_to_threshold"
-    table.loc[speed, "D"] = table.loc[speed, "D_land"]
-    table = table[~speed | (table["window"] <= SPEED_LATE_WINDOW)]
-    table["abs"] = table["D"].abs()
-    med = table.groupby(["vd", "predictor", "window"])["abs"].median()
-
+    table = table[table["vd"].isin(PRIMARY_VDS) & ~table["predictor"].isin(PRUNED)]
+    rows = [k for k in PRIMARY_ORDER if k != LOG_LR]
     fig, axes = figstyle.figure(width="full", ratio=0.42, ncols=3)
-    for ax, vd in zip(axes, PRIMARY_VDS):
-        by_family: dict[str, int] = {}
-        m = med.loc[vd].unstack("window")
-        for key in PRIMARY_ORDER:
-            if key not in m.index:
-                continue
-            family = FAMILY.get(key, "free")
-            marker = _MARKERS[by_family.get(family, 0) % len(_MARKERS)]
-            by_family[family] = by_family.get(family, 0) + 1
-            colour = figstyle.INK if key == LOG_LR else FAMILY_COLOURS[family][0]
-            x = np.arange(len(m.columns))
-            ax.plot(x, m.loc[key], marker=marker, ms=3.5, lw=1.2, color=colour,
-                    ls="--" if key == LOG_LR else "-", mec="white", mew=0.4)
-        ax.set_xticks(range(len(m.columns)))
-        ax.set_xticklabels([_window_label(w) for w in m.columns], fontsize=7)
-        ax.set_ylim(0, 1)
-        ax.set_yticks([0, 0.25, 0.5, 0.75, 1.0])
-        ax.set_yticklabels([_dec(t) for t in (0, 0.25, 0.5, 0.75, 1.0)] if ax is axes[0] else [],
-                           fontsize=7)
-        ax.set_title(VD_LABELS[vd], fontsize=figstyle.BODY_PT - 1)
-        ax.set_xlabel("ventana", fontsize=figstyle.BODY_PT - 1)
-        ax.tick_params(axis="x", length=2, width=0.6, color="#666666")
-    axes[0].set_ylabel("|D| mediana por celda", fontsize=figstyle.BODY_PT - 1)
-    handles = [Line2D([], [], color=figstyle.INK, ls="--", lw=1.2,
-                      label=COLUMN_LABELS[LOG_LR])]
-    handles += [Line2D([], [], color=FAMILY_COLOURS[f][0], lw=1.2,
-                       label=FAMILY_COLOURS[f][1])
-                for f in ("free", "variability", "alignment")]
-    fig.legend(handles=handles, loc="outside lower center", ncol=4, fontsize=7.5,
-               handletextpad=0.5, columnspacing=1.4, frameon=False)
+    _box_panels(fig, axes, table, "D_diff_w", rows, "cambio de |D| al esperar")
+    fig.legend(handles=_family_handles(grid=False), loc="outside lower center",
+               ncol=3, fontsize=7.5, handlelength=1.1, handletextpad=0.5,
+               columnspacing=1.4, frameon=False)
     return figstyle.save(fig, "ventanas", out_dir)
 
 
@@ -603,7 +557,7 @@ def curve_windows(
     out_dir: Path = figstyle.FIGURE_DIR,
 ) -> Path:
     """Each dataset's centre-rate, seed-0 runs with the windows drawn over their
-    val loss, under the plateau band, and their val accuracy, against the thresholds."""
+    val loss, under the plateau band."""
     runs = load_summaries(report_dir)
     runs = runs[(runs["seed"] == 0) & np.isclose(runs["lr"], runs["optimizer"].map(center_lr))]
     optimizer = runs.set_index("run_name")["optimizer"]
@@ -612,47 +566,50 @@ def curve_windows(
     datasets = [d for d in DATASETS if d in set(traj["dataset"])]
     colour = dict(zip(MODELS, figstyle.PALETTE))
     style = {"sgd": "-", "adam": (0, (3, 1.5))}
-    band, dotted = figstyle.PALETTE[3], (0, (1, 1.5))
+    band = figstyle.PALETTE[3]
     comma = FuncFormatter(lambda v, _: f"{v:g}".replace(".", ","))
 
-    fig, axes = figstyle.figure(width="full", ratio=0.28 * len(datasets), nrows=len(datasets), ncols=2)
-    for (ax_l, ax_a), dset in zip(np.atleast_2d(axes), datasets):
+    ncols = 2
+    nrows = math.ceil(len(datasets) / ncols)
+    fig, axes = figstyle.figure(width="full", ratio=0.3 * nrows, nrows=nrows, ncols=ncols)
+    axes = np.atleast_1d(axes).ravel()
+    for ax, dset in zip(axes, datasets):
         budget = DATASET_BUDGET[dset]["epochs"]
         rows = traj[traj["dataset"] == dset]
         plateaus = []
         for (model, name), g in rows.groupby(["model", "run_name"]):
-            ls = style[optimizer[name]]
-            ax_l.plot(g["epoch"] + 1, g["val_loss"], color=colour[model], ls=ls, lw=1.2)
-            ax_a.plot(g["epoch"] + 1, g["val_acc"], color=colour[model], ls=ls, lw=1.2)
+            ax.plot(g["epoch"] + 1, g["val_loss"], color=colour[model],
+                    ls=style[optimizer[name]], lw=1.2)
             plateaus.append(plateau_epoch(g))
-        for model in set(rows["model"]):
-            ax_a.axhline(THRESHOLD_ACC[(dset, model)], color=colour[model], lw=0.7, ls=dotted, zorder=0)
-        ax_l.set_yscale("log")
-        ax_l.yaxis.set_major_locator(LogLocator(subs=(1, 2, 3, 5)))
-        ax_l.yaxis.set_minor_locator(NullLocator())
-        ax_l.axvspan(min(plateaus), max(plateaus), color=band, alpha=0.18, lw=0, zorder=0)
-        ax_l.annotate("meseta", ((min(plateaus) + max(plateaus)) / 2, 0.97), xycoords=("data", "axes fraction"),
-                      ha="center", va="top", fontsize=7.5, color="#8a5a00")
-        for ax in (ax_l, ax_a):
-            ax.yaxis.set_major_formatter(comma)
-            for frac in (0.05, 0.10, 0.25, 0.50):
-                epoch = round(budget * frac)
-                ax.axvline(epoch, color=figstyle.INK, lw=0.7, zorder=0)
-                ax.annotate(f"{frac:.0%}".replace("%", " %"), (epoch, 1.0), xycoords=("data", "axes fraction"),
-                            xytext=(0, 1 if frac in (0.05, 0.25) else 9), textcoords="offset points",
-                            ha="center", va="bottom", fontsize=7, color=figstyle.INK)
-            ax.set_xlim(1, budget)
-            ax.set_xticks([1, *range(10, budget + 1, 10)])
-        ax_l.set_ylabel("validation loss")
-        ax_a.set_ylabel("validation accuracy")
-        ax_a.set_title(DATASET_LABELS[dset], loc="right", fontsize=8, pad=14)
-    for ax in np.atleast_2d(axes)[-1]:
+        ax.set_yscale("log")
+        ax.yaxis.set_major_locator(LogLocator(subs=(1, 2, 3, 5)))
+        ax.yaxis.set_minor_locator(NullLocator())
+        ax.yaxis.set_major_formatter(comma)
+        ax.axvspan(min(plateaus), max(plateaus), color=band, alpha=0.18, lw=0, zorder=0)
+        ax.annotate("meseta", ((min(plateaus) + max(plateaus)) / 2, 0.97),
+                    xycoords=("data", "axes fraction"), ha="center", va="top",
+                    fontsize=7.5, color="#8a5a00")
+        for frac in (0.05, 0.10, 0.25, 0.50):
+            epoch = round(budget * frac)
+            ax.axvline(epoch, color=figstyle.INK, lw=0.7, zorder=0)
+            ax.annotate(f"{frac:.0%}".replace("%", " %"), (epoch, 1.0),
+                        xycoords=("data", "axes fraction"),
+                        xytext=(0, 1 if frac in (0.05, 0.25) else 9),
+                        textcoords="offset points", ha="center", va="bottom",
+                        fontsize=7, color=figstyle.INK)
+        ax.set_xlim(1, budget)
+        ax.set_xticks([1, *range(10, budget + 1, 10)])
+        ax.set_title(DATASET_LABELS[dset], loc="right", fontsize=8, pad=14)
+    for ax in axes[::ncols]:
+        ax.set_ylabel("loss de validación (log)")
+    for ax in axes[-ncols:]:
         ax.set_xlabel("epoch")
+    for ax in axes[len(datasets):]:
+        ax.set_axis_off()
     handles = [Line2D([], [], color=colour[m], lw=1.2, label=MODEL_LABELS[m]) for m in MODELS]
     handles += [Line2D([], [], color=figstyle.INK, lw=1.2, ls=style["sgd"], label="SGD"),
-                Line2D([], [], color=figstyle.INK, lw=1.2, ls=style["adam"], label="Adam"),
-                Line2D([], [], color=figstyle.INK, lw=0.7, ls=dotted, label="umbral")]
-    fig.legend(handles=handles, loc="outside lower center", ncol=6, frameon=False, fontsize=8,
+                Line2D([], [], color=figstyle.INK, lw=1.2, ls=style["adam"], label="Adam")]
+    fig.legend(handles=handles, loc="outside lower center", ncol=5, frameon=False, fontsize=8,
                handlelength=1.4, columnspacing=0.8)
     return figstyle.save(fig, "ventanas-curvas", out_dir)
 
@@ -664,5 +621,5 @@ if __name__ == "__main__":
     print(cell_overlap())
     print(sign_strip())
     print(selection_bars())
-    print(window_curves())
+    print(window_change())
     print(curve_windows())

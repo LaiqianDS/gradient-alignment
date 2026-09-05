@@ -108,7 +108,7 @@ Bloquean experimentos. La acción para resolverlas vive en [[3 - Progreso]] §Pl
 
 - **Trampa:** al 50 % la validación es casi el resultado, así que su crecimiento es trivial y no es «suficiencia temprana» de nada.
 - **Trampa:** en el gap los predictores gratuitos pierden |D| al esperar porque el gap es velocidad al revés y la lectura temprana es la que la recoge; no leer eso como «la validación temprana predice el gap».
-- **Trampa:** la figura `ventanas` lleva diez líneas por panel; se sostiene por color de familia y marcador, y la afirmación que defiende es una sola, las gratuitas suben y las métricas se quedan planas.
+- **Trampa, superada el 2026-09-05:** la figura `ventanas` llevaba diez líneas por panel con la mediana de |D| en cada ventana y Lai la encontró sin sentido (cuatro puntos no equiespaciados unidos con líneas, y las medianas ya están en la tabla). Pasó a un diagrama de caja por predictor del cambio de |D| por celda, leído de `results/ventanas.parquet` (`figures.window_change`), con la misma afirmación, las gratuitas suben y las métricas se quedan planas. El mismo día `signos` pasó de 240 puntos por panel a cajas por familia, y la significación por celda vive solo en la tabla de recuentos.
 
 #### La fase C fija tres reglas de lectura de H2 antes de calcular su tabla, y H2 cae
 
