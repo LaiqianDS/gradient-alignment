@@ -185,7 +185,7 @@ EXAMPLE_WINDOW = 0.05
 
 # Label of each logged column.
 COLUMN_LABELS = {
-    LOG_LR: "posición del learning rate",
+    LOG_LR: "posición en la rejilla",
     "var/normalized": "NGV",
     "noise_scale/simple": "GNS",
     "gsnr/mean": "GSNR",
@@ -202,7 +202,7 @@ COLUMN_LABELS = {
 FAMILY_COLOURS = {
     "alignment": (figstyle.PALETTE[0], "alineación"),
     "variability": (figstyle.PALETTE[1], "variabilidad"),
-    "free": (figstyle.PALETTE[3], "predictores de referencia"),
+    "free": (figstyle.PALETTE[3], "predictor de referencia"),
 }
 
 
@@ -583,19 +583,14 @@ def window_curves(
         ax.set_title(VD_LABELS[vd], fontsize=figstyle.BODY_PT - 1)
         ax.set_xlabel("ventana", fontsize=figstyle.BODY_PT - 1)
         ax.tick_params(axis="x", length=2, width=0.6, color="#666666")
-    axes[0].set_ylabel("|D| mediana, 24 celdas", fontsize=figstyle.BODY_PT - 1)
-    handles = []
-    by_family = {}
-    for key in PRIMARY_ORDER:
-        family = FAMILY.get(key, "free")
-        marker = _MARKERS[by_family.get(family, 0) % len(_MARKERS)]
-        by_family[family] = by_family.get(family, 0) + 1
-        colour = figstyle.INK if key == LOG_LR else FAMILY_COLOURS[family][0]
-        handles.append(Line2D([], [], marker=marker, ms=3.5, lw=1.2, color=colour,
-                              ls="--" if key == LOG_LR else "-", mec="white", mew=0.4,
-                              label=COLUMN_LABELS[key]))
-    fig.legend(handles=handles, loc="outside lower center", ncol=5, fontsize=7,
-               handletextpad=0.4, columnspacing=1.0, frameon=False)
+    axes[0].set_ylabel("|D| mediana por celda", fontsize=figstyle.BODY_PT - 1)
+    handles = [Line2D([], [], color=figstyle.INK, ls="--", lw=1.2,
+                      label=COLUMN_LABELS[LOG_LR])]
+    handles += [Line2D([], [], color=FAMILY_COLOURS[f][0], lw=1.2,
+                       label=FAMILY_COLOURS[f][1])
+                for f in ("free", "variability", "alignment")]
+    fig.legend(handles=handles, loc="outside lower center", ncol=4, fontsize=7.5,
+               handletextpad=0.5, columnspacing=1.4, frameon=False)
     return figstyle.save(fig, "ventanas", out_dir)
 
 
