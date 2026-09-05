@@ -34,6 +34,7 @@
   booktitle  = {Proceedings of the 37th International Conference on Machine Learning (ICML)},
   series     = {Proceedings of Machine Learning Research},
   volume     = {119},
+  pages      = {8469--8479},
   publisher  = {PMLR},
   year       = {2020},
 }
@@ -80,6 +81,7 @@
   title      = {Accelerating Stochastic Gradient Descent using Predictive Variance Reduction},
   booktitle  = {Advances in Neural Information Processing Systems},
   volume     = {26},
+  pages      = {315--323},
   year       = {2013},
 }
 
@@ -88,6 +90,7 @@
   title      = {On the Ineffectiveness of Variance Reduced Optimization for Deep Learning},
   booktitle  = {Advances in Neural Information Processing Systems},
   volume     = {32},
+  pages      = {1753--1763},
   year       = {2019},
 }
 
@@ -97,6 +100,7 @@
   author     = {Forouzesh, Mahsa and Thiran, Patrick},
   title      = {Disparity Between Batches as a Signal for Early Stopping},
   booktitle  = {Machine Learning and Knowledge Discovery in Databases. Research Track (ECML PKDD 2021)},
+  pages      = {217--232},
   publisher  = {Springer},
   year       = {2021},
   doi        = {10.1007/978-3-030-86520-7_14},
@@ -170,6 +174,16 @@
   doi     = {10.1109/5.726791},
 }
 
+@article{srivastava2014dropout,
+  author  = {Srivastava, Nitish and Hinton, Geoffrey and Krizhevsky, Alex and Sutskever, Ilya and Salakhutdinov, Ruslan},
+  title   = {Dropout: A Simple Way to Prevent Neural Networks from Overfitting},
+  journal = {Journal of Machine Learning Research},
+  volume  = {15},
+  number  = {56},
+  pages   = {1929--1958},
+  year    = {2014},
+}
+
 @techreport{krizhevsky2009learning,
   author      = {Krizhevsky, Alex},
   title       = {Learning Multiple Layers of Features from Tiny Images},
@@ -234,7 +248,7 @@
 }
 
 @misc{liu2024zeropur,
-  author     = {Liu, Erhu and Yang, Zonglin and Liu, Bo and Xiao, Bin and Bi, Xiuli},
+  author     = {Liu, Erhu and Yang, Zonglin and Liu, Bo and Meng, Xianjia and Bi, Xiuli and Han, Junwei and Xiao, Bin},
   title      = {ZeroPur: Succinct Training-Free Adversarial Purification},
   year       = {2024},
   eprint     = {2406.03143},
@@ -264,28 +278,11 @@
   author     = {Li, Siyuan and Liu, Zicheng and Zang, Zelin and Wu, Di and Chen, Zhiyuan and Li, Stan Z.},
   title      = {GenURL: A General Framework for Unsupervised Representation Learning},
   journal    = {IEEE Transactions on Neural Networks and Learning Systems},
-  year       = {2023},
+  volume     = {36},
+  pages      = {286--298},
+  year       = {2025},
   doi        = {10.1109/TNNLS.2023.3332087},
   eprint     = {2110.14553},
-  eprinttype = {arxiv},
-}
-
-@inproceedings{neyshabur2020towards,
-  author     = {Neyshabur, Behnam},
-  title      = {Towards Learning Convolutions from Scratch},
-  booktitle  = {Advances in Neural Information Processing Systems},
-  volume     = {33},
-  year       = {2020},
-  eprint     = {2007.13657},
-  eprinttype = {arxiv},
-}
-
-@misc{springenberg2015striving,
-  author     = {Springenberg, Jost Tobias and Dosovitskiy, Alexey and Brox, Thomas and Riedmiller, Martin},
-  title      = {Striving for Simplicity: The All Convolutional Net},
-  year       = {2015},
-  note       = {ICLR 2015 Workshop Track},
-  eprint     = {1412.6806},
   eprinttype = {arxiv},
 }
 
@@ -342,17 +339,6 @@
   year       = {2020},
   eprint     = {1912.02178},
   eprinttype = {arxiv},
-}
-
-@article{benjamini1995controlling,
-  author  = {Benjamini, Yoav and Hochberg, Yosef},
-  title   = {Controlling the False Discovery Rate: A Practical and Powerful Approach to Multiple Testing},
-  journal = {Journal of the Royal Statistical Society: Series B (Methodological)},
-  volume  = {57},
-  number  = {1},
-  pages   = {289--300},
-  year    = {1995},
-  doi     = {10.1111/j.2517-6161.1995.tb02031.x},
 }
 
 @article{nosek2018preregistration,
@@ -487,26 +473,6 @@
   eprinttype = {arxiv},
 }
 
-@inproceedings{cohen2021gradient,
-  author     = {Cohen, Jeremy M. and Kaur, Simran and Li, Yuanzhi and Kolter, J. Zico and Talwalkar, Ameet},
-  title      = {Gradient Descent on Neural Networks Typically Occurs at the Edge of Stability},
-  booktitle  = {International Conference on Learning Representations (ICLR)},
-  year       = {2021},
-  eprint     = {2103.00065},
-  eprinttype = {arxiv},
-}
-
-@article{schwartz2020green,
-  author  = {Schwartz, Roy and Dodge, Jesse and Smith, Noah A. and Etzioni, Oren},
-  title   = {Green {AI}},
-  journal = {Communications of the ACM},
-  volume  = {63},
-  number  = {12},
-  pages   = {54--63},
-  year    = {2020},
-  doi     = {10.1145/3381831},
-}
-
 @inproceedings{yin2018gradient,
   author     = {Yin, Dong and Pananjady, Ashwin and Lam, Max and Papailiopoulos, Dimitris and Ramchandran, Kannan and Bartlett, Peter},
   title      = {Gradient Diversity: A Key Ingredient for Scalable Distributed Learning},
@@ -517,15 +483,6 @@
   publisher  = {PMLR},
   year       = {2018},
   eprint     = {1706.05699},
-  eprinttype = {arxiv},
-}
-
-@inproceedings{smith2018dont,
-  author     = {Smith, Samuel L. and Kindermans, Pieter-Jan and Ying, Chris and Le, Quoc V.},
-  title      = {Don't Decay the Learning Rate, Increase the Batch Size},
-  booktitle  = {International Conference on Learning Representations (ICLR)},
-  year       = {2018},
-  eprint     = {1711.00489},
   eprinttype = {arxiv},
 }
 
