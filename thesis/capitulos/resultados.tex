@@ -432,6 +432,37 @@ H6 cae en parte. De las siete predicciones, dos se cumplen en las tres arquitect
 \section{Conclusiones del capítulo}
 \label{sec:res-conclusiones}
 
-Los datos sirven para la pregunta, con cuatro salvedades medidas. La censura de la velocidad es consecuencia del diseño, y contada en pares comparables cada celda conserva entre el 62 y el 99\,\% de los suyos. El \emph{learning rate} explica alrededor de nueve décimas de la dispersión de cada métrica dentro de la celda, así que toda D lleva dentro esa causa común. Para la velocidad solo predicen las dos primeras ventanas, y el mejor \emph{loss} de validación deja de predecir al 25\,\% en 15 celdas, por el sobreajuste. La curva de validación cuenta lo mismo que el test, en orden y en nivel.
+Los datos sirven para la pregunta, con cinco salvedades medidas. La censura de la velocidad es consecuencia del diseño, y contada en pares comparables cada celda conserva entre el 62 y el 99\,\% de los suyos. El \emph{learning rate} explica alrededor de nueve décimas de la dispersión de cada métrica dentro de la celda, así que toda D lleva dentro esa causa común. Para la velocidad solo predicen las dos primeras ventanas, y el mejor \emph{loss} de validación deja de predecir al 25\,\% en 15 celdas, por el sobreajuste. La curva de validación cuenta lo mismo que el test, en orden y en nivel. El \emph{batch} de medición de 256 ejemplos deja al estimador de la escala de ruido contra su techo de 255, y al 5\,\% más de un tercio de las lecturas de los entrenamientos que aprendieron queda por encima de 200. En ese tramo una escala real de unas 900 se lee como 200 y una de unas 10.000 como 250, así que la métrica apenas separa los entrenamientos que más ruido tienen.
 
 Los seis veredictos, sobre la familia primaria al 5\,\% y los 806 entrenamientos que aprendieron, son estos. H1 se sostiene como requisito previo, porque GWA muestra asociación con la velocidad en 16 celdas y con el \emph{accuracy} de test en 15, más que la posición en la rejilla, y la cuenta granulada queda vacía. H2 cae, porque ninguna métrica supera a la validación de la misma ventana con intervalo ni elige mejor el \emph{learning rate}, y GWA cuesta 0,023 de \emph{accuracy} frente a 0,013. H3 cae, porque la alineación pone la primera métrica y también la última y el orden cambia con la arquitectura. H4 se sostiene, porque cuatro métricas no maduran y dos maduran poco mientras la validación sube hasta 0,70. H5 no se refuta ni queda demostrada, con entre cero y dos inversiones en 12 pares. H6 cae en parte, con dos predicciones cumplidas, tres sin apoyo y dos invertidas por composición de curvas sobre el \emph{learning rate}. Ninguna clase de coste compra más capacidad predictiva que la clase gratuita.
+
+La Tabla~\ref{tab:aportaciones} reúne, métrica a métrica, lo que las secciones anteriores reparten por hipótesis, qué lee cada una, qué anticipa al 5\,\% y en cuántas celdas, dónde falla y cómo queda frente a su artículo y frente a la validación. Una D se traduce a pares, porque $(D + 1)/2$ es la parte de los pares comparables que el predictor ordena bien; la D de 0,40 de GWA con la velocidad son siete pares de cada diez, y la de 0,71 del \emph{accuracy} de validación, ocho y medio.
+
+\begin{table}[htbp]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\caption{Qué anticipa cada métrica al 5\,\%, sobre las 24 celdas y los 806 entrenamientos que aprendieron.}
+\label{tab:aportaciones}
+\begin{tabular}{>{\raggedright\arraybackslash}p{1.9cm}
+                >{\raggedright\arraybackslash}p{2.5cm}
+                >{\raggedright\arraybackslash}p{3.5cm}
+                >{\raggedright\arraybackslash}p{3.0cm}
+                >{\raggedright\arraybackslash}p{2.9cm}}
+\toprule
+\textbf{Métrica} & \textbf{Qué lee} & \textbf{Qué anticipa, celdas a favor y en contra} & \textbf{Dónde falla} & \textbf{Frente al artículo y a la validación} \\
+\midrule
+GWA\newline alineación; barrido, lineal & Coseno entre el gradiente y los pesos de la última capa, un margen normalizado por ejemplo & Alta, cruce más tardío (16/1) y menos \emph{accuracy} de test (15/1), en los cuatro conjuntos y las tres arquitecturas. Con el \emph{gap}, nada (6/4) & Una celda al revés, la ResNet-18 sobre Tiny-ImageNet con SGD. Con el \emph{gap} cambia de signo entre la convolucional y la ResNet-18 & Signo del artículo, 15/1. Pierde con la validación con intervalo en ocho celdas, sin ganar en ninguna; elegir con ella cuesta 0,023 frente a 0,013 \\
+\addlinespace[2pt]
+\emph{Stiffness}\newline alineación; barrido, cuadrática & Coseno medio entre gradientes de ejemplos de la misma clase & Alta, \emph{gap} menor (15/1), tantas celdas como la posición en la rejilla (15/0), y cruce más tardío (9/5) & La ResNet-18 se parte con el \emph{gap}; con 100 y 200 clases descansa en menos del 1\,\% de los pares; con Adam dobla su asociación con el \emph{gap} & Al revés que su artículo en velocidad (5/9). Pierde con el \emph{loss} de validación 7/17; elegir con ella cuesta 0,110, más que el azar \\
+\addlinespace[2pt]
+\emph{Gradient disparity}\newline variabilidad; cinco pasadas propias & Distancia entre los gradientes de dos submuestras, la raíz de la traza de la covarianza del ruido & Alta, más \emph{accuracy} de test (12/4) y \emph{gap} menor (11/4); segunda en las tres variables & Se da la vuelta en MNIST y en la ResNet-18; con Adam ordena la velocidad la mitad de fuerte que con SGD; la que más invierte entre optimizadores, cinco inversiones de 36 & Al revés que su artículo con el test (4/12). Gana a la validación con intervalo en tres celdas y pierde en ocho; cuesta 0,097 con el signo del artículo \\
+\addlinespace[2pt]
+GSNR\newline variabilidad; barrido, lineal & Razón señal-ruido del gradiente, parámetro a parámetro & Alto, \emph{gap} menor (11/2), en las tres arquitecturas & Con la velocidad y el test cambia de bando entre la convolucional, en contra, y la ResNet-18, a favor & Signo del artículo con el \emph{gap}, 11/2. Pierde con el \emph{loss} de validación 5/19; cuesta 0,035, la segunda mejor \\
+\addlinespace[2pt]
+Escala de ruido\newline variabilidad; barrido, lineal & Traza de la covarianza sobre la norma del gradiente medio, la m-coherencia con otro nombre & Nada con claridad, velocidad 7/3, test 3/6 y \emph{gap} 5/6 & La sostiene solo la ResNet-18 en velocidad, con las tres celdas en contra en MNIST; contra el techo del estimador en un tercio de las lecturas & Su artículo, 7/3 sin apoyo claro; la m-coherencia con el \emph{gap}, 5/6. Pierde con la validación 6/18; cuesta 0,073, más que el azar \\
+\addlinespace[2pt]
+\emph{Gradient confusion}\newline alineación; barrido, cuadrática & El coseno más negativo entre pares de ejemplos & Nada con claridad, velocidad 5/4, test 5/5 y \emph{gap} 9/5; la que más crece al esperar, de 0,18 a 0,29 con el test & Cambia de bando con la velocidad entre la red plana (4/0) y la convolucional (0/3) & Su artículo, 5/4 sin apoyo. Pierde con la validación 6/17; cuesta 0,059 \\
+\bottomrule
+\end{tabular}
+\end{table}
