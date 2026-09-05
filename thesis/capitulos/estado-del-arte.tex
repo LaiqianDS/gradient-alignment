@@ -96,7 +96,7 @@ Quedan fuera dos ejes que no admiten lectura en paralelo. Los bancos de prueba a
 \fill[lit] (0,3.8) circle (2.6pt);
 \node[anchor=east] at (-3,3.15) {TSE};
 \draw[lit, line width=3.5pt, line cap=round] (0.5,3.15) -- (50,3.15);
-\node[anchor=east] at (-3,2.5) {Validación temprana};
+\node[anchor=east] at (-3,2.5) {Validación temprana (rondas de Hyperband)};
 \foreach \p in {3.7,11.1,33.3,100} { \fill[lit] (\p,2.5) circle (2.6pt); }
 \node[anchor=east] at (-3,1.85) {GWA};
 \draw[lit, line width=3.5pt, line cap=round] (0.5,1.85) -- (100,1.85);
@@ -105,7 +105,7 @@ Quedan fuera dos ejes que no admiten lectura en paralelo. Los bancos de prueba a
 \node[anchor=east, mem] at (-3,0.5) {Métricas del gradiente};
 \foreach \p in {5,10,25,50} { \fill[mem] (\p,0.5) circle (2.6pt); }
 \end{tikzpicture}
-\caption{Momento en que lee cada predictor. La banda marca el tramo de las cuatro ventanas de este trabajo. Un punto es una lectura en ese instante y una barra, una lectura continua. Los puntos de la validación temprana son las rondas de Hyperband.}
+\caption{Momento en que lee cada predictor. Un punto es una lectura en un instante, una barra una lectura continua y la banda naranja las cuatro ventanas de este trabajo.}
 \label{fig:sota-momento}
 \end{figure}
 
