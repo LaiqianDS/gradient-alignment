@@ -1,11 +1,11 @@
-\chapter{Configuración del sistema y reproducibilidad}
+\chapter{Configuración del sistema}
 \label{ap:configuracion}
 % Fuente: uv.lock, src/seed.py, src/train.py, run_matrix.py, run_pilot.py, git log sobre
 % reports/ y reports_pilot/, y los 960 summary.json. Cifras verificadas el 2026-09-03.
-% Lo que Desarrollo ya cuenta (relojes, reanudación, semillas, normalización) no se repite:
-% este apéndice da versiones, órdenes, máquina y alcance.
+% Lo que Desarrollo ya cuenta (relojes, coste de la medición) no se repite:
+% este apéndice da versiones, órdenes y máquina.
 
-Este apéndice recoge lo que hace falta para repetir el estudio: las versiones del software, las órdenes que ejecutan los entrenamientos y los análisis, la máquina, y qué parte del resultado se reproduce en otra máquina.
+Este apéndice recoge lo que hace falta para repetir el estudio: las versiones del software, las órdenes que ejecutan los entrenamientos y los análisis, y la máquina en la que corrieron.
 
 \section{Entorno software}
 \label{sec:entorno}
@@ -26,13 +26,6 @@ La batería de pruebas se ejecuta con \texttt{uv run pytest}.
 
 Los 960 entrenamientos y el piloto corrieron en una sola máquina con Linux y una GPU NVIDIA GeForce RTX 5080 de 16 GB, sin clúster ni ejecución en paralelo. La memoria del anfitrión importa tanto como la de la GPU, porque el barrido compartido de la Sección~\ref{sec:des-metricas} reúne en ella la matriz de gradientes por ejemplo para formar el Gram: con $M = 256$ son 14,2 GB para la red \emph{fully connected} sobre Tiny-ImageNet y 11,5 GB para la ResNet-18, además de lo que consume el propio entrenamiento.
 
-Los 960 corrieron con el mismo código de medición, el del repositorio en \texttt{b38f635}: el primer entrenamiento se versionó el 8 de agosto de 2026 (\texttt{9fe77ab}) y el último el 22 (\texttt{f6df900}), sin ningún cambio entre esas fechas en el código de entrenamiento ni en las métricas. El 29 de agosto (\texttt{1ca5f65} y \texttt{a2e1ab8}) los signos de la \emph{stiffness} y la fracción negativa de la \emph{gradient confusion} pasaron a devolver NaN donde el valor es indefinido, en lugar de un cero, también en los datos ya guardados en \texttt{reports/}. Los 24 ficheros de \texttt{experiments/} conservan el umbral de junio porque el lanzador no sobrescribe un fichero existente; ningún cálculo los lee. El piloto son 24 entrenamientos en \texttt{reports\_pilot/} (\texttt{3b84f5b}), ejecutados con el código de junio, y sus seis resúmenes de Tiny-ImageNet llevan la clave \texttt{\_tiny\_test\_note} y una repetición corregida en \texttt{testfix\_40ep/}, según cuenta la Sección~\ref{sec:pilot}. Sumados sobre los 960 resúmenes, la matriz costó 121,7 horas de reloj, 97,6 de entrenamiento y 24,1 de instrumentación; los dos relojes y la reanudación están en las Secciones~\ref{sec:des-metricas} y~\ref{sec:ejecucion}.
-
-\section{Reproducibilidad determinista}
-\label{sec:determinismo}
-
-Las semillas y el modo determinista de cuDNN que fija cada entrenamiento, y su alcance, están en la Sección~\ref{sec:reproducibilidad}. El modo determinista general de PyTorch no se activa, y la igualdad bit a bit entre dos ejecuciones se comprobó sobre los 22 gemelos del piloto y no de forma sistemática. Las constantes de normalización de Tiny-ImageNet dependen de la biblioteca que decodifica sus JPEG, así que reproducir la matriz en otra máquina puede exigir fijar también esa biblioteca.
+Los 960 corrieron con el mismo código de medición, el del repositorio en \texttt{b38f635}: el primer entrenamiento se versionó el 8 de agosto de 2026 (\texttt{9fe77ab}) y el último el 22 (\texttt{f6df900}), sin ningún cambio entre esas fechas en el código de entrenamiento ni en las métricas. El 29 de agosto (\texttt{1ca5f65} y \texttt{a2e1ab8}) los signos de la \emph{stiffness} y la fracción negativa de la \emph{gradient confusion} pasaron a devolver NaN donde el valor es indefinido, en lugar de un cero, también en los datos ya guardados en \texttt{reports/}. Los 24 ficheros de \texttt{experiments/} conservan el umbral de junio porque el lanzador no sobrescribe un fichero existente; ningún cálculo los lee. El piloto son 24 entrenamientos en \texttt{reports\_pilot/} (\texttt{3b84f5b}), ejecutados con el código de junio. Sumados sobre los 960 resúmenes, la matriz costó 121,7 horas de reloj, 97,6 de entrenamiento y 24,1 de instrumentación; los dos relojes están en la Sección~\ref{sec:des-metricas}.
 
 Cuatro campos de \texttt{summary.json} están obsoletos y no se leen: \texttt{epochs\_to\_threshold} y \texttt{seconds\_to\_threshold}, calculados con los umbrales de junio, y \texttt{best\_val\_acc} y \texttt{best\_val\_loss}, calculados con el suavizado anterior al de la Sección~\ref{sec:variables}. La capa de análisis, en \texttt{efficiency.py}, recalcula los cuatro desde \texttt{trajectory.parquet}, y los demás campos del resumen se leen tal cual. Las tablas de \texttt{results/} son derivadas y se regeneran con la orden de la Sección~\ref{sec:entorno}, y cada cifra de la memoria que sale de ellas se cita con la fecha del fichero.
-
-En la misma máquina y con el mismo entorno, un entrenamiento repite su trayectoria. En otra máquina cambian el redondeo de los cálculos y, en Tiny-ImageNet, los propios píxeles, y lo reproducible allí son las estadísticas del estudio y no cada trayectoria.

@@ -57,7 +57,7 @@ Sea un conjunto de entrenamiento de $n$ ejemplos $\{(x_i, y_i)\}_{i=1}^n$, una r
 \label{eq:sgd}
 \end{equation}
 
-donde $\eta_t$ es el \emph{learning rate}. Si el \emph{minibatch} se muestrea de manera uniforme, el estimador es \emph{insesgado}, $\mathbb{E}[\hat{g}_t] = \nabla \mathcal{L}(\theta_t)$, lo que garantiza que SGD optimiza el \emph{loss} correcto y no una distorsión sistemática de él. Su dispersión, en cambio, no es nula. Con ejemplos independientes, la traza de su covarianza vale
+donde $\eta_t$ es el \emph{learning rate}. Una \emph{epoch} es una pasada completa sobre los $n$ ejemplos, repartidos en \emph{minibatches} de tamaño $B$, y es la unidad en la que esta memoria mide la duración de un entrenamiento. Si el \emph{minibatch} se muestrea de manera uniforme, el estimador es \emph{insesgado}, $\mathbb{E}[\hat{g}_t] = \nabla \mathcal{L}(\theta_t)$, lo que garantiza que SGD optimiza el \emph{loss} correcto y no una distorsión sistemática de él. Su dispersión, en cambio, no es nula. Con ejemplos independientes, la traza de su covarianza vale
 
 \begin{equation}
 \operatorname{tr}\operatorname{Cov}[\hat{g}_t] = \frac{\operatorname{tr}(\Sigma)}{B},
