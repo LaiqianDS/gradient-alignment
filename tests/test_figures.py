@@ -105,3 +105,14 @@ def test_every_headline_column_has_a_label():
 
     assert set(headline_columns()) <= set(figures.COLUMN_LABELS)
     assert figures.EXAMPLE_KEY in figures.COLUMN_LABELS
+
+def test_the_curve_windows_build_and_write_a_pdf(tmp_path):
+    from run_pilot import center_lr
+
+    reports, img = tmp_path / "reports", tmp_path / "img"
+    reports.mkdir()
+    _write_run(reports, "centre", dataset="mnist", model="cnn", lr=center_lr("sgd"),
+               val_acc=(0.5, 0.9, 0.95, 0.96), val_loss=(1.0, 0.4, 0.3, 0.3))
+    _write_run(reports, "other", dataset="mnist", model="cnn", lr=1e-3)
+    path = figures.curve_windows(reports, img)
+    assert path.exists() and path.suffix == ".pdf"

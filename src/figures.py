@@ -14,6 +14,7 @@ from matplotlib.colors import (
 )
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch, Rectangle
+from matplotlib.ticker import FuncFormatter, LogLocator, NullLocator
 from matplotlib.transforms import blended_transform_factory
 
 import numpy as np
@@ -24,10 +25,12 @@ from analysis import (
     REPORTS_DIR,
     dynamic_range_report,
     headline_columns,
+    load_summaries,
     load_trajectories,
     load_windows,
 )
 from config import (
+    DATASET_BUDGET,
     DATASETS,
     LR_GRID,
     MODELS,
@@ -53,6 +56,7 @@ from efficiency import (
     run_health,
     vd_status,
 )
+from run_pilot import center_lr, plateau_epoch
 from train import median3
 
 # One colour step per seed count; zero is white, so an empty square reads as zero.
@@ -594,6 +598,65 @@ def window_curves(
     return figstyle.save(fig, "ventanas", out_dir)
 
 
+def curve_windows(
+    report_dir: str | Path = REPORTS_DIR,
+    out_dir: Path = figstyle.FIGURE_DIR,
+) -> Path:
+    """Each dataset's centre-rate, seed-0 runs with the windows drawn over their
+    val loss, under the plateau band, and their val accuracy, against the thresholds."""
+    runs = load_summaries(report_dir)
+    runs = runs[(runs["seed"] == 0) & np.isclose(runs["lr"], runs["optimizer"].map(center_lr))]
+    optimizer = runs.set_index("run_name")["optimizer"]
+    traj = load_trajectories(report_dir)
+    traj = traj[traj["run_name"].isin(optimizer.index)].sort_values("epoch")
+    datasets = [d for d in DATASETS if d in set(traj["dataset"])]
+    colour = dict(zip(MODELS, figstyle.PALETTE))
+    style = {"sgd": "-", "adam": (0, (3, 1.5))}
+    band, dotted = figstyle.PALETTE[3], (0, (1, 1.5))
+    comma = FuncFormatter(lambda v, _: f"{v:g}".replace(".", ","))
+
+    fig, axes = figstyle.figure(width="full", ratio=0.28 * len(datasets), nrows=len(datasets), ncols=2)
+    for (ax_l, ax_a), dset in zip(np.atleast_2d(axes), datasets):
+        budget = DATASET_BUDGET[dset]["epochs"]
+        rows = traj[traj["dataset"] == dset]
+        plateaus = []
+        for (model, name), g in rows.groupby(["model", "run_name"]):
+            ls = style[optimizer[name]]
+            ax_l.plot(g["epoch"] + 1, g["val_loss"], color=colour[model], ls=ls, lw=1.2)
+            ax_a.plot(g["epoch"] + 1, g["val_acc"], color=colour[model], ls=ls, lw=1.2)
+            plateaus.append(plateau_epoch(g))
+        for model in set(rows["model"]):
+            ax_a.axhline(THRESHOLD_ACC[(dset, model)], color=colour[model], lw=0.7, ls=dotted, zorder=0)
+        ax_l.set_yscale("log")
+        ax_l.yaxis.set_major_locator(LogLocator(subs=(1, 2, 3, 5)))
+        ax_l.yaxis.set_minor_locator(NullLocator())
+        ax_l.axvspan(min(plateaus), max(plateaus), color=band, alpha=0.18, lw=0, zorder=0)
+        ax_l.annotate("meseta", ((min(plateaus) + max(plateaus)) / 2, 0.97), xycoords=("data", "axes fraction"),
+                      ha="center", va="top", fontsize=7.5, color="#8a5a00")
+        for ax in (ax_l, ax_a):
+            ax.yaxis.set_major_formatter(comma)
+            for frac in (0.05, 0.10, 0.25, 0.50):
+                epoch = round(budget * frac)
+                ax.axvline(epoch, color=figstyle.INK, lw=0.7, zorder=0)
+                ax.annotate(f"{frac:.0%}".replace("%", " %"), (epoch, 1.0), xycoords=("data", "axes fraction"),
+                            xytext=(0, 1 if frac in (0.05, 0.25) else 9), textcoords="offset points",
+                            ha="center", va="bottom", fontsize=7, color=figstyle.INK)
+            ax.set_xlim(1, budget)
+            ax.set_xticks([1, *range(10, budget + 1, 10)])
+        ax_l.set_ylabel("validation loss")
+        ax_a.set_ylabel("validation accuracy")
+        ax_a.set_title(DATASET_LABELS[dset], loc="right", fontsize=8, pad=14)
+    for ax in np.atleast_2d(axes)[-1]:
+        ax.set_xlabel("epoch")
+    handles = [Line2D([], [], color=colour[m], lw=1.2, label=MODEL_LABELS[m]) for m in MODELS]
+    handles += [Line2D([], [], color=figstyle.INK, lw=1.2, ls=style["sgd"], label="SGD"),
+                Line2D([], [], color=figstyle.INK, lw=1.2, ls=style["adam"], label="Adam"),
+                Line2D([], [], color=figstyle.INK, lw=0.7, ls=dotted, label="umbral")]
+    fig.legend(handles=handles, loc="outside lower center", ncol=6, frameon=False, fontsize=8,
+               handlelength=1.4, columnspacing=0.8)
+    return figstyle.save(fig, "ventanas-curvas", out_dir)
+
+
 if __name__ == "__main__":
     print(lr_window())
     print(cell_range())
@@ -602,3 +665,4 @@ if __name__ == "__main__":
     print(sign_strip())
     print(selection_bars())
     print(window_curves())
+    print(curve_windows())

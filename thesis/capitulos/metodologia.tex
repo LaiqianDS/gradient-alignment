@@ -113,36 +113,22 @@ El tamaño de la tabla engaña. Los 40 entrenamientos de una celda no son 40 val
 \section{Ventana temporal}
 \label{sec:ventana}
 
-Las ocho métricas de gradiente se calculan al final de cada \emph{epoch} sobre el \emph{batch} de medición, y el predictor de referencia se lee sobre las curvas de \emph{loss} de entrenamiento y de validación de esas mismas \emph{epochs}, de modo que de cada entrenamiento queda registrada la trayectoria completa. Una \emph{ventana} es una fracción del presupuesto de \emph{epochs}, y el valor que actúa como predictor es el que la métrica toma en la \emph{epoch} que cierra esa fracción. Las ventanas empleadas son el 5, el 10, el 25 y el 50\,\% del presupuesto, más el 100\,\% como referencia del entrenamiento completo.
+Las ocho métricas de gradiente se calculan al final de cada \emph{epoch} sobre el \emph{batch} de medición. El predictor de referencia se lee en esas mismas \emph{epochs}, TSE sobre el \emph{loss} de entrenamiento y las dos lecturas de validación sobre la curva de validación. De cada entrenamiento queda así registrada la trayectoria completa. Una \emph{ventana} es una fracción del presupuesto de \emph{epochs}, y el valor que actúa como predictor es el que la métrica toma en la \emph{epoch} que cierra esa fracción. Las ventanas son el 5, el 10, el 25 y el 50\,\% del presupuesto, más el 100\,\% como referencia del entrenamiento completo.
 
-La ventana se define como fracción y no como un número fijo de \emph{epochs} porque los presupuestos no son iguales en los cuatro conjuntos de datos: la \emph{epoch} 5 es la cuarta parte de un entrenamiento de MNIST y la octava de uno de CIFAR-100. La fracción iguala la posición en el presupuesto, no la posición en la curva de aprendizaje, y conviene decir qué es «temprano» en las otras dos unidades. La Tabla~\ref{tab:ventanas-epochs} da, para cada conjunto, la \emph{epoch} en la que cierra cada ventana, los pasos de optimizador que la red lleva dados al cerrarla, y dos referencias de la propia curva: la \emph{epoch} en la que el \emph{loss} de validación del piloto de la Sección~\ref{sec:calibracion} entra en meseta, y la \emph{epoch} mediana en la que los entrenamientos de la matriz cruzan su umbral. La ventana del 5\,\% es la \emph{epoch} 2 en CIFAR-100 y en Tiny-ImageNet, donde el piloto sitúa la meseta entre las \emph{epochs} 1 y 8, y la del 50\,\% cae en todos los conjuntos en plena fase de sobreajuste. En pasos, «temprano» quiere decir entre 390 y 1.406. El redondeo de los presupuestos a múltiplos de 20 solo garantiza que cada fracción caiga en \emph{epoch} entera; las ventanas son, en la práctica, las \emph{epochs} 1, 2, 5 y 10 en MNIST y las 2, 4, 10 y 20 en los demás conjuntos, y por eso la hipótesis H4 se declara en \emph{epochs}.
+La ventana se define como fracción y no como un número fijo de \emph{epochs} porque los presupuestos no son iguales en los cuatro conjuntos de datos. La \emph{epoch} 5 es la cuarta parte de un entrenamiento de MNIST y la octava de uno de CIFAR-100. La fracción iguala la posición en el presupuesto, no la posición en la curva de aprendizaje, así que hay que decir qué es «temprano» en las otras dos unidades. La Figura~\ref{fig:ventanas-curvas} sitúa las cuatro ventanas sobre el \emph{loss} y el \emph{accuracy} de validación de seis entrenamientos por conjunto, los del \emph{learning rate} central de cada optimizador con la \emph{seed} 0, que son los que corrió el piloto de la Sección~\ref{sec:calibracion}. La banda es la meseta del \emph{loss} de validación con la regla de esa sección, desde la primera hasta la última \emph{epoch} en la que una de las seis curvas entra en ella, y las líneas punteadas son el umbral de cada arquitectura. Las ventanas del 5 y del 10\,\% caen en plena bajada del \emph{loss} para la CNN y la ResNet-18. Para la red \emph{fully connected} de CIFAR-100 y Tiny-ImageNet caen en el fondo, porque su mínimo llega entre las \emph{epochs} 1 y 4 y después sube. La del 5\,\% es la \emph{epoch} 2 en CIFAR-100 y en Tiny-ImageNet, donde la meseta empieza ya entre las \emph{epochs} 1 y 8. La del 50\,\% queda más allá de la meseta en tres conjuntos y dentro de ella en MNIST. En la matriz, tres de cada cuatro entrenamientos de CIFAR-10, CIFAR-100 y Tiny-ImageNet que aprenden (Sección~\ref{sec:protocolo-poblacion}) ya han dejado atrás su mejor \emph{loss} de validación al cerrar esa ventana, y en MNIST solo uno de cada cuatro. Cada \emph{epoch} son 390 pasos de optimizador en MNIST, 351 en CIFAR-10 y CIFAR-100 y 703 en Tiny-ImageNet, así que la ventana del 5\,\% son 390 pasos en MNIST y 1.406 en Tiny-ImageNet. El redondeo de los presupuestos a múltiplos de 20 solo garantiza que cada fracción caiga en \emph{epoch} entera. Las ventanas son, en la práctica, las \emph{epochs} 1, 2, 5 y 10 en MNIST y las 2, 4, 10 y 20 en los demás conjuntos, y por eso la hipótesis H4 se declara en \emph{epochs}.
 
-\begin{table}[ht]
+\begin{figure}[htbp]
 \centering
-\small
-\caption{Las ventanas en \emph{epochs} y en pasos, junto a la curva de aprendizaje: la \emph{epoch} de meseta del \emph{loss} de validación en el piloto y la \emph{epoch} mediana de cruce del umbral en la matriz.}
-\label{tab:ventanas-epochs}
-\footnotesize
-\setlength{\tabcolsep}{4pt}
-\begin{tabular}{lcccccccc}
-\toprule
-& & \multicolumn{4}{c}{\textbf{\emph{Epoch} de cierre}} & & & \\
-\cmidrule(lr){3-6}
-\textbf{Conjunto} & \textbf{Presup.} & 5\,\% & 10\,\% & 25\,\% & 50\,\% & \textbf{Pasos/\emph{epoch}} & \textbf{Meseta piloto} & \textbf{Cruce mediano} \\
-\midrule
-MNIST         & 20 & 1 & 2 & 5  & 10 & 390 & 6 a 17 & 5 \\
-CIFAR-10      & 40 & 2 & 4 & 10 & 20 & 351 & 3 a 19 & 5 \\
-CIFAR-100     & 40 & 2 & 4 & 10 & 20 & 351 & 3 a 8  & 4 \\
-Tiny-ImageNet & 40 & 2 & 4 & 10 & 20 & 703 & 1 a 8  & 5 \\
-\bottomrule
-\end{tabular}
-\end{table}
+\includegraphics{ventanas-curvas}
+\caption{Dónde cae cada ventana sobre la curva de aprendizaje. \emph{Loss} y \emph{accuracy} de validación de los seis entrenamientos con el \emph{learning rate} central y la \emph{seed} 0 de cada conjunto. Las líneas verticales son las ventanas, la banda la meseta del \emph{loss} de validación y las punteadas el umbral de cada arquitectura.}
+\label{fig:ventanas-curvas}
+\end{figure}
 
-Las ventanas tempranas son cuatro porque cuál es la más temprana que todavía basta es una de las preguntas del trabajo, y su respuesta es un resultado en sí misma. El barrido no cuesta cómputo adicional: como la trayectoria entera queda registrada, las ventanas se recortan después de ejecutar los entrenamientos y no se deciden antes.
+Hay cuatro ventanas tempranas porque una de las preguntas del trabajo, H4, es cuál es la más temprana que todavía basta, y su respuesta es un resultado en sí misma. El barrido no cuesta cómputo adicional. Como la trayectoria entera queda registrada, las ventanas se recortan después de ejecutar los entrenamientos y no se deciden antes.
 
-Las métricas se miden una vez por \emph{epoch}, al final de cada una. Es una decisión, no un límite del software, y es la causa directa del solape que la Sección~\ref{sec:riesgos} obliga a medir: entre dos lecturas median entre 351 y 703 pasos de optimizador, y lo que ocurre dentro de la primera \emph{epoch} no se ve. Una instantánea al final de la \emph{epoch} es además ruidosa con \emph{learning rates} altos, donde la red oscila de un paso al siguiente; McCandlish et al.~\cite{mccandlish2018empirical} promedian la escala de ruido sobre pasos. Medir dentro de la primera \emph{epoch} habría costado una fracción pequeña de las 24 horas de instrumentación, y queda anotado en el Capítulo~\ref{ch:trabajos-futuros}.
+Una ventana solo puede predecir lo que ocurre después de cerrarse. Para el rendimiento final y para el \emph{gap} de generalización esa condición se cumple siempre, porque ambos se miden al terminar el entrenamiento. Para la velocidad no está garantizada. Si un entrenamiento cruza el umbral dentro de la propia ventana, la métrica leída ahí no anticipa el cruce. Describe un entrenamiento que ya lo ha hecho. Ese solape se mide, celda a celda, en la Sección~\ref{sec:res-solape}, antes de interpretar ningún resultado de velocidad.
 
-Una ventana solo puede predecir aquello que ocurre después de cerrarse. Para el rendimiento final y para el \emph{gap} de generalización esa condición se cumple siempre, porque ambos se miden al terminar el entrenamiento. Para la velocidad no está garantizada: si un entrenamiento cruza el umbral dentro de la propia ventana, la métrica leída ahí no anticipa el cruce, sino que describe un entrenamiento que ya lo ha hecho. El alcance de ese solape se trata en la Sección~\ref{sec:riesgos}.
+Las métricas se miden una vez por \emph{epoch}, al final de cada una. Es una decisión, no un límite del software, y es la causa de ese solape. Entre dos lecturas median entre 351 y 703 pasos de optimizador, y lo que ocurre dentro de la primera \emph{epoch} no se ve. Una instantánea al final de la \emph{epoch} es además ruidosa con \emph{learning rates} altos, donde la red oscila de un paso al siguiente. McCandlish et al.~\cite{mccandlish2018empirical} promedian la escala de ruido sobre pasos. Medir dentro de la primera \emph{epoch} habría costado poco, y la Sección~\ref{sec:futuro-medicion} cuantifica cuánto.
 
 \section{Configuración del entrenamiento}
 \label{sec:setup}
