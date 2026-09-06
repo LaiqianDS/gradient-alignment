@@ -171,7 +171,7 @@ def lr_window(
         ScalarMappable(norm=NORM, cmap=CMAP), ax=panels + [ax_tau],
         ticks=range(len(SEEDS) + 1), pad=0.02, aspect=30, drawedges=True,
     )
-    bar.set_label("entrenamientos que cruzan el umbral", fontsize=figstyle.BODY_PT - 1)
+    bar.set_label("entrenamientos que cruzan τ", fontsize=figstyle.BODY_PT - 1)
     # A light frame, because the zero swatch is white.
     bar.outline.set(edgecolor="#dcdcdc", linewidth=0.6)
     bar.dividers.set(color="#dcdcdc", linewidth=0.8)
@@ -200,8 +200,8 @@ COLUMN_LABELS = {
     "confusion/eta": "gradient confusion",
     "gwa/value": "GWA",
     "tse/ema_0_999": "TSE",
-    "val_loss": "loss de validación",
-    "val_acc": "accuracy de validación",
+    "val_loss": "val loss",
+    "val_acc": "val accuracy",
 }
 
 FAMILY_COLOURS = {
@@ -212,13 +212,13 @@ FAMILY_COLOURS = {
 
 
 def _range_markers(ax, x, y, live, labels: bool = False) -> None:
-    """The runs of one cell, coloured by whether the run ever learned."""
-    for mask, colour, name in (
-        (live, figstyle.PALETTE[0], "supera el azar"),
-        (~live, figstyle.PALETTE[1], "se queda en el azar"),
-    ):
-        ax.plot(x[mask], y[mask], "o", ms=3.4, ls="none", color=colour,
-                mec="white", mew=0.5, zorder=3, label=name if labels else None)
+    """The runs of one cell, filled when the run learned and hollow when not."""
+    ax.plot(x[live], y[live], "o", ms=3.4, ls="none", color=figstyle.PALETTE[0],
+            mec="white", mew=0.5, zorder=3,
+            label="supera el azar" if labels else None)
+    ax.plot(x[~live], y[~live], "o", ms=3.4, ls="none", mfc="white",
+            mec=figstyle.MUTED, mew=0.8, zorder=3,
+            label="se queda en el azar" if labels else None)
 
 
 def cell_range(
@@ -314,7 +314,7 @@ def cell_composition(
     crossed = ~np.isnan(t_star)
     # The censored runs sit on a level of their own above the budget.
     censored_at = budget * 1.12
-    crossed_colour, censored_colour = figstyle.PALETTE[0], figstyle.PALETTE[1]
+    crossed_colour, censored_colour = figstyle.PALETTE[0], figstyle.MUTED
 
     fig, (ax_m, ax_t) = figstyle.figure(width="full", ratio=0.72, nrows=2, sharex=True)
     for ax, y in ((ax_m, metric), (ax_t, np.where(crossed, t_star, censored_at))):
@@ -347,7 +347,7 @@ def cell_composition(
     ax_t.set_yticks(ticks + [censored_at])
     ax_t.set_yticklabels([str(t) for t in ticks] + ["no cruza"])
     ax_t.axhline(budget, ls="--", lw=0.8, color=figstyle.RULE, zorder=1)
-    ax_t.set_ylabel("epochs hasta el umbral")
+    ax_t.set_ylabel("epochs hasta τ")
     ax_t.set_xticks(range(len(grid)))
     ax_t.set_xticklabels([_rate_label(lr) for lr in grid], fontsize=7.5,
                          rotation=45, ha="right", rotation_mode="anchor")
@@ -440,7 +440,7 @@ def cell_overlap(
     closes = win.groupby("window")["epoch"].first() + 1  # 1-indexed
     budget = int(traj["epoch"].max()) + 1
 
-    crossed_colour, censored_colour = figstyle.PALETTE[0], figstyle.PALETTE[1]
+    crossed_colour, censored_colour = figstyle.PALETTE[0], figstyle.MUTED
     fig, (ax, ax_n) = figstyle.figure(
         width="full", ratio=0.66, nrows=2,
         gridspec_kw={"height_ratios": [3.0, 1.0]},
@@ -488,7 +488,7 @@ def cell_overlap(
     ax.set_yticks([0, 0.25, 0.5, 0.75, 1.0])
     ax.set_yticklabels([_rate_label(t) for t in (0, 0.25, 0.5, 0.75, 1.0)])
     ax_n.set_xlabel("epoch")
-    ax.set_ylabel("accuracy de validación suavizado")
+    ax.set_ylabel("val accuracy suavizado")
     ax.text(budget, 0.99, " ".join((DATASET_LABELS[dset], MODEL_LABELS[model],
                                     OPTIMIZER_LABELS[opt])),
             ha="right", va="top", fontsize=7.5)
@@ -510,9 +510,9 @@ PRIMARY_ORDER = (
     "stiffness/cos_within", "confusion/eta", "gwa/value",
 )
 VD_LABELS = {
-    "epochs_to_threshold": "epochs hasta el umbral, por hitos",
-    "final_test_acc": "accuracy de test",
-    "final_gap_loss": "gap de loss",
+    "epochs_to_threshold": "epochs hasta τ, por hitos",
+    "final_test_acc": "test accuracy",
+    "final_gap_loss": "loss gap",
 }
 
 
@@ -632,7 +632,7 @@ def window_change(
     table = table[table["vd"].isin(PRIMARY_VDS) & ~table["predictor"].isin(PRUNED)]
     rows = [k for k in PRIMARY_ORDER if k != LOG_LR]
     fig, axes = figstyle.figure(width="full", ratio=0.42, ncols=3)
-    _box_panels(fig, axes, table, "D_diff_w", rows, "cambio de |D| al esperar")
+    _box_panels(fig, axes, table, "D_diff_w", rows, "|D| tardía − |D| temprana")
     fig.legend(handles=_family_handles(grid=False), loc="outside lower center",
                ncol=3, fontsize=7.5, handlelength=1.1, handletextpad=0.5,
                columnspacing=1.4, frameon=False)
@@ -688,7 +688,7 @@ def curve_windows(
         ax.set_xticks([1, *range(10, budget + 1, 10)])
         ax.set_title(DATASET_LABELS[dset], loc="right", fontsize=8, pad=14)
     for ax in axes[::ncols]:
-        ax.set_ylabel("loss de validación (log)")
+        ax.set_ylabel("val loss (log)")
     for ax in axes[-ncols:]:
         ax.set_xlabel("epoch")
     for ax in axes[len(datasets):]:

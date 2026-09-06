@@ -22,7 +22,7 @@
 \LoadClass{book}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Codificacio dels caracteres 
+% Codificacio dels caracteres
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \RequirePackage[T1]{fontenc}
 
@@ -75,7 +75,7 @@
 \definecolor{grisfosc}{gray}{0.25}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Para evitar lÃ­neas huÃ©rfanas y viudas
+% Para evitar líneas huérfanas y viudas
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \clubpenalty=10000
@@ -116,7 +116,7 @@
      \renewcommand{\quadrename}{Quadre}
      \renewcommand{\listquadrename}{\'Index de quadres}
      \renewcommand{\appendicesname}{Ap\`endixs}}
-     
+
 
 \addto\captionsspanish{%
      \renewcommand{\titulacioname}{Grado en Ingenier\'\i a Inform\'atica}
@@ -132,7 +132,7 @@
      \renewcommand{\quadrename}{Cuadro}
      \renewcommand{\listquadrename}{\'Indice de cuadros}
      \renewcommand{\appendicesname}{Ap\'endices}}
-     
+
 \addto\captionsenglish{%
      \renewcommand{\titulacioname}{Degree in Computer Engineering}
      \renewcommand{\tfgname}{Degree final work}
@@ -143,31 +143,30 @@
      \renewcommand{\algorithmname}{Algorithm}
      \renewcommand{\listalgorithmname}{List of algorithms}
      \renewcommand{\appendicesname}{Appendices}}
-     
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Nous tipus d'objectes flotants
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Formato de los caption de tablas, figuras, etc.
-% LÃ­neas centrados, tamaÃ±o "small" para etiqueta y texto, 
+% Líneas centrados, tamaño "small" para etiqueta y texto,
 % y la etiqueta en negrita
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \RequirePackage[justification=centerlast,small,bf,labelsep=colon]{caption}
 
-\RequirePackage{algorithmic}
+\RequirePackage{algpseudocode}
 \RequirePackage[within=chapter]{newfloat}
 
 \DeclareFloatingEnvironment[fileext=loa,
      listname=\listalgorithmname,name=\algorithmname]{algorithm}
-     \DeclareCaptionFormat{ruled}{\hrulefill\par#1#2#3\vspace{-.5\baselineskip}\hrulefill}
-\captionsetup[algorithm]{justification=raggedright,singlelinecheck=off,position=below,format=ruled}  
-   
+\captionsetup[algorithm]{justification=raggedright,singlelinecheck=off,position=below}
+
 \DeclareFloatingEnvironment[fileext=loq,
-     listname=\listquadrename,name=\quadrename]{quadre}     
-  
+     listname=\listquadrename,name=\quadrename]{quadre}
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Para escribir cÃ³digo y que quede bien
+% Para escribir código y que quede bien
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \RequirePackage{listings}
@@ -179,7 +178,7 @@
 	numberstyle=\footnotesize,      % the size of the fonts that are used for the line-numbers
 	stepnumber=1,                   % the step between two line-numbers. If it is 1 each line will be numbered
 	numbersep=5pt,                  % how far the line-numbers are from the code
-	backgroundcolor=\color{white},	% choose the background color. 
+	backgroundcolor=\color{white},	% choose the background color.
 	numberstyle=\tiny\color{gray},	% choose the color of the numbers
 	keywordstyle=\color{blue},		% choose the color of the keywords
 	commentstyle=\color{dkgreen},	% choose the color of the comments
@@ -196,8 +195,8 @@
 }
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Aspecto los tÃ­tulos para \chapter y \section, asÃ­ como 
-% aÃ±adir un punto despuÃ©s de la numeraciÃ³n de las secciones
+% Aspecto los títulos para \chapter y \section, así como
+% añadir un punto después de la numeración de las secciones
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \RequirePackage{titlesec}
@@ -206,14 +205,14 @@
 
 \titleformat{\chapter}[display]
 {\normalfont\Large\filleft\sffamily\bfseries}  % FORMAT
-{\titlerule[1pt]                                  
+{\titlerule[1pt]
  \vspace{1pt}
  \titlerule
  \vspace{1pc}
  \LARGE\MakeUppercase{\chaptertitlename} \thechapter} % LABEL
 {0pc}                                                 % SEP
-{\Huge}                                               % BEFORE CODE (abans del tÃ­tol)
-[\vspace{5pt}{\titlerule[1pt]}]                                          % AFTER  CODE (desprÃ©s del tÃ­tol)
+{\Huge}                                               % BEFORE CODE (abans del títol)
+[\vspace{5pt}{\titlerule[1pt]}]                                          % AFTER  CODE (després del títol)
 
 \titleformat{\section}
  {\Large\normalfont\sffamily\bfseries}
@@ -226,7 +225,7 @@
 \setlength{\cftbeforechapskip}{3pt}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% DefiniciÃ³n de las cabeceras y pies de pÃ¡gina
+% Definición de las cabeceras y pies de página
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \RequirePackage{fancyhdr}
@@ -241,7 +240,7 @@
 
 \lhead[\bfseries\thepage]{\sffamily\rightmark}
 \rhead[\sffamily\leftmark]{\bfseries\thepage}
-\cfoot{} 
+\cfoot{}
 \lfoot{}
 \rfoot{}
 
@@ -255,23 +254,19 @@
 %%%%%%%%%%%%%
 
 \RequirePackage[colorlinks]{hyperref}
-\hypersetup{
-    colorlinks=true, 
-    linkcolor=black, 
-    urlcolor=cyan
-}
+\hypersetup{colorlinks,linkcolor={black},citecolor={black},urlcolor={red}}
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% SeparaciÃ³n entre pÃ¡rrafos
+% Separación entre párrafos
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \setlength{\parskip}{1ex}
 
 \newcommand{\foreign}[2]{\foreignlanguage{#1}{\textit{#2}}}
-     
-\newenvironment{Foreign}[1]{\begin{quote}\itshape\selectlanguage{#1}}{\end{quote}}     
-      
+
+\newenvironment{Foreign}[1]{\begin{quote}\itshape\selectlanguage{#1}}{\end{quote}}
+
 %%%%%%%%
 % Resums
 %%%%%%%%
@@ -290,7 +285,7 @@
 
 
 %%%%%%%%%
-% Ãndexs
+% Índexs
 %%%%%%%%%
 \newcommand{\makeindexes}{\cleardoublepage\tableofcontents\cleardoublepage
                           \iflistfigures\listoffigures\fi
@@ -313,48 +308,48 @@
 
 \newcommand{\APPENDIX}{\appendix
              \phantomsection
-             \addtocontents{toc}{\protect\noindent\protect\hrulefill\protect\par}             
+             \addtocontents{toc}{\protect\noindent\protect\hrulefill\protect\par}
              \ifnum\value{appendix}=1 \addtocontents{toc}{\protect\appendixname\protect\par}
                     \else\addtocontents{toc}{\protect\appendicesname\protect\par}\fi}
 
-\newcommand{\m@ketitle}{%
-\begin{titlepage}
-\AddToShipoutPicture*{\AtPageUpperLeft{%
-    % Marges: dalt=esquerra=dreta=2cm 
-    \raisebox{-4cm}{\hspace{2cm}\includegraphics[height=2cm]{logo-upv}% grandÃ ria 116mmx37mm escalada a 62.7mmx20mm
-    \hspace{5.54cm}% 21cm-(2+6.27+5.19+2)cm
-                    \includegraphics[height=2cm]{logo-etsinf}% grandÃ ria 109mmx42mm escalada a 51.9mmx20mm
-                    }}}
-\AddToShipoutPicture*{\includegraphics[width=21cm,height=12.89cm]{baseportada}}
-\centering
-\vspace*{2cm}
-\begin{color}{grisfosc}
-\large
-Escuela Técnica Superior de Ingeniería Informática
+% \newcommand{\m@ketitle}{%
+% \begin{titlepage}
+% \AddToShipoutPicture*{\AtPageUpperLeft{%
+%     % Marges: dalt=esquerra=dreta=2cm
+%     \raisebox{-4cm}{\hspace{2cm}\includegraphics[height=2cm]{portada/logo-upv.pdf}% grand� ria 116mmx37mm escalada a 62.7mmx20mm
+%     \hspace{5.54cm}% 21cm-(2+6.27+5.19+2)cm
+%                     \includegraphics[height=2cm]{portada/logo-etsinf.pdf}% grand� ria 109mmx42mm escalada a 51.9mmx20mm
+%                     }}}
+% \AddToShipoutPicture*{\includegraphics[width=21cm,height=12.89cm]{portada/baseportada.png}}
+% \centering
+% \vspace*{2cm}
+% \begin{color}{grisfosc}
+% \large
+% Escola T\`ecnica Superior d'Enginyeria Inform\`atica
 
-Universidad Politécnica de Valencia
-\end{color}
-\vspace{\stretch{1}}
+% Universitat Polit\`ecnica de Val\`encia
+% \end{color}
+% \vspace{\stretch{1}}
 
-\LARGE\bfseries\@title
+% \LARGE\bfseries\@title
 
-\large\scshape \tfgname
-\par\vspace{0.2cm}\par
-\normalfont\textcolor{grisclar}{\titulacioname}
+% \large\scshape \tfgname
+% \par\vspace{0.2cm}\par
+% \normalfont\textcolor{grisclar}{\titulacioname}
 
-\vspace{\stretch{2}}
+% \vspace{\stretch{2}}
 
-% Autor, tutor y fecha
-\begin{flushright} 
-\begin{tabular}{l}
-   \textit{\authorname:} \begin{tabular}[t]{l}\@author\end{tabular}\\[0.2cm]
-   \textit{\tutorname:} \begin{tabular}[t]{l}\t@tor\end{tabular}
-\end{tabular}
-\medskip
+% % Autor, tutor y fecha
+% \begin{flushright}
+% \begin{tabular}{l}
+%    \textit{\authorname:} \begin{tabular}[t]{l}\@author\end{tabular}\\[0.2cm]
+%    \textit{\tutorname:} \begin{tabular}[t]{l}\t@tor\end{tabular}
+% \end{tabular}
+% \medskip
 
-\coursename\space\c@rs
-\end{flushright}
-\end{titlepage}}
+% \coursename\space\c@rs
+% \end{flushright}
+% \end{titlepage}}
 
 \renewcommand{\cleardoublepage}{\clearpage\if@twoside \ifodd\c@page\else
 \hbox{}
@@ -362,12 +357,18 @@ Universidad Politécnica de Valencia
 \newpage
 \if@twocolumn\hbox{}\newpage\fi\fi\fi}
 
+\newcommand{\blankcoververso}{%
+    \setcounter{page}{2}%
+    \thispagestyle{empty}%
+    \null%
+    \clearpage}
+
 \AtBeginDocument{%
-    \frontmatter\m@ketitle\cleardoublepage\thispagestyle{plain}}
+    \frontmatter\blankcoververso\thispagestyle{plain}}
 
 \newcounter{appendix}
 \AtEndDocument{%
-    \ifnum\value{chapter}=1 
+    \ifnum\value{chapter}=1
            \immediate\write\@auxout{\unexpanded{\setcounter{appendix}{1}}}
-    \else 
+    \else
            \immediate\write\@auxout{\unexpanded{\setcounter{appendix}{2}}} \fi}

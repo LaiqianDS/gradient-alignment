@@ -26,6 +26,7 @@ CYCLE = cycler(color=PALETTE)
 
 INK = "#333333"
 RULE = "#8a8a8a"
+MUTED = "#767676"  # data the figure sets aside; RULE stays for the guides
 
 
 def _sans_name() -> str:
