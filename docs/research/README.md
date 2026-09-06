@@ -10,7 +10,8 @@
 | Por qué/cuándo se decidió algo (log de decisiones) | [[2 - Decisiones]] |
 | Dónde estamos (fases, estado actual, pasos inmediatos) | [[3 - Progreso]] |
 | Qué datasets y modelos usa cada paper + frecuencias del setup | [[Corpus]] |
-| Cómo se implementa y loguea cada métrica + auditoría | [[Métricas]] |
+| Cómo se implementa y loguea cada métrica | [[Métricas]] |
+| Datasets, particiones, arquitecturas exactas, condiciones de entrenamiento, anclas de accuracy de la bibliografía y la tabla de signos de H6 | [[Datos experimentales]] |
 | Definición de un concepto | [[Conceptos]] |
 | Resumen y uso en el TFG de un paper concreto | `Papers/<paper>` |
 | El trabajo contado de principio a fin | `thesis/` (la memoria) |
@@ -19,11 +20,11 @@
 
 Antes de nada, dos avisos que ahorran tiempo. El primero es que aquí hay tres tipos de documento y conviene no confundirlos: los que explican **qué se hace y por qué**, los que registran **qué se decidió y cuándo**, y el que dice **dónde está el proyecto ahora**. El segundo es que ningún documento largo de este vault se lee de principio a fin; se consultan por la sección que hace falta.
 
-Hay cuatro caminos de lectura según a qué vengas, y cada uno se sostiene solo. Uno de ellos, el de cómo se decide cada hipótesis, hoy no existe. El plan de análisis se retiró el 2026-08-25 y construir el método es el trabajo que queda.
+Hay cuatro caminos de lectura según a qué vengas, y cada uno se sostiene solo.
 
 **Para entender la pregunta (media hora).** Leer el resumen de cinco líneas de arriba y después [[1 - Diseño]] entero, que es el qué y el porqué completo: pregunta de investigación, las seis hipótesis, el diseño experimental, la matriz de runs y los baselines. Con eso ya se puede tener una conversación sobre el trabajo.
 
-**Para entender cómo se decide.** Todavía no se decide de ninguna manera. Existió un plan de análisis preregistrado y se retiró el 2026-08-25 junto con su código estadístico; el motivo y sus consecuencias están en la entrada de esa fecha de [[2 - Decisiones]]. Las seis hipótesis siguen enunciadas en [[1 - Diseño]] como afirmaciones falsables, sin criterio de decisión. Definir ese criterio, hipótesis por hipótesis, es la única pendiente del proyecto.
+**Para entender cómo se decide.** [[1 - Diseño]] §Método de análisis resume con qué cuenta se decide cada hipótesis, y [[2 - Decisiones]] guarda cada elección con su base, su evidencia y su fecha. Un aviso que importa: el plan de análisis preregistrado se retiró después de terminar la matriz, así que el método es posterior a los datos; la cronología completa está en [[2 - Decisiones]] y la memoria la declara en Metodología §Riesgos. Los seis veredictos están en [[3 - Progreso]].
 
 **Para entender el código.** Empezar por `src/config.py`, que es la fuente de verdad: contiene a la vez los knobs de un run y los ejes congelados de la matriz, y todo lo demás los importa en vez de repetirlos. Después `src/train.py`, que es un run entero de principio a fin y se lee en una sentada. Luego `src/metrics/README.md` para saber qué mide cada métrica en lenguaje llano, `src/metrics/__init__.py` para ver por qué el registro y el baseline están separados, y `src/metrics/primitives.py` para el barrido compartido, que es la optimización que hace viable el estudio. Al final, una métrica cualquiera con su test al lado, para ver el patrón de `_core` puro más envoltorio.
 
@@ -36,10 +37,11 @@ Lo que no conviene hacer: leer [[2 - Decisiones]] de principio a fin, porque es 
 ## Referencia (cambia poco)
 
 - **[[Corpus]]**: datasets y modelos por paper (pares dataset → modelo), frecuencias que justifican el setup y decisiones de implementación (con la sustitución ImageNet → Tiny-ImageNet).
-- **[[Métricas]]**: la métrica de cada paper y cómo se traslada al pipeline (estimador, claves de logging, coste, señal); incluye el plan de logging consolidado y la auditoría contra los PDFs.
+- **[[Métricas]]**: la métrica de cada paper y cómo se traslada al pipeline (estimador, claves de logging, coste, señal), más el plan de logging consolidado.
+- **[[Datos experimentales]]**: la tabla de datasets y particiones, la definición exacta de las tres arquitecturas, las condiciones de entrenamiento con las constantes de normalización, las anclas de accuracy de la bibliografía por celda y la tabla de signos que cada artículo predice.
 - **[[Conceptos]]**: glosario: una entrada por concepto, agrupadas por tema (alineación · varianza · optimización · generalización), enlazadas a los papers que las fundamentan.
 - **[[EBRON]]**: título, resumen y palabras clave registrados (no editar: es lo entregado).
-- **[[Seminarios TFG - cosas a tener en cuenta]]**: guía de redacción, depósito y defensa (ETSINF-UPV), con lo que difiere para GCD.
+- **Seminarios TFG - cosas a tener en cuenta** (en `writing/`, solo en local: esa carpeta no se versiona): guía de redacción, depósito y defensa (ETSINF-UPV), con lo que difiere para GCD. En la misma carpeta viven las notas de estilo del TFM HOFT y la revisión externa de la memoria.
 
 ## Papers
 
@@ -53,6 +55,6 @@ Lo que no conviene hacer: leer [[2 - Decisiones]] de principio a fin, porque es 
 
 ## Recordatorios
 
-- Anexo ODS obligatorio (plantilla oficial; ver [[Seminarios TFG - cosas a tener en cuenta]] §6).
+- Anexo ODS obligatorio, ya escrito (`.tex` y `.docx` sobre la plantilla oficial).
 - El tutor evalúa parte de la nota: visto bueno antes del depósito.
 - [Notas redacción TFG (UPV)](https://poliformat.upv.es/access/content/group/GRA_14056_2025/Seminario%20Redacción%20y%20Defensa%20del%20TFG/3_Trabajo%20Final%20de%20Grado.pdf)

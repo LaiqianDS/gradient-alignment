@@ -42,7 +42,7 @@ Qué datasets y arquitecturas usa cada paper del corpus, fusionados como pares *
 
 Review/Slides, sin experimentos propios. Taxonomía cualitativa de optimizadores (Momentum, NAG, Adagrad, Adadelta, RMSprop, Adam, AdaMax, Nadam) y arquitecturas paralelas/distribuidas para SGD (Hogwild!, Downpour SGD, delay-tolerant, TensorFlow, Elastic Averaging SGD). Únicas ilustraciones: función de Beale y un saddle point (Figura 4 de Alec Radford).
 
-## Coherent Gradients: An Approach to Understanding Generalization in Gradient Descent-based Optimization (Chatterjee, 2019)
+## Coherent Gradients: An Approach to Understanding Generalization in Gradient Descent-based Optimization (Chatterjee, 2020)
 
 - **MNIST** (único dataset) → MLP FC de 1 capa oculta de 2048 ReLUs, softmax 10 vías (Xavier, vanilla SGD sin momentum, CE, lr 0.1, minibatch 100, $10^5$ pasos ≈ 170 épocas, sin regularización explícita). Para winsorized SGD, MLP de 3 capas ocultas de 256 ReLUs (60 000 pasos ≈ 100 épocas, $c \in \{0,1,2,4,8\}$). Experimentos con label noise 25/50/75/100%. Elección de FC (no convolucional) deliberada para evitar inductive bias arquitectónico.
 
@@ -112,12 +112,12 @@ Slides/Lecture deck (Coursera, Lecture 6a-6e), sin experimentos propios sistemá
 
 ## Frecuencias
 
-### Datasets (sobre los 15 papers con setup)
+### Datasets (sobre los 14 papers con setup; Defazio & Bottou queda fuera de todos los recuentos)
 
 **Reales (visión).**
 - **MNIST** (9 papers): Faghri; Johnson & Zhang; Kingma & Ba; McCandlish; Chatterjee (Coherent Gradients); Forouzesh & Thiran; Fort et al.; Sankararaman; Liu.
-- **CIFAR-10** (11 papers): Faghri; Johnson & Zhang; Kingma & Ba; McCandlish; Forouzesh & Thiran; Hölzl; Ru et al.; Fort et al.; Sankararaman; Liu; (cualitativo en Chatterjee & Zielinski).
-- **CIFAR-100** (6 papers): Faghri; Forouzesh & Thiran; Ru et al.; Fort et al.; Sankararaman; (cualitativo en Chatterjee & Zielinski).
+- **CIFAR-10** (10 papers con experimentos propios, 11 con la discusión cualitativa de Chatterjee & Zielinski): Faghri; Johnson & Zhang; Kingma & Ba; McCandlish; Forouzesh & Thiran; Hölzl; Ru et al.; Fort et al.; Sankararaman; Liu; (cualitativo en Chatterjee & Zielinski).
+- **CIFAR-100** (5 papers con experimentos propios, 6 con Chatterjee & Zielinski): Faghri; Forouzesh & Thiran; Ru et al.; Fort et al.; Sankararaman; (cualitativo en Chatterjee & Zielinski).
 - **ImageNet** (4 papers): Faghri; McCandlish; Chatterjee & Zielinski; Hölzl (variante ImageNet-1k).
 - Otros (visión, 1 paper cada uno): Fashion MNIST (Fort et al.; cualitativo en Chatterjee & Zielinski); SVHN (McCandlish); CIFAR-10-N, CIFAR-C, ImageNet-V2/ReaL/C, ImageNet-21k, iNat18, Places365 (Hölzl); ImageNet-16-120 (Ru, vía NAS-Bench-201); Flower102 (Ru, vía RWNN); MRNet (Forouzesh & Thiran).
 
@@ -131,19 +131,19 @@ Slides/Lecture deck (Coursera, Lecture 6a-6e), sin experimentos propios sistemá
 
 ### Arquitecturas (por familia)
 
-- **MLPs / Fully-Connected** (8 papers): Faghri; Johnson & Zhang; Kingma & Ba; Chatterjee 2019; Forouzesh & Thiran; Fort et al.; Sankararaman; Liu.
-- **CNNs (no-ResNet)** (8 papers): Kingma & Ba; McCandlish; Forouzesh & Thiran (AlexNet); Chatterjee & Zielinski (Inception-V3); Defazio & Bottou (LeNet-5); Fort et al.; Sankararaman; Liu.
-- **ResNets / Wide ResNets** (8 papers con ResNet estricto): Faghri (ResNet8/18/32); McCandlish (ResNet-32/50); Forouzesh & Thiran (ResNet-18); Chatterjee & Zielinski (ResNet-18); Defazio & Bottou (ResNet-18/110/50); Fort et al. (ResNet20v1); Sankararaman (WRN $\beta$-$\ell$); Liu (ResNet18). (Hölzl usa ConvNeXt, no ResNet estricto.)
-- **DenseNets** (1): Defazio & Bottou. **VGG** (1): Forouzesh & Thiran. **Transformers / ViT / ConvNeXt** (2): Hölzl (ViT/S-16, ViT/B-16, ConvNeXt-Femto), Fort et al. (BERT, validación NLP). **LSTMs / RNNs** (1): McCandlish.
+- **MLPs / Fully-Connected** (8 papers): Faghri; Johnson & Zhang; Kingma & Ba; Chatterjee 2020; Forouzesh & Thiran; Fort et al.; Sankararaman; Liu.
+- **CNNs (no-ResNet)** (7 papers): Kingma & Ba; McCandlish; Forouzesh & Thiran (AlexNet); Chatterjee & Zielinski (Inception-V3); Fort et al.; Sankararaman; Liu. (Defazio & Bottou, fuera del recuento, usa LeNet-5.)
+- **ResNets / Wide ResNets** (7 papers con ResNet estricto): Faghri (ResNet8/18/32); McCandlish (ResNet-32/50); Forouzesh & Thiran (ResNet-18); Chatterjee & Zielinski (ResNet-18); Fort et al. (ResNet20v1); Sankararaman (WRN $\beta$-$\ell$); Liu (ResNet18). (Hölzl usa ConvNeXt, no ResNet estricto; Defazio & Bottou, fuera del recuento, usa ResNet-18/110/50.)
+- **DenseNets** (1, fuera del recuento): Defazio & Bottou. **VGG** (1): Forouzesh & Thiran. **Transformers / ViT / ConvNeXt** (2): Hölzl (ViT/S-16, ViT/B-16, ConvNeXt-Femto), Fort et al. (BERT, validación NLP). **LSTMs / RNNs** (1): McCandlish.
 - **Modelos clásicos (reg. logística L2, SVM)** (3): Johnson & Zhang; Kingma & Ba; Liu (contraste teórico). **Especiales (VAE, autoencoder, InfoGAN, Random Features)** (3): Faghri; Kingma & Ba; McCandlish. **NAS search spaces** (1): Ru et al. **RL (A2C, PPO)** (1): McCandlish. **Dominio (MRNet)** (1): Forouzesh & Thiran. **Sin experimentos propios** (2): Ruder 2017, Tieleman & Hinton 2012.
 
 ---
 
 ## Decisiones de implementación (TFG)
 
-Datasets efectivamente cargados en `src/data.py` y descargados a `data/`:
+Datasets efectivamente cargados por el código y descargados a `data/`:
 
-- **MNIST** (cubre 10 papers), **CIFAR-10** (12), **CIFAR-100** (6), **Fashion-MNIST** (Fort et al.), **Tiny-ImageNet** (sustituto de ImageNet-1k: Faghri, McCandlish, Chatterjee & Zielinski, Hölzl).
+- **MNIST** (9 papers), **CIFAR-10** (10, 11 con la discusión cualitativa), **CIFAR-100** (5, 6 con ella), **Fashion-MNIST** (Fort et al.; cargado pero fuera de la matriz), **Tiny-ImageNet** (sustituto de ImageNet-1k: Faghri, McCandlish, Chatterjee & Zielinski, Hölzl).
 
 **Sustitución de ImageNet-1k.** El ILSVRC2012 completo (~150 GB) queda fuera de presupuesto de disco y cómputo para el TFG. Se usa **Tiny-ImageNet** (200 clases, 64×64, ~240 MB) como proxy de bajo coste. Implicación: los experimentos de escala completa de Faghri (ResNet18), McCandlish (ResNet-50), Chatterjee & Zielinski (ResNet-18/Inception-V3) y Hölzl (ViT/S-16, ConvNeXt-F) no son reproducibles fielmente; sus resultados se interpretan como evidencia cualitativa sobre subconjuntos de menor resolución, y debe declararse en la memoria.
 
