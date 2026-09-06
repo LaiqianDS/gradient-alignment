@@ -38,6 +38,23 @@ def test_the_cell_range_builds_and_writes_a_pdf(tmp_path):
     assert path.exists() and path.suffix == ".pdf"
 
 
+def test_the_cell_composition_builds_and_writes_a_pdf(tmp_path):
+    """MNIST/CNN/SGD over four rates: the lowest never crosses, the next two
+    cross in different epochs and the top rate never learns."""
+    from config import LR_GRID
+
+    reports, img = tmp_path / "reports", tmp_path / "img"
+    reports.mkdir()
+    curves = ((0.5, 0.9, 0.95, 0.96), (0.5, 0.9, 0.99, 0.99), (0.5, 0.99, 0.99, 0.99),
+              (0.05, 0.05, 0.05, 0.05))
+    for i, (lr, curve) in enumerate(zip(LR_GRID["sgd"][:4], curves)):
+        for seed in range(3):
+            _write_run(reports, f"r{i}s{seed}", dataset="mnist", model="cnn", lr=lr,
+                       seed=seed, val_acc=curve,
+                       window_columns={figures.COMPOSITION_KEY: 0.9 - 0.2 * i + 0.01 * seed})
+    path = figures.cell_composition(reports, img)
+    assert path.exists() and path.suffix == ".pdf"
+
 def test_the_column_range_builds_and_writes_a_pdf(tmp_path):
     reports, img = tmp_path / "reports", tmp_path / "img"
     reports.mkdir()

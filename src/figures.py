@@ -285,6 +285,88 @@ def cell_range(
     return figstyle.save(fig, "rango-celda", out_dir)
 
 
+COMPOSITION_KEY = "stiffness/cos_within"
+
+def cell_composition(
+    report_dir: str | Path = REPORTS_DIR,
+    out_dir: Path = figstyle.FIGURE_DIR,
+) -> Path:
+    """The example cell's stiffness at the early window above its epochs to
+    threshold, both along the learning-rate grid, over the runs that learned."""
+    dset, model, opt = EXAMPLE_CELL
+    grid = LR_GRID[opt]
+    slot = {lr: i for i, lr in enumerate(grid)}
+    budget = DATASET_BUDGET[dset]["epochs"]
+    health = run_health(report_dir)
+    alive = set(health.loc[health["learned"], "run_name"])
+    win = load_windows(report_dir)
+    cell = win[(win["window"] == EXAMPLE_WINDOW) & (win["dataset"] == dset)
+               & (win["model"] == model) & (win["optimizer"] == opt)]
+    cell = (cell[cell["run_name"].isin(alive)].dropna(subset=[COMPOSITION_KEY])
+            .sort_values(["lr", "seed"]))
+    traj = load_trajectories(report_dir)
+    cross = crossing_epochs(traj[traj["run_name"].isin(cell["run_name"])])
+
+    lrs = cell["lr"].to_numpy()
+    x = cell["lr"].map(slot).to_numpy(dtype=float) + (cell["seed"].to_numpy() - 2) * 0.11
+    metric = cell[COMPOSITION_KEY].to_numpy()
+    t_star = cell["run_name"].map(cross).to_numpy(dtype=float)
+    crossed = ~np.isnan(t_star)
+    # The censored runs sit on a level of their own above the budget.
+    censored_at = budget * 1.12
+    crossed_colour, censored_colour = figstyle.PALETTE[0], figstyle.PALETTE[1]
+
+    fig, (ax_m, ax_t) = figstyle.figure(width="full", ratio=0.72, nrows=2, sharex=True)
+    for ax, y in ((ax_m, metric), (ax_t, np.where(crossed, t_star, censored_at))):
+        ax.plot(x[crossed], y[crossed], "o", ms=3.4, ls="none", color=crossed_colour,
+                mec="white", mew=0.5, zorder=3)
+        ax.plot(x[~crossed], y[~crossed], "o", ms=3.4, ls="none", mfc="white",
+                mec=censored_colour, mew=0.8, zorder=3)
+    for lr in grid:
+        hit = lrs == lr
+        if hit.any():
+            ax_m.hlines(metric[hit].mean(), slot[lr] - 0.34, slot[lr] + 0.34,
+                        color=figstyle.INK, lw=2.2, zorder=4)
+    empty = [slot[lr] for lr in grid if not (lrs == lr).any()]
+    if empty:
+        ax_m.text(np.mean(empty), 0.5, "ninguno\naprende", ha="center", va="center",
+                  fontsize=7.5, color=figstyle.RULE)
+
+    ax_m.set_ylim(0, 1.0)
+    ax_m.set_yticks([0, 0.25, 0.5, 0.75, 1.0])
+    ax_m.set_yticklabels(["0", "0,25", "0,5", "0,75", "1"])
+    ax_m.set_ylabel(
+        f"{COLUMN_LABELS[COMPOSITION_KEY]}, ventana {_window_label(EXAMPLE_WINDOW)}"
+    )
+    ax_m.text(len(grid) - 0.35, 0.98,
+              " ".join((DATASET_LABELS[dset], MODEL_LABELS[model], OPTIMIZER_LABELS[opt])),
+              ha="right", va="top", fontsize=7.5)
+
+    ticks = [t for t in (1, 10, 20, 30, 40) if t <= budget]
+    ax_t.set_ylim(0, censored_at + budget * 0.08)
+    ax_t.set_yticks(ticks + [censored_at])
+    ax_t.set_yticklabels([str(t) for t in ticks] + ["no cruza"])
+    ax_t.axhline(budget, ls="--", lw=0.8, color=figstyle.RULE, zorder=1)
+    ax_t.set_ylabel("epochs hasta el umbral")
+    ax_t.set_xticks(range(len(grid)))
+    ax_t.set_xticklabels([_rate_label(lr) for lr in grid], fontsize=7.5,
+                         rotation=45, ha="right", rotation_mode="anchor")
+    ax_t.set_xlim(-0.7, len(grid) - 0.3)
+    ax_t.set_xlabel("learning rate")
+    for ax in (ax_m, ax_t):
+        ax.tick_params(axis="x", length=2, width=0.6, color="#666666")
+
+    fig.legend(
+        handles=[Line2D([], [], marker="o", ls="none", ms=3.4, color=crossed_colour,
+                        mec="white", mew=0.5, label="cruza el umbral"),
+                 Line2D([], [], marker="o", ls="none", ms=3.4, mfc="white",
+                        mec=censored_colour, mew=0.8, label="no lo cruza"),
+                 Line2D([], [], color=figstyle.INK, lw=2.2, label="media por learning rate")],
+        loc="outside lower center", ncol=3, fontsize=7.5, handletextpad=0.4,
+        columnspacing=1.4, frameon=False,
+    )
+    return figstyle.save(fig, "composicion-celda", out_dir)
+
 def column_range(
     report_dir: str | Path = REPORTS_DIR,
     out_dir: Path = figstyle.FIGURE_DIR,
@@ -622,6 +704,7 @@ def curve_windows(
 if __name__ == "__main__":
     print(lr_window())
     print(cell_range())
+    print(cell_composition())
     print(column_range())
     print(cell_overlap())
     print(sign_strip())

@@ -66,7 +66,7 @@ La Tabla~\ref{tab:coste-metricas} recoge ambas en los dos casos, cada métrica m
 \centering
 \footnotesize
 \setlength{\tabcolsep}{3pt}
-\caption{Coste asintótico de una medición, con $T$ las \emph{epochs} transcurridas.}
+\caption{Coste asintótico de una medición, con $e$ la \emph{epoch} en curso.}
 \label{tab:coste-metricas}
 \begin{tabular}{>{\raggedright\arraybackslash}p{3.5cm}
                 >{\raggedright\arraybackslash}p{2.6cm}
@@ -104,7 +104,7 @@ GSNR & $M$, una por ejemplo & $\Theta(MP)$ & 0 & $\Theta(P\log P)$ \\
 \addlinespace[3pt]
 \multicolumn{5}{l}{\itshape Predictor de referencia, sin calcular el gradiente} \\
 \addlinespace[2pt]
-TSE & 0 & $\Theta(T)$ & 0 & $\Theta(T)$ \\
+TSE & 0 & $\Theta(e)$ & 0 & $\Theta(e)$ \\
 \bottomrule
 \end{tabular}
 \end{table}

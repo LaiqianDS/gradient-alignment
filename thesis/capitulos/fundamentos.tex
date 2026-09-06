@@ -41,6 +41,7 @@ $T$                   & presupuesto de \emph{epochs}                            
 $\tau$                & umbral de \emph{accuracy} de validación de la celda      & Sec.~\ref{sec:eficiencia} \\
 $t^\star$             & \emph{epochs} hasta el umbral                            & Sec.~\ref{sec:eficiencia} \\
 $f$                   & fracción temprana del presupuesto                 & Cap.~\ref{ch:metodologia} \\
+$e$                   & \emph{epoch} en curso, de 1 a $T$                 & Cap.~\ref{ch:metodologia} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -77,7 +78,7 @@ Los dos optimizadores del estudio parten de ese mismo gradiente y lo transforman
 \label{eq:momentum-adam}
 \end{equation}
 
-donde $\hat{m}_t$ y $\hat{v}_t$ son las dos medias móviles de Adam corregidas por su sesgo inicial. Con $\mu = 0{,}9$ y un gradiente estable, $m_t$ tiende a $\hat{g}/(1 - \mu) = 10\,\hat{g}$, así que el paso efectivo de SGD es unas diez veces el de la Ecuación~\ref{eq:sgd} y sigue siendo proporcional al gradiente. El paso de Adam, al dividir cada coordenada por su propia escala, mide del orden de $\eta$ por coordenada sea cual sea la magnitud del gradiente. Esa diferencia es la razón práctica por la que la rejilla de \emph{learning rates} de Adam se sitúa una década por debajo de la de SGD en la Sección~\ref{sec:matriz}. El argumento no es una igualdad de magnitudes, porque los dos pasos dependen del gradiente de manera distinta. Se apoya en los valores por defecto habituales, $10^{-2}$ para SGD con \emph{momentum} y $10^{-3}$ para Adam, y la Sección~\ref{sec:matriz} comprueba sobre la matriz que las dos listas dejan en el azar un número parecido de entrenamientos.
+donde $\hat{m}_t$ y $\hat{v}_t$ son las dos medias móviles de Adam corregidas por su sesgo inicial. Con $\mu = 0{,}9$ y un gradiente estable, $m_t$ tiende a $\hat{g}/(1 - \mu) = 10\,\hat{g}$, así que el paso efectivo de SGD es unas diez veces el de la Ecuación~\ref{eq:sgd} y sigue siendo proporcional al gradiente. El paso de Adam, al dividir cada coordenada por su propia escala, mide del orden de $\eta$ por coordenada sea cual sea la magnitud del gradiente. Esa diferencia es la razón práctica por la que la rejilla de \emph{learning rates} de Adam es la de SGD dividida entre 10 en la Sección~\ref{sec:matriz}. El argumento no es una igualdad de magnitudes, porque los dos pasos dependen del gradiente de manera distinta. Se apoya en los valores por defecto habituales, $10^{-2}$ para SGD con \emph{momentum} y $10^{-3}$ para Adam, y la Sección~\ref{sec:matriz} comprueba sobre la matriz que las dos listas dejan en el azar un número parecido de entrenamientos.
 
 Dos resúmenes estadísticos del gradiente por ejemplo $g$ (que la Sección~\ref{sec:geometria} define formalmente) organizan el resto del capítulo. El \emph{primer momento} $\mathbb{E}[g]$ describe la dirección consistente del gradiente y es lo que estiman el término de inercia (\emph{momentum}) de SGD y la media móvil $m_t$ de Adam. El \emph{segundo momento}, a través de $\mathbb{E}[\|g\|^2]$ o de la traza de $\Sigma$, describe su magnitud y su dispersión, y es lo que recogen la media móvil $v_t$ de Adam y la escala de ruido del gradiente. Las dos familias de métricas leen, respectivamente, la dirección relativa de los gradientes por ejemplo (alineación) y su dispersión (variabilidad).
 
