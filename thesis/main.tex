@@ -1,3 +1,5 @@
+% tocbibind (cargado por la clase) mete los tres índices dentro del índice general; fuera.
+\PassOptionsToPackage{nottoc,notlof,notlot}{tocbibind}
 \documentclass[11pt,spanish,listoffigures,listoftables]{tfgetsinf}
 
 \usepackage[utf8]{inputenc}
@@ -23,6 +25,9 @@
 % \titulacioname se fija como caption de babel en el .cls (GII) y babel la reaplica en
 % \begin{document}; por eso se sobreescribe vía \addto\captionsspanish y no con \renewcommand.
 \addto\captionsspanish{\renewcommand{\titulacioname}{Grado en Ciencia de Datos}}
+
+% Igual que en la clase pero sin la raya que separaba las entradas de los índices (ya no hay).
+\renewcommand{\makeindexes}{\cleardoublepage\tableofcontents\cleardoublepage\listoffigures\listoftables}
 
 \title{Métricas del gradiente como indicadores de la \\
          eficiencia del entrenamiento en redes neuronales}
@@ -110,6 +115,6 @@ The result is negative. Some metric does relate to efficiency, but none predicts
 \cleardoublepage
 
 \APPENDIX
-\include{capitulos/anexo-ods}
+\input{capitulos/anexo-ods}   % \input, no \include: con \include la cabecera «Apéndice» acaba detrás de A.1 y A.2 en el índice
 
 \end{document}
