@@ -69,7 +69,7 @@ This work starts from a concrete hypothesis, that the behaviour of the gradients
 
 The aim is to determine to what extent those metrics, read over different early fractions of training, relate to efficiency indicators such as the epochs needed to reach a target accuracy or the final test accuracy. It also examines whether those relations hold when the problem, the architecture and the optimizer change. To answer this, 960 configurations were trained, grouped into 24 cells in which only the learning rate and the seed change.
 
-The result is negative. Some metric does relate to efficiency, but none predicts better than the validation accuracy and loss read in that same early fraction, which training already produces at no cost. Measuring the gradient of every example, in contrast, makes training more expensive. The conclusion is that instrumenting gradients does not pay off as an early signal under these conditions, and that negative answer saves the computation for later work.
+The result is negative. Some metrics do relate to efficiency, but none predicts better than the validation accuracy and loss read in that same early fraction, which training already produces at no cost. Measuring the gradient of every example, in contrast, makes training more expensive. The conclusion is that instrumenting gradients does not pay off as an early signal under these conditions, and that negative answer saves the computation for later work.
 \end{abstract}
 
 % La clase genera los índices (general, figuras, tablas) automáticamente al cerrar

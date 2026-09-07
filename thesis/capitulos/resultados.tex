@@ -11,7 +11,7 @@ Seis de las siete variables dependientes se leen sin compararlas con ningún umb
 
 El \emph{accuracy} de test y el \emph{gap} de \emph{accuracy} tienen valor en los 960 entrenamientos, pero en esos 41 el valor no es una medición. Una red divergida termina con todos los pesos en NaN. Con las salidas en NaN, el \emph{argmax} devuelve siempre la clase cero. La cifra registrada es la frecuencia de esa clase en el conjunto de test. Las variables que se leen del \emph{loss} no tienen ese problema, porque el NaN se propaga por la aritmética y el valor queda ausente. Esos 41 valores se cuentan aparte y no entran en ninguna variable leída al final del entrenamiento. Dos de los 41, la red \emph{fully connected} sobre MNIST con SGD y el \emph{learning rate} 0,3 en dos \emph{seeds}, aprendieron en la primera \emph{epoch} y divergieron en la segunda. Por eso cuentan como entrenamientos que aprendieron y entran censurados en la velocidad, según fija la Sección~\ref{sec:protocolo-poblacion}.
 
-La séptima variable, las \emph{epochs} hasta el umbral, es la única que se censura. La tienen definida 573 de los 960 entrenamientos, entre 15 y 38 por celda, con 22 de las 24 celdas en 20 o más. Contada en entrenamientos, la pérdida parece grave. Contada en la unidad que usa el estadístico, lo es menos. Una correlación de rangos no consume entrenamientos, consume pares comparables, parejas de las que se sabe cuál fue más rápida. Un entrenamiento censurado no cruzó dentro del presupuesto. Fue más lento que cualquiera que sí cruzó, y forma par con todos ellos. Solo se pierden los pares de dos censurados, porque entre ellos no se sabe cuál habría cruzado antes. Medida en pares, cada celda conserva entre el 62 y el 99\,\% de los suyos. La más pobre es Tiny-ImageNet con la red \emph{fully connected} y Adam, que cruza 15 veces y aun así conserva el 62\,\% de sus pares. Esa fracción es una función del número de cruces. Es la misma pérdida expresada en la escala en la que trabaja el estadístico.
+La séptima variable, las \emph{epochs} hasta el umbral, es la única que se censura. La tienen definida 573 de los 960 entrenamientos, entre 15 y 38 por celda, con 22 de las 24 celdas en 20 o más. Contada en entrenamientos, la pérdida parece grave. Contada en la unidad que usa el estadístico, lo es menos. Una correlación de rangos no consume entrenamientos, consume pares comparables, parejas de las que se sabe cuál fue más rápida. Un entrenamiento censurado forma par con todos los que cruzaron, porque fue más lento que cualquiera de ellos. Solo se pierden los pares de dos censurados (Figura~\ref{fig:somers-pares}). Medida en pares, cada celda conserva entre el 62 y el 99\,\% de los suyos. La más pobre es Tiny-ImageNet con la red \emph{fully connected} y Adam, que cruza 15 veces y aun así conserva el 62\,\% de sus pares. Esa fracción es una función del número de cruces. Es la misma pérdida expresada en la escala en la que trabaja el estadístico.
 
 Los entrenamientos censurados tampoco se reparten al azar por la rejilla. La Figura~\ref{fig:ventana-lr} recorre los ocho \emph{learning rates} de cada optimizador y muestra cuántos de los cinco entrenamientos de cada uno cruzan el umbral. Los dos paneles comparten el eje. Una misma columna es el mismo valor de \emph{learning rate} en los dos, aunque cada lista empiece en un sitio distinto. Cada fila lleva su umbral, tomado de la Tabla~\ref{tab:umbrales}, porque de él dependen la posición y la anchura de su tramo. En las 24 celdas los cruces ocupan un tramo contiguo, sin un solo hueco. Ese tramo se desplaza hacia los valores mayores a medida que la red gana profundidad. La red \emph{fully connected} cruza en las cinco primeras posiciones de su lista y casi nunca después, la convolucional casi siempre entre la segunda y la sexta, y la ResNet-18 es la única que llega a las dos últimas. Los dos optimizadores muestran el mismo desplazamiento. Ese desplazamiento no se debe solo a la arquitectura, porque el umbral también sube con la profundidad y a la red más honda se le pide más \emph{accuracy}. Las dos causas empujan en el mismo sentido. Esta figura no las separa.
 
@@ -110,7 +110,7 @@ La Figura~\ref{fig:solape-celda} recorre CIFAR-10 con la red convolucional y SGD
 \begin{figure}[ht]
 \centering
 \includegraphics{solape-celda}
-\caption{Una de las 24 celdas, CIFAR-10 con la red convolucional y SGD. Arriba la curva de cada entrenamiento y el \emph{epoch} en que cruza el umbral, abajo los cruces acumulados.}
+\caption{Una de las 24 celdas, CIFAR-10 con la red convolucional y SGD. Arriba la curva de cada entrenamiento y la \emph{epoch} en que cruza el umbral, abajo los cruces acumulados.}
 \label{fig:solape-celda}
 \end{figure}
 
@@ -460,7 +460,7 @@ La Figura~\ref{fig:composicion-celda} enseña esa composición sobre una celda r
 \begin{figure}[ht]
 \centering
 \includegraphics{composicion-celda}
-\caption{Una de las 24 celdas, MNIST con la red convolucional y SGD. Arriba la \emph{stiffness} al 5\,\%, abajo los \emph{epochs} hasta el umbral, los dos sobre la rejilla de \emph{learning rate}.}
+\caption{Una de las 24 celdas, MNIST con la red convolucional y SGD. Arriba la \emph{stiffness} al 5\,\%, abajo las \emph{epochs} hasta el umbral, las dos sobre la rejilla de \emph{learning rate}.}
 \label{fig:composicion-celda}
 \end{figure}
 

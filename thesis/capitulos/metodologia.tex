@@ -35,7 +35,9 @@ La eficiencia de un entrenamiento no es una cantidad única. Este trabajo la des
 
 La distinción entre variable principal y lectura de apoyo importa al leer los resultados. Los tres aspectos sí son preguntas distintas, y la pregunta de investigación se contrasta contra los tres. Dentro de cada uno, en cambio, las variables de apoyo son la misma pregunta leída de otra manera. Una métrica que se asocie al \emph{gap} de \emph{loss} pero no al \emph{gap} de \emph{accuracy} da un solo resultado, con una comprobación que no lo respalda. Tratar las siete como hallazgos independientes multiplicaría por dos o por tres las ocasiones de encontrar algo por azar dentro de cada aspecto.
 
-Las \emph{epochs} hasta el umbral y el mejor \emph{loss} de validación se leen sobre una versión suavizada de la curva de validación. El suavizado es una mediana móvil centrada de tres \emph{epochs}. En la primera y en la última \emph{epoch}, donde no hay tres valores, se toma el valor crudo. Esa segunda regla se fijó después de entrenar la matriz, como todo el método (Sección~\ref{sec:concl-limitaciones}). Hasta entonces el borde tomaba la media de las dos \emph{epochs} disponibles. Esa media cruza el umbral en la primera \emph{epoch} cuando solo la segunda lo cruza. De los 17 cruces de primera \emph{epoch} que había, 15 pasan a la segunda con el valor crudo. En la última \emph{epoch} la media escondía dos cruces. Los totales pasan de 571 a 573, según recoge la Sección~\ref{sec:res-cobertura}. Ambas variables leen un extremo de la curva. El extremo de una serie ruidosa está sesgado en proporción a su volatilidad. Esa volatilidad depende del \emph{learning rate}, que es justamente el eje que barre la matriz. Las métricas de variabilidad del gradiente son candidatas plausibles a predecirla. Sin suavizar, el estimador de la variable dependiente quedaría ligado al predictor por el ruido que ambos comparten, y no por el aprendizaje. La mediana atenúa ese ruido, no lo elimina. Mira además una \emph{epoch} adelante, porque el valor suavizado de la \emph{epoch} $e$ se calcula con la $e - 1$, la $e$ y la $e + 1$. Un cruce en la $e$ ya contiene la $e + 1$. El área bajo la curva se calcula sobre la curva cruda, porque promedia toda la trayectoria. La curva sin suavizar se conserva en todos los entrenamientos, pero ningún contraste de esta memoria se repite sobre ella.
+Las \emph{epochs} hasta el umbral y el mejor \emph{loss} de validación se leen sobre la curva de validación suavizada con una mediana móvil centrada de tres \emph{epochs}. En la primera y en la última \emph{epoch}, donde no hay tres valores, se toma el valor crudo. Se suaviza porque las dos variables leen un extremo de una serie ruidosa. Ese extremo está sesgado en proporción a su volatilidad. La volatilidad depende del \emph{learning rate}, el mismo eje que barre la matriz y que mueve las métricas de variabilidad, así que sin suavizar predictor y variable compartirían ruido además de aprendizaje. La mediana atenúa ese ruido, no lo elimina. Mira también una \emph{epoch} adelante, porque el valor suavizado de la \emph{epoch} $e$ se calcula con la $e - 1$, la $e$ y la $e + 1$. Un cruce en la $e$ ya contiene la $e + 1$. El área bajo la curva se calcula sobre la curva cruda, porque promedia toda la trayectoria. La curva sin suavizar se conserva en todos los entrenamientos, pero ningún contraste de esta memoria se repite sobre ella.
+
+La regla del borde se fijó después de entrenar la matriz, como todo el método (Sección~\ref{sec:concl-limitaciones}). Hasta entonces el borde tomaba la media de las dos \emph{epochs} disponibles. Esa media cruza el umbral en la primera \emph{epoch} cuando solo la segunda lo cruza. De los 17 cruces de primera \emph{epoch} que había, 15 pasan a la segunda con el valor crudo. En la última \emph{epoch} la media escondía dos cruces. Los totales pasan de 571 a 573, según recoge la Sección~\ref{sec:res-cobertura}.
 
 En estas condiciones de entrenamiento, tres de las siete miden además otra cosa. Sin \emph{weight decay} ni \emph{data augmentation}, el \emph{loss} de validación toca fondo en las primeras \emph{epochs} y vuelve a subir, según mide la Sección~\ref{sec:eficiencia}. El área bajo una curva de 40 \emph{epochs} recoge entonces en parte cuánto sube después del mínimo, y el mejor \emph{loss} dice cuándo empieza el sobreajuste. El \emph{gap} a presupuesto fijo es en buena parte velocidad leída al revés, porque un entrenamiento que cruza antes pasa más \emph{epochs} sobreajustando cuando el presupuesto se agota. En la matriz las dos van juntas. Entre los entrenamientos que llegan a ajustar los datos de entrenamiento, la D de Somers de la Sección~\ref{sec:protocolo-coeficiente} entre el \emph{gap} de \emph{loss} y las \emph{epochs} hasta el umbral, calculada dentro de cada celda, tiene mediana $-0{,}56$. Por eso el \emph{gap} se lee con la velocidad delante. Una asociación de una métrica con el \emph{gap} se lee junto a la de esa misma métrica con la velocidad, porque puede ser la misma relación vista desde el otro lado.
 
@@ -213,7 +215,31 @@ La Sección~\ref{sec:setup} fija tres factores: cuatro conjuntos de datos, tres 
 
 La celda es la unidad de análisis. Dentro de una celda, el conjunto de datos, la arquitectura y el optimizador son siempre los mismos. Lo único que cambia entre sus 40 entrenamientos es el \emph{learning rate} y la \emph{seed}. Toda correlación se calcula dentro de una celda, nunca sobre los 960 entrenamientos juntos. Cualquier entrenamiento sobre MNIST es rápido y ninguno sobre Tiny-ImageNet lo es. Si se mezclasen, casi toda la diferencia de eficiencia vendría del conjunto de datos y de la arquitectura, y la correlación saldría alta aunque la métrica no distinguiese nada dentro de un mismo problema. Con los tres factores fijos, la correlación responde a una sola pregunta, si la métrica temprana anticipa qué \emph{learning rates} van a entrenar bien.
 
-Esa pregunta tiene un problema conocido, la causa común, y hay que tenerlo delante al leer cualquier resultado. El \emph{learning rate} mueve a la vez las dos cosas que se correlacionan, la métrica temprana y la eficiencia. Una métrica puede subir con el \emph{learning rate}, y la eficiencia también, sin que la métrica sepa nada de la eficiencia. Por eso una correlación dentro de una celda no distingue por sí sola «la métrica anticipa la eficiencia» de «la métrica lee el \emph{learning rate} de otra manera». H1 se presenta como requisito previo. La posición en la rejilla entra en todas las tablas como predictor de coste cero, porque no hay que medir nada para conocerla. La cuenta granulada de la Sección~\ref{sec:protocolo-granulada} compara solo entrenamientos con el mismo \emph{learning rate}. Es la única cuenta libre de esa causa común. Un diseño con menos \emph{learning rates} y más \emph{seeds}, o con un segundo hiperparámetro barrido, como el tamaño de \emph{batch} o el ruido de etiquetas, exigiría entrenar de nuevo y queda para el Capítulo~\ref{ch:trabajos-futuros}. El procedimiento completo está en la Sección~\ref{sec:protocolo-analisis}.
+Esa pregunta tiene un problema conocido, la causa común, que la Figura~\ref{fig:causa-comun} dibuja y que hay que tener delante al leer cualquier resultado. El \emph{learning rate} mueve a la vez las dos cosas que se correlacionan, la métrica temprana y la eficiencia, las flechas naranjas de la figura. Por eso una correlación dentro de una celda no distingue por sí sola «la métrica anticipa la eficiencia» de «la métrica lee el \emph{learning rate} de otra manera». Mueve también la curva de validación, que es el principio de la misma curva de la que sale la velocidad y cuyo final queda cerca del rendimiento de test, la flecha azul. Lo que la hipótesis H2 pregunta es si existe la flecha fina, algo que la métrica sabe de la eficiencia y que la validación de esa misma \emph{epoch} no sabe. H1 se presenta como requisito previo. La posición en la rejilla entra en todas las tablas como predictor de coste cero, porque no hay que medir nada para conocerla. La cuenta granulada de la Sección~\ref{sec:protocolo-granulada} compara solo entrenamientos con el mismo \emph{learning rate}. Es la única cuenta libre de esa causa común. Un diseño con menos \emph{learning rates} y más \emph{seeds}, o con un segundo hiperparámetro barrido, como el tamaño de \emph{batch} o el ruido de etiquetas, exigiría entrenar de nuevo y queda para el Capítulo~\ref{ch:trabajos-futuros}. El procedimiento completo está en la Sección~\ref{sec:protocolo-analisis}.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[font=\sffamily\footnotesize,
+  caja/.style={draw, rounded corners=2pt, align=center, inner sep=4pt,
+               minimum height=0.9cm, text width=2.9cm}]
+\definecolor{causa}{HTML}{D55E00}
+\definecolor{curva}{HTML}{0072B2}
+\node[caja] (lr)  at (0,3.9)     {learning rate};
+\node[caja] (met) at (-3.4,1.7)  {métrica de gradiente\\ en la ventana};
+\node[caja] (val) at (3.4,1.7)   {validación\\ en la ventana};
+\node[caja] (ef)  at (0,0)       {eficiencia\\ al terminar};
+\draw[->, causa, line width=1pt] (lr) -- (met);
+\draw[->, causa, line width=1pt] (lr) -- (val);
+\draw[->, causa, line width=1pt] (lr) -- (ef);
+\node[causa, anchor=west] at (0.1,2.8) {mueve las tres};
+\draw[->, curva, line width=1pt] (val) -- (ef);
+\node[curva, anchor=west] at (1.85,0.55) {misma curva};
+\draw[->, line width=0.5pt] (met) -- (ef);
+\node[anchor=east] at (-1.85,0.55) {lo que H2 pregunta};
+\end{tikzpicture}
+\caption{Efecto del \emph{learning rate} sobre la métrica, la validación y la eficiencia.}
+\label{fig:causa-comun}
+\end{figure}
 
 \begin{table}[ht]
 \centering
@@ -330,14 +356,49 @@ Las dos variables de generalización piden además un suelo. Un \emph{gap} peque
 
 El coeficiente es la D de Somers~\cite{somers1962new}. La variable de velocidad es la razón de elegirla. Las \emph{epochs} hasta el umbral no existen para todos los entrenamientos y toman pocos valores distintos, con muchos empates. La rho de Spearman pide un número para cada entrenamiento, que un entrenamiento censurado no tiene. La tau de Kendall admite los empates, pero no un valor que solo se conoce como mayor que el presupuesto. La D decide par a par cuáles se pueden ordenar. Con esa regla trata la censura y los empates en la misma cuenta. Sin censura ni empates coincide con la tau. Las siete variables se leen entonces con el mismo coeficiente.
 
-Dentro de una celda, cada contraste enfrenta dos columnas de la tabla de análisis, un predictor leído en una ventana y una variable de eficiencia, y produce un solo número. Se toman todos los pares de entrenamientos de la celda. Un par es comparable cuando los dos valores de la variable son distintos. Entre los pares comparables, un par es concordante si el entrenamiento con mayor predictor tiene también mayor variable, y discordante si la tiene menor. Un par empatado en el predictor cuenta como comparable, pero no suma ni resta. Con $N_c$ pares concordantes, $N_d$ discordantes y $N$ comparables,
+Dentro de una celda, cada contraste enfrenta dos columnas de la tabla de análisis, un predictor leído en una ventana y una variable de eficiencia, y produce un solo número. Se toman todos los pares de entrenamientos de la celda y se clasifican como enseña la Figura~\ref{fig:somers-pares}, sobre cinco entrenamientos de una celda inventada, con el predictor en horizontal y las \emph{epochs} hasta el umbral en vertical, más lento cuanto más arriba. Un punto relleno cruza el umbral y uno hueco no. Los huecos quedan en la banda de arriba, más lentos que cualquier relleno. Un par es comparable cuando los dos valores de la variable son distintos. Entre los pares comparables, un par es concordante si el entrenamiento con mayor predictor tiene también mayor variable, y discordante si la tiene menor. En la figura el concordante es la línea azul, que sube hacia la derecha, y el discordante la naranja, que sube hacia la izquierda. Un par empatado en el predictor cuenta como comparable, pero no suma ni resta. Los dos pares que no se comparan van en negro. Con $N_c$ pares concordantes, $N_d$ discordantes y $N$ comparables,
 \begin{equation}
 D = \frac{N_c - N_d}{N},
 \label{eq:somers-d}
 \end{equation}
 que vale 1 cuando el predictor ordena la celda exactamente como la variable, $-1$ cuando la ordena al revés y 0 cuando acierta tantos pares como falla. Una D de 0,5 significa que, de cada cuatro pares comparables, tres van en el mismo sentido y uno al revés. Es el índice de concordancia $C$ de Harrell et al.~\cite{harrell1982evaluating,harrell1996multivariable} llevado del intervalo $[0, 1]$ al $[-1, 1]$, con $C = (D + 1)/2$, y coincide con la tau de Kendall que emplea la Sección~\ref{sec:res-val-test} cuando no hay empates ni censura~\cite{newson2002parameters}.
 
-La censura entra por la definición de par comparable. Un entrenamiento que no cruza el umbral es más lento que cualquiera que lo cruce, aunque no se sepa cuánto. Su par con cualquier entrenamiento que cruzó es comparable, con el que cruzó como más rápido, incluso si cruzó en la última \emph{epoch}. Dos entrenamientos censurados no se pueden ordenar entre sí y su par no es comparable. Dos que cruzan en la misma \emph{epoch} tampoco, porque sus valores no son distintos. Esos empates son frecuentes porque $t^\star$ es un entero con pocos valores distintos (Sección~\ref{sec:variables}). Es la regla con la que Harrell et al. evalúan un pronóstico sobre tiempos de supervivencia observados a medias, y las \emph{epochs} hasta el umbral son un tiempo de ese tipo. Así no hay que desechar los censurados, que son el extremo lento de cada celda, ni anotarles el presupuesto como si fuera una medición. El número de pares comparables se declara junto a cada D, porque es su tamaño efectivo y varía de una celda a otra mucho más que el número de entrenamientos.
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[font=\sffamily\footnotesize,
+  cruza/.style={circle, fill=black, inner sep=0pt, minimum size=5pt},
+  nocruza/.style={circle, draw=black, fill=white, inner sep=0pt, minimum size=5pt, line width=0.8pt}]
+\definecolor{conc}{HTML}{0072B2}
+\definecolor{disc}{HTML}{D55E00}
+\definecolor{banda}{HTML}{F0E442}
+\fill[banda!35] (0,4.4) rectangle (6.2,5.2);
+\node[anchor=east] at (-0.15,4.8) {no cruza};
+\draw[->] (0,0) -- (6.4,0);
+\draw[->] (0,0) -- (0,5.6);
+\node[below] at (3.1,-0.1) {predictor en la ventana};
+\node[rotate=90, above] at (-0.15,1.9) {epochs hasta el umbral};
+\node[nocruza] (E) at (0.8,4.8) {};
+\node[cruza]   (B) at (1.6,3.0) {};
+\node[cruza]   (A) at (2.6,1.4) {};
+\node[cruza]   (C) at (3.8,3.0) {};
+\node[nocruza] (D) at (5.0,4.8) {};
+\node[anchor=north] at (2.6,1.25) {cruza el umbral};
+\draw[conc, line width=1pt] (A) -- (C);
+\node[conc, anchor=west] at (3.35,1.95) {concordante};
+\draw[disc, line width=1pt] (A) -- (B);
+\node[disc, anchor=east] at (1.85,1.95) {discordante};
+\draw[black, line width=0.5pt] (B) -- (C);
+\node[anchor=south east] at (3.65,3.15) {empate, no comparable};
+\draw[conc, line width=1pt] (C) -- (D);
+\node[conc, anchor=west] at (4.55,3.6) {censurado contra cruzado, comparable};
+\draw[black, line width=0.5pt] (E) -- (D);
+\node[anchor=south] at (2.9,5.25) {dos censurados, no comparable};
+\end{tikzpicture}
+\caption{Qué pares cuenta la D de Somers.}
+\label{fig:somers-pares}
+\end{figure}
+
+La censura entra por la definición de par comparable, con los dos entrenamientos de la banda de la Figura~\ref{fig:somers-pares}. El par de un censurado con uno que cruzó se compara, porque el censurado es más lento aunque no se sepa cuánto. Dos censurados no se ordenan entre sí. Dos que cruzan en la misma \emph{epoch} tampoco, porque sus valores no son distintos. Esos empates son frecuentes porque $t^\star$ es un entero con pocos valores distintos (Sección~\ref{sec:variables}). Es la regla con la que Harrell et al. evalúan un pronóstico sobre tiempos de supervivencia observados a medias, y las \emph{epochs} hasta el umbral son un tiempo de ese tipo. Así no hay que desechar los censurados, que son el extremo lento de cada celda, ni anotarles el presupuesto como si fuera una medición. El número de pares comparables se declara junto a cada D, porque es su tamaño efectivo y varía de una celda a otra mucho más que el número de entrenamientos.
 
 Cada D lleva su incertidumbre, calculada sin ningún supuesto sobre la forma de los datos. Se quita un entrenamiento de la celda, se recalcula la D con los que quedan y se repite con cada entrenamiento de la celda, entre 25 y 40. La dispersión de esas réplicas da el error típico de la D por el método \emph{jackknife}~\cite{efron1982jackknife}, el mismo que Harrell et al. emplean para el índice de concordancia. Con $n$ réplicas $D_{(-i)}$ de media $\bar{D}$,
 \begin{equation}
