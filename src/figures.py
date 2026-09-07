@@ -44,6 +44,7 @@ from contrast import (
     LOG_LR,
     PRIMARY_VDS,
     PRUNED,
+    REFERENCE,
     RESULTS_DIR,
     primary_family,
 )
@@ -542,9 +543,10 @@ def _family_handles(grid: bool = True) -> list:
                       for f in ("free", "variability", "alignment")]
 
 
-def _box_panels(fig, axes, table, column: str, rows, xlabel: str) -> None:
+def _box_panels(fig, axes, table, column: str, rows, xlabel: str,
+                vds=PRIMARY_VDS) -> None:
     """One panel per dependent variable, one box per predictor row."""
-    for c, (ax, vd) in enumerate(zip(axes, PRIMARY_VDS)):
+    for c, (ax, vd) in enumerate(zip(axes, vds)):
         sub = table[table["vd"] == vd]
         for i, pred in enumerate(rows):
             d = sub.loc[sub["predictor"] == pred, column].dropna().to_numpy()
@@ -576,6 +578,30 @@ def sign_strip(
                fontsize=7.5, handlelength=1.1, handletextpad=0.5, columnspacing=1.4,
                frameon=False)
     return figstyle.save(fig, "signos", out_dir)
+
+
+# The two variables that decide H2, each against its named reference.
+DECIDING_VDS = ("final_test_acc", "final_gap_loss")
+
+
+def reference_boxes(
+    table_path: Path = RESULTS_DIR / "tabla_larga.parquet",
+    out_dir: Path = figstyle.FIGURE_DIR,
+) -> Path:
+    """Per predictor, the cells' |D| minus the |D| of the variable's named
+    reference, as a box; the reference's own row is left empty and named."""
+    table = primary_family(pd.read_parquet(table_path))
+    fig, axes = figstyle.figure(width="full", ratio=0.44, ncols=2)
+    _box_panels(fig, axes, table, "D_diff", PRIMARY_ORDER,
+                "|D| predictor − |D| referencia", vds=DECIDING_VDS)
+    for ax, vd in zip(axes, DECIDING_VDS):
+        ax.text(0, PRIMARY_ORDER.index(REFERENCE[vd]), "referencia", ha="center",
+                va="center", fontsize=7.5, color=figstyle.RULE,
+                bbox=dict(facecolor="white", edgecolor="none", pad=1.5), zorder=4)
+    fig.legend(handles=_family_handles(), loc="outside lower center", ncol=4,
+               fontsize=7.5, handlelength=1.1, handletextpad=0.5, columnspacing=1.4,
+               frameon=False)
+    return figstyle.save(fig, "incremental", out_dir)
 
 
 def selection_bars(
@@ -708,6 +734,7 @@ if __name__ == "__main__":
     print(column_range())
     print(cell_overlap())
     print(sign_strip())
+    print(reference_boxes())
     print(selection_bars())
     print(window_change())
     print(curve_windows())

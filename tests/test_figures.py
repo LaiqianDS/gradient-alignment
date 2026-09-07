@@ -94,6 +94,23 @@ def test_the_selection_bars_build_and_write_a_pdf(tmp_path):
     assert out.exists() and out.suffix == ".pdf"
 
 
+def test_the_reference_boxes_build_and_write_a_pdf(tmp_path):
+    import numpy as np
+    import pandas as pd
+
+    land = {c: np.nan for c in ("D_land", "se_land", "n_land", "n_pairs_land",
+                                "D_diff_land", "se_diff_land")}
+    rows = [{"dataset": d, "model": "cnn", "optimizer": "sgd", "window": 0.05,
+             "predictor": p, "vd": vd, "n": 30, "n_pairs": 400, "D": 0.3, "se": 0.1,
+             "D_diff": diff, "se_diff": 0.1, **land}
+            for d, diff in (("mnist", 0.3), ("cifar10", -0.1), ("cifar100", -0.4))
+            for p in ("val_acc", "val_loss", "gwa/value", "gsnr/mean", "log_lr")
+            for vd in ("final_test_acc", "final_gap_loss")]
+    path = tmp_path / "tabla_larga.parquet"
+    pd.DataFrame(rows).to_parquet(path, index=False)
+    out = figures.reference_boxes(path, tmp_path / "img")
+    assert out.exists() and out.suffix == ".pdf"
+
 def test_the_window_change_builds_and_writes_a_pdf(tmp_path):
     import pandas as pd
 
