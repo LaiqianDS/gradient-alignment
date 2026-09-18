@@ -13,3 +13,6 @@ __pycache__/
 # CLAUDE.md se queda fuera del repositorio a propósito (decisión del 2026-08-29):
 # es un fichero de instrucciones para una IA y el repositorio acaba depositado.
 CLAUDE.md
+
+# La defensa (guion, PPTX y figuras) es material de trabajo, no del depósito.
+thesis/defensa/

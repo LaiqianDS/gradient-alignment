@@ -62,12 +62,4 @@ Las que siguen mandando en lo que queda. El resto del plan por fases se cerró c
 
 **Regla de registro:** el vault se poda mientras se trabaja, no al final. Una entrada de [[2 - Decisiones]] guarda cuatro cosas y ninguna más: qué se decidió, por qué en la forma más corta que aún lo defienda ante un tribunal, la evidencia medida con su número, y las trampas que le costarían tiempo a quien lo toque después. Se va todo lo demás: el camino hasta la decisión, las alternativas que ya no informan nada, el detalle de la verificación, y lo que el código o la memoria ya cuentan mejor. El vault no cita funciones, commits ni sesiones de trabajo; cita datos (`reports/`, `results/`, columnas, knobs) y secciones de la memoria. **Lo que no se poda nunca son las decisiones y sus fechas**, porque son la evidencia de que el análisis es posterior a los datos y anterior a los resultados.
 
-### Fase I: obligatorio para el depósito
-
-Lo administrativo y lo que solo se puede hacer al final.
-
-- [x] **Anexo ODS**, en `anexo-ods.tex`, con la tabla de los 17 y una reflexión de unas 900 palabras: 7, 9 y 12 en medio, 4 y 13 en bajo, los 12 restantes no proceden, sin ninguna cifra de energía porque solo se midieron horas de GPU. El fichero suelto para Ebrón es `thesis/anexo-ods.docx`, generado desde el `.tex` por `thesis/anexo-ods-docx.py` sobre la plantilla oficial de `docs/research/writing/`; si el `.tex` cambia, se vuelve a ejecutar.
-- [ ] **Los tres resúmenes** de `main.tex` están escritos; faltan los agradecimientos.
-- [ ] Formato UPV/ETSINF, Turnitin y entrega por EBRON.
-- [ ] Borrador al tutor → incorporar feedback.
-- [ ] Slides de defensa (10-15, ~15 min).
+- [ ] **Slides de defensa** en PPTX, por Teams con PowerPoint Live: 20 minutos de exposición (máximo 45 con las preguntas) y unas 20 diapositivas. Las recomendaciones de los seminarios están en §10 de `writing/Seminarios TFG - cosas a tener en cuenta.md`.
